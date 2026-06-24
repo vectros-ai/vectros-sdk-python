@@ -1,0 +1,75 @@
+# =============================================================================
+# Vectros AI Platform Python SDK — pyproject.toml
+#
+# Why this lives in `platform/api-services/fern/python_sdk_overlay/` and not in
+# `vectros-sdk-python` itself:
+#
+# Fern's free-tier `fern-python-sdk` generator emits SOURCE CODE but NOT build
+# packaging (no pyproject.toml, no setup.py, no MANIFEST.in). Paid Fern tiers
+# emit those; we don't pay. So we overlay our own buildable packaging onto the
+# generated output in the `sdk_generate` CI job before pushing to the source
+# repo. See `docs/reference/SDK-DISTRIBUTION.md`.
+#
+# `0.29.6` is substituted by apply.sh at build time:
+#   - Production publish: <base> from `fern/sdk-version.txt` (e.g. 0.6.3)
+#   - Staging publish:    <base>.dev0+staging.<short-sha> (PEP 440 local form)
+# =============================================================================
+
+[build-system]
+# setuptools>=77 required for PEP 639 license expression (`license = "MIT"`
+# string form). The deprecated `license = {text = "..."}` table form works
+# back to setuptools 61 but is sunset on 2027-02-18.
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vectros"
+version = "0.29.6"
+description = "Vectros AI Platform SDK — hybrid search, document ingestion, structured records, and inference for your application."
+readme = "README.md"
+requires-python = ">=3.8"
+# PEP 639 SPDX expression (NOT the deprecated `license = {text = "MIT"}` form).
+# The matching License :: OSI Approved :: MIT License classifier is also
+# deprecated under PEP 639 — omitted from classifiers below for the same reason.
+license = "MIT"
+authors = [{name = "Vectros AI", email = "support@vectros.ai"}]
+keywords = ["vectros", "ai", "rag", "search", "vector-database", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    # httpx upper bound: Fern's generated `core/http_client.py` imports
+    # `from httpx._types import RequestFiles`. `httpx._types` is a PRIVATE
+    # module that was removed in httpx 0.28 (the public surface moved to
+    # `httpx.types`). Without the upper bound pip resolves the latest
+    # httpx and consumer imports of the SDK die with
+    #   ModuleNotFoundError: No module named 'httpx._types'
+    # Caught when the Python SDK staging smoke first ran against the initial
+    # overlay. Re-evaluate when Fern fixes the import to use the public
+    # `httpx.types` surface.
+    "httpx>=0.21.2,<0.28",
+    "pydantic>=1.9.2",
+    "typing_extensions>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://vectros.ai"
+Documentation = "https://developers.vectros.ai"
+Repository = "https://github.com/vectros-ai/vectros-sdk-python"
+
+# Fern emits package source under `vectros/` (relocated there by apply.sh).
+# `find` discovers it and any subpackages (vectros.auth, vectros.core, etc).
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["vectros*"]
+exclude = ["tests*"]

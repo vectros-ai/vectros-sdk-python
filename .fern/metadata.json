@@ -1,0 +1,12 @@
+{
+  "cliVersion": "5.35.2",
+  "generatorName": "fernapi/fern-python-sdk",
+  "generatorVersion": "5.12.11",
+  "generatorConfig": {
+    "package_name": "vectros"
+  },
+  "originGitCommit": "d28581e7775c8e64bea5bd58d521d93b0c1f7d5b",
+  "originGitCommitIsDirty": true,
+  "invokedBy": "ci",
+  "ciProvider": "gitlab"
+}
