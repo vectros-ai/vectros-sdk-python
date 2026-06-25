@@ -3,6 +3,8 @@
 import typing
 
 DocumentResponseStatus = typing.Union[
-    typing.Literal["PENDING_UPLOAD", "UPLOADED", "EXTRACTING", "PENDING_INDEX", "INDEXED", "STORED", "FAILED"],
+    typing.Literal[
+        "PENDING_UPLOAD", "UPLOADED", "EXTRACTING", "PENDING_INDEX", "INDEXED", "SKIPPED", "STORED", "FAILED"
+    ],
     typing.Any,
 ]

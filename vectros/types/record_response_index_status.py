@@ -2,4 +2,4 @@
 
 import typing
 
-RecordResponseIndexStatus = typing.Union[typing.Literal["PENDING_INDEX", "INDEXED", "FAILED"], typing.Any]
+RecordResponseIndexStatus = typing.Union[typing.Literal["PENDING_INDEX", "INDEXED", "SKIPPED", "FAILED"], typing.Any]
