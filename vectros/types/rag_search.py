@@ -75,7 +75,7 @@ class RagSearch(UniversalBaseModel):
         FieldMetadata(alias="typeName"),
         pydantic.Field(
             alias="typeName",
-            description="Restrict retrieval to records of a specific schema type. Applies only to records: setting it implicitly limits results to records unless `contentTypes` also includes `documents`, in which case documents are still returned unfiltered.",
+            description="Restrict retrieval to content of a specific schema type — for example `patient` or `runbook`. Applies to both documents and records: any item whose bound schema type matches is kept. On its own it narrows both content types to that type; combine it with `contentTypes` to narrow within a single content type. Untyped content (ingested without a schema) never matches.",
         ),
     ] = None
     created_after: typing_extensions.Annotated[

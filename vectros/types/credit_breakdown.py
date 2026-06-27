@@ -78,6 +78,28 @@ class CreditBreakdown(UniversalBaseModel):
         FieldMetadata(alias="storageEstimateMilli"),
         pydantic.Field(alias="storageEstimateMilli", description="storageEstimate in milli-credit precision (exact)"),
     ] = None
+    reads: typing.Optional[int] = pydantic.Field(default=None)
+    """
+    Credits consumed by read-call overage
+    """
+
+    reads_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="readsMilli"),
+        pydantic.Field(alias="readsMilli", description="reads in milli-credit precision (exact)"),
+    ] = None
+    data_out: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="dataOut"),
+        pydantic.Field(
+            alias="dataOut", description="Credits consumed by data-out (egress) overage — includes document downloads"
+        ),
+    ] = None
+    data_out_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="dataOutMilli"),
+        pydantic.Field(alias="dataOutMilli", description="dataOut in milli-credit precision (exact)"),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

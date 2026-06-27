@@ -12,6 +12,7 @@ from .documents_section import DocumentsSection
 from .identity_section import IdentitySection
 from .inference_section import InferenceSection
 from .read_access_section import ReadAccessSection
+from .reads_section import ReadsSection
 from .records_section import RecordsSection
 from .search_section import SearchSection
 from .tenants import Tenants
@@ -36,6 +37,7 @@ class UsageReportResponse(UniversalBaseModel):
     ] = None
     identity: typing.Optional[IdentitySection] = None
     inference: typing.Optional[InferenceSection] = None
+    reads: typing.Optional[ReadsSection] = None
     tenants: typing.Optional[Tenants] = None
     contexts: typing.Optional[typing.List[ContextDetail]] = pydantic.Field(default=None)
     """

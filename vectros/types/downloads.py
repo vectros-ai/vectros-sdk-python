@@ -8,17 +8,17 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class Downloads(UniversalBaseModel):
     """
-    Pre-signed download URL usage. Note: downloads are billed at GB granularity (ceiling), so per-environment `credits` values can sum to more than the account-level `credits` when each environment has a sub-GB remainder. The `bytes` field is exact — use `ceil((live.bytes + test.bytes) / 1e9) * DOWNLOAD_CREDITS_PER_GB` for precise math.
+    Pre-signed download URL usage. Document-download egress is metered as part of the unified data-out line: it draws your plan's included data-out allowance and is billed at the data-out rate above it — see `reads.dataOut`. This section is the document-download byte detail; its `credits` is always 0 (the charge appears on the data-out line, not here).
     """
 
     bytes: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Total bytes egressed via download URLs this period
+    Total bytes egressed via download URLs this period (also counted toward `reads.dataOut.bytes`)
     """
 
     credits: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Credits charged for download egress (rounded up to whole GB)
+    Always 0 — document downloads are billed on the unified data-out line (`reads.dataOut`), not as a separate per-download charge.
     """
 
     if IS_PYDANTIC_V2:

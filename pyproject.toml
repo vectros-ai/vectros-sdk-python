@@ -10,7 +10,7 @@
 # generated output in the `sdk_generate` CI job before pushing to the source
 # repo. See `docs/reference/SDK-DISTRIBUTION.md`.
 #
-# `0.29.9` is substituted by apply.sh at build time:
+# `0.30.0` is substituted by apply.sh at build time:
 #   - Production publish: <base> from `fern/sdk-version.txt` (e.g. 0.6.3)
 #   - Staging publish:    <base>.dev0+staging.<short-sha> (PEP 440 local form)
 # =============================================================================
@@ -27,7 +27,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vectros"
-version = "0.29.9"
+version = "0.30.0"
 description = "Vectros AI Platform SDK — hybrid search, document ingestion, structured records, and inference for your application."
 readme = "README.md"
 requires-python = ">=3.8"

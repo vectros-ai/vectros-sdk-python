@@ -8820,7 +8820,7 @@ client.search.content(
 <dl>
 <dd>
 
-**type_name:** `typing.Optional[str]` — Restrict results to records of a specific schema type (for example `patient` or `intake_form`). Has no effect on documents — it only narrows record results. Setting it implicitly limits the results to records, unless you also include documents via `contentTypes`.
+**type_name:** `typing.Optional[str]` — Restrict results to content of a specific schema type — for example `patient`, `intake_form`, or `runbook`. Applies to both documents and records: any item whose bound schema type matches is kept. On its own it narrows both documents and records to that type; combine it with `contentTypes` to narrow within a single content type — for example `contentTypes: ["documents"]` with `typeName: "runbook"` searches only runbook documents. Untyped content (ingested without a schema) never matches a `typeName` filter.
     
 </dd>
 </dl>

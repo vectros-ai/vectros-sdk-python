@@ -12,6 +12,7 @@ from ..core.request_options import RequestOptions
 from ..core.serialization import convert_and_respect_annotation_metadata
 from ..errors.bad_request_error import BadRequestError
 from ..errors.forbidden_error import ForbiddenError
+from ..errors.too_many_requests_error import TooManyRequestsError
 from ..types.filter_value import FilterValue
 from ..types.search_response import SearchResponse
 from .types.search_request_content_types_item import SearchRequestContentTypesItem
@@ -106,7 +107,7 @@ class RawSearchClient:
             Restrict results to content (documents or records) anywhere under this folder subtree — the folder itself and all of its descendants. Provide the Vectros-assigned UUID of a top-level (root) folder. Applies to documents and records alike. Use `folderId` instead to match a single exact folder.
 
         type_name : typing.Optional[str]
-            Restrict results to records of a specific schema type (for example `patient` or `intake_form`). Has no effect on documents — it only narrows record results. Setting it implicitly limits the results to records, unless you also include documents via `contentTypes`.
+            Restrict results to content of a specific schema type — for example `patient`, `intake_form`, or `runbook`. Applies to both documents and records: any item whose bound schema type matches is kept. On its own it narrows both documents and records to that type; combine it with `contentTypes` to narrow within a single content type — for example `contentTypes: ["documents"]` with `typeName: "runbook"` searches only runbook documents. Untyped content (ingested without a schema) never matches a `typeName` filter.
 
         created_after : typing.Optional[str]
             Restrict results to content created at or after this ISO-8601 UTC timestamp. Useful for incremental queries (for example, finding anything ingested in the last hour), for isolating just-created content from older history, and for time-bounded analytics. Pair it with `createdBefore` to define a window.
@@ -181,6 +182,17 @@ class RawSearchClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -283,7 +295,7 @@ class AsyncRawSearchClient:
             Restrict results to content (documents or records) anywhere under this folder subtree — the folder itself and all of its descendants. Provide the Vectros-assigned UUID of a top-level (root) folder. Applies to documents and records alike. Use `folderId` instead to match a single exact folder.
 
         type_name : typing.Optional[str]
-            Restrict results to records of a specific schema type (for example `patient` or `intake_form`). Has no effect on documents — it only narrows record results. Setting it implicitly limits the results to records, unless you also include documents via `contentTypes`.
+            Restrict results to content of a specific schema type — for example `patient`, `intake_form`, or `runbook`. Applies to both documents and records: any item whose bound schema type matches is kept. On its own it narrows both documents and records to that type; combine it with `contentTypes` to narrow within a single content type — for example `contentTypes: ["documents"]` with `typeName: "runbook"` searches only runbook documents. Untyped content (ingested without a schema) never matches a `typeName` filter.
 
         created_after : typing.Optional[str]
             Restrict results to content created at or after this ISO-8601 UTC timestamp. Useful for incremental queries (for example, finding anything ingested in the last hour), for isolating just-created content from older history, and for time-bounded analytics. Pair it with `createdBefore` to define a window.
@@ -358,6 +370,17 @@ class AsyncRawSearchClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
