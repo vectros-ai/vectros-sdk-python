@@ -15,6 +15,11 @@ class UserResponse(UniversalBaseModel):
     A user identity that you control within your account.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new user. True when a new user was created; false when a user with the same `externalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/users); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing user was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     The Vectros-assigned UUID for this user. Use this ID when referencing the user in token minting, record ownership, and filters.

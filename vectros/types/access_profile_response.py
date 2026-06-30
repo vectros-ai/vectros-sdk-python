@@ -14,6 +14,11 @@ class AccessProfileResponse(UniversalBaseModel):
     An access profile — the permission row for one principal within one app context.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new access profile. True when a new profile was created; false when a profile with the same `principalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/app-contexts/{contextId}/profiles); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing profile was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     Opaque identifier for this profile. Also serves as the pagination cursor.

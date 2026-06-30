@@ -15,6 +15,11 @@ class RecordResponse(UniversalBaseModel):
     A record: a structured JSON payload that is stored and, optionally, indexed for search.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new record. True when a new record was created; false when a record with the same `externalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/records); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing record was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     Unique identifier for this record (UUID), assigned by Vectros at creation.

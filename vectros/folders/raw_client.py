@@ -12,6 +12,7 @@ from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
 from ..errors.bad_request_error import BadRequestError
 from ..errors.conflict_error import ConflictError
+from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..types.folder_page import FolderPage
@@ -105,6 +106,7 @@ class RawFoldersClient:
         self,
         *,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
@@ -115,12 +117,15 @@ class RawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FolderResponse]:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
 
         Parameters
         ----------
         name : str
             Human-readable display name of the folder. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a folder with the same slug already exists under the same parent its mutable fields (`name`, `description`, and ownership) are overwritten from the request and the version is bumped, instead of the existing folder being returned unchanged; the immutable slug and parent are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `folders:u` scope in addition to `folders:c`.
 
         description : typing.Optional[str]
             Optional description of the folder's contents or purpose.
@@ -149,11 +154,14 @@ class RawFoldersClient:
         Returns
         -------
         HttpResponse[FolderResponse]
-            The folder was created (or, if a folder with the same slug already exists under the same parent, that existing folder is returned).
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/folders",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "name": name,
                 "description": description,
@@ -163,6 +171,9 @@ class RawFoldersClient:
                 "orgId": org_id,
                 "clientId": client_id,
                 "expectedVersion": expected_version,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -179,6 +190,17 @@ class RawFoldersClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -721,6 +743,7 @@ class AsyncRawFoldersClient:
         self,
         *,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
@@ -731,12 +754,15 @@ class AsyncRawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FolderResponse]:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
 
         Parameters
         ----------
         name : str
             Human-readable display name of the folder. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a folder with the same slug already exists under the same parent its mutable fields (`name`, `description`, and ownership) are overwritten from the request and the version is bumped, instead of the existing folder being returned unchanged; the immutable slug and parent are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `folders:u` scope in addition to `folders:c`.
 
         description : typing.Optional[str]
             Optional description of the folder's contents or purpose.
@@ -765,11 +791,14 @@ class AsyncRawFoldersClient:
         Returns
         -------
         AsyncHttpResponse[FolderResponse]
-            The folder was created (or, if a folder with the same slug already exists under the same parent, that existing folder is returned).
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/folders",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "name": name,
                 "description": description,
@@ -779,6 +808,9 @@ class AsyncRawFoldersClient:
                 "orgId": org_id,
                 "clientId": client_id,
                 "expectedVersion": expected_version,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -795,6 +827,17 @@ class AsyncRawFoldersClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

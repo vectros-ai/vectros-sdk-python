@@ -782,7 +782,7 @@ client.auth.list_access_profiles(
 <dl>
 <dd>
 
-Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 </dd>
 </dl>
 </dd>
@@ -832,6 +832,14 @@ client.auth.create_access_profile(
 <dd>
 
 **request:** `AccessProfileRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
     
 </dd>
 </dl>
@@ -941,7 +949,7 @@ client.auth.list_app_contexts()
 <dl>
 <dd>
 
-Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 </dd>
 </dl>
 </dd>
@@ -983,6 +991,14 @@ client.auth.create_app_context(
 <dd>
 
 **request:** `AppContextRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
     
 </dd>
 </dl>
@@ -1102,7 +1118,7 @@ client.auth.list_roles(
 <dl>
 <dd>
 
-Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing role was returned) tells the two apart. To overwrite an existing role's `name`/`description`/`scopes` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 </dd>
 </dl>
 </dd>
@@ -1161,6 +1177,14 @@ client.auth.create_role(
 <dd>
 
 **request:** `RoleRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
     
 </dd>
 </dl>
@@ -2774,7 +2798,7 @@ client.identity.list_clients(
 <dl>
 <dd>
 
-Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `clients:c` scope.
+Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
 </dd>
 </dl>
 </dd>
@@ -2815,6 +2839,14 @@ client.identity.create_client(
 <dd>
 
 **request:** `ClientRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
     
 </dd>
 </dl>
@@ -3382,7 +3414,7 @@ client.identity.list_orgs(
 <dl>
 <dd>
 
-Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `orgs:c` scope.
+Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
 </dd>
 </dl>
 </dd>
@@ -3423,6 +3455,14 @@ client.identity.create_org(
 <dd>
 
 **request:** `OrgRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
     
 </dd>
 </dl>
@@ -3981,7 +4021,7 @@ client.identity.list_users(
 <dl>
 <dd>
 
-Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `users:c` scope.
+Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
 </dd>
 </dl>
 </dd>
@@ -4022,6 +4062,14 @@ client.identity.create_user(
 <dd>
 
 **request:** `UserRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
     
 </dd>
 </dl>
@@ -4548,7 +4596,7 @@ client.documents.list_documents(
 <dl>
 <dd>
 
-Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Requires the `documents:c` scope.
+Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
 </dd>
 </dl>
 </dd>
@@ -4589,6 +4637,14 @@ client.documents.ingest_document(
 <dd>
 
 **request:** `DocumentRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
     
 </dd>
 </dl>
@@ -4926,7 +4982,7 @@ client.documents.patch_document(
 <dl>
 <dd>
 
-Finds documents of a given type by a schema-declared lookup field. The document must be bound to a schema (via `schemaId`) that declares the field as a lookup field. A lookup on a sensitive field is rejected here, because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -4978,7 +5034,7 @@ client.documents.lookup_documents(
 <dl>
 <dd>
 
-**field:** `str` — The name of the lookup field declared on the schema.
+**field:** `str` — The field to look up by. Use `externalId` to look up by the document's external identifier, or the name of any lookup field declared on the bound schema.
     
 </dd>
 </dl>
@@ -5115,7 +5171,7 @@ client.documents.lookup_documents_by_body(
 <dl>
 <dd>
 
-**field:** `str` — Name of a lookup field declared on the schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
+**field:** `str` — The field to look up by. Use `externalId` to look up by the document's external identifier (no schema declaration required), or the name of any lookup field declared on the bound schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
     
 </dd>
 </dl>
@@ -5427,7 +5483,7 @@ client.documents.get_document_versions(
 <dl>
 <dd>
 
-Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Requires the `documents:c` scope.
+Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body; `?upsert=true` requires the `documents:u` scope). Requires the `documents:c` scope.
 </dd>
 </dl>
 </dd>
@@ -5477,6 +5533,14 @@ client.documents.upload_document(
 <dd>
 
 **file_type:** `str` — MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
     
 </dd>
 </dl>
@@ -6056,7 +6120,7 @@ client.folders.list_folders(
 <dl>
 <dd>
 
-Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Requires the `folders:c` scope.
+Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
 </dd>
 </dl>
 </dd>
@@ -6097,6 +6161,14 @@ client.folders.create_folder(
 <dd>
 
 **request:** `FolderRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a folder with the same slug already exists under the same parent its mutable fields (`name`, `description`, and ownership) are overwritten from the request and the version is bumped, instead of the existing folder being returned unchanged; the immutable slug and parent are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `folders:u` scope in addition to `folders:c`.
     
 </dd>
 </dl>
@@ -7295,7 +7367,7 @@ client.records.list_records(
 <dl>
 <dd>
 
-Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. Requires the `records:c:<type>` scope.
+Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing record was returned) tells the two apart. To overwrite an existing record's content instead of returning it unchanged, set `?upsert=true` (this also requires the `records:u:<type>` scope). Requires the `records:c:<type>` scope.
 </dd>
 </dl>
 </dd>
@@ -7342,6 +7414,14 @@ client.records.create_record(
 <dd>
 
 **request:** `RecordRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
     
 </dd>
 </dl>
@@ -8243,7 +8323,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. Requires the `schemas:w` scope.
+Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
 </dd>
 </dl>
 </dd>
@@ -8311,6 +8391,14 @@ client.schemas.create_schema(
 <dd>
 
 **request:** `SchemaRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
     
 </dd>
 </dl>

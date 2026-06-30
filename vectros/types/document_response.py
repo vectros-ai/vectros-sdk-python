@@ -15,6 +15,11 @@ class DocumentResponse(UniversalBaseModel):
     A document, created either by ingesting raw text or by uploading a file.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new document. True when a new document was created; false when a document with the same `externalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/documents); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing document was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     The Vectros-assigned unique ID of the document.

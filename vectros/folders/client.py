@@ -101,6 +101,7 @@ class FoldersClient:
         self,
         *,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
@@ -111,12 +112,15 @@ class FoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
 
         Parameters
         ----------
         name : str
             Human-readable display name of the folder. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a folder with the same slug already exists under the same parent its mutable fields (`name`, `description`, and ownership) are overwritten from the request and the version is bumped, instead of the existing folder being returned unchanged; the immutable slug and parent are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `folders:u` scope in addition to `folders:c`.
 
         description : typing.Optional[str]
             Optional description of the folder's contents or purpose.
@@ -145,7 +149,7 @@ class FoldersClient:
         Returns
         -------
         FolderResponse
-            The folder was created (or, if a folder with the same slug already exists under the same parent, that existing folder is returned).
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
 
         Examples
         --------
@@ -161,6 +165,7 @@ class FoldersClient:
         """
         _response = self._raw_client.create_folder(
             name=name,
+            upsert=upsert,
             description=description,
             parent_folder_id=parent_folder_id,
             slug=slug,
@@ -531,6 +536,7 @@ class AsyncFoldersClient:
         self,
         *,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
@@ -541,12 +547,15 @@ class AsyncFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
 
         Parameters
         ----------
         name : str
             Human-readable display name of the folder. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a folder with the same slug already exists under the same parent its mutable fields (`name`, `description`, and ownership) are overwritten from the request and the version is bumped, instead of the existing folder being returned unchanged; the immutable slug and parent are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `folders:u` scope in addition to `folders:c`.
 
         description : typing.Optional[str]
             Optional description of the folder's contents or purpose.
@@ -575,7 +584,7 @@ class AsyncFoldersClient:
         Returns
         -------
         FolderResponse
-            The folder was created (or, if a folder with the same slug already exists under the same parent, that existing folder is returned).
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
 
         Examples
         --------
@@ -599,6 +608,7 @@ class AsyncFoldersClient:
         """
         _response = await self._raw_client.create_folder(
             name=name,
+            upsert=upsert,
             description=description,
             parent_folder_id=parent_folder_id,
             slug=slug,

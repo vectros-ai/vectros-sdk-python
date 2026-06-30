@@ -465,6 +465,7 @@ class AuthClient:
         context_id: str,
         *,
         principal_id: str,
+        upsert: typing.Optional[bool] = None,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -472,7 +473,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -480,6 +481,9 @@ class AuthClient:
 
         principal_id : str
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
             Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
@@ -517,6 +521,7 @@ class AuthClient:
         _response = self._raw_client.create_access_profile(
             context_id,
             principal_id=principal_id,
+            upsert=upsert,
             scopes=scopes,
             role_id=role_id,
             identity_overrides=identity_overrides,
@@ -571,11 +576,12 @@ class AuthClient:
         *,
         context_id: str,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
@@ -584,6 +590,9 @@ class AuthClient:
 
         name : str
             Human-readable display name for this app context. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -610,7 +619,7 @@ class AuthClient:
         )
         """
         _response = self._raw_client.create_app_context(
-            context_id=context_id, name=name, description=description, request_options=request_options
+            context_id=context_id, name=name, upsert=upsert, description=description, request_options=request_options
         )
         return _response.data
 
@@ -668,11 +677,12 @@ class AuthClient:
         role_id: str,
         name: str,
         scopes: typing.Sequence[ScopeClause],
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
-        Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing role was returned) tells the two apart. To overwrite an existing role's `name`/`description`/`scopes` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -686,6 +696,9 @@ class AuthClient:
 
         scopes : typing.Sequence[ScopeClause]
             The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -722,6 +735,7 @@ class AuthClient:
             role_id=role_id,
             name=name,
             scopes=scopes,
+            upsert=upsert,
             description=description,
             request_options=request_options,
         )
@@ -2063,6 +2077,7 @@ class AsyncAuthClient:
         context_id: str,
         *,
         principal_id: str,
+        upsert: typing.Optional[bool] = None,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -2070,7 +2085,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -2078,6 +2093,9 @@ class AsyncAuthClient:
 
         principal_id : str
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
             Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
@@ -2123,6 +2141,7 @@ class AsyncAuthClient:
         _response = await self._raw_client.create_access_profile(
             context_id,
             principal_id=principal_id,
+            upsert=upsert,
             scopes=scopes,
             role_id=role_id,
             identity_overrides=identity_overrides,
@@ -2185,11 +2204,12 @@ class AsyncAuthClient:
         *,
         context_id: str,
         name: str,
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
@@ -2198,6 +2218,9 @@ class AsyncAuthClient:
 
         name : str
             Human-readable display name for this app context. Required.
+
+        upsert : typing.Optional[bool]
+            When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -2232,7 +2255,7 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create_app_context(
-            context_id=context_id, name=name, description=description, request_options=request_options
+            context_id=context_id, name=name, upsert=upsert, description=description, request_options=request_options
         )
         return _response.data
 
@@ -2298,11 +2321,12 @@ class AsyncAuthClient:
         role_id: str,
         name: str,
         scopes: typing.Sequence[ScopeClause],
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
-        Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new role under the given app context. This call is idempotent by `roleId`: if a role with the same `roleId` already exists, the existing role is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing role was returned) tells the two apart. To overwrite an existing role's `name`/`description`/`scopes` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). If you use a scoped credential, the role's scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -2316,6 +2340,9 @@ class AsyncAuthClient:
 
         scopes : typing.Sequence[ScopeClause]
             The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -2360,6 +2387,7 @@ class AsyncAuthClient:
             role_id=role_id,
             name=name,
             scopes=scopes,
+            upsert=upsert,
             description=description,
             request_options=request_options,
         )

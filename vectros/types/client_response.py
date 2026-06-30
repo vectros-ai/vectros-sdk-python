@@ -13,6 +13,11 @@ class ClientResponse(UniversalBaseModel):
     A client (subject) identity that you control.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new client. True when a new client was created; false when a client with the same `externalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/clients); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing client was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     The Vectros-assigned UUID for this client. Use this ID when referencing the client in token minting, record ownership, and filters.

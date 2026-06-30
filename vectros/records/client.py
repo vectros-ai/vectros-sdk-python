@@ -237,6 +237,7 @@ class RecordsClient:
     def create_record(
         self,
         *,
+        upsert: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -251,10 +252,13 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
         """
-        Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. Requires the `records:c:<type>` scope.
+        Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing record was returned) tells the two apart. To overwrite an existing record's content instead of returning it unchanged, set `?upsert=true` (this also requires the `records:u:<type>` scope). Requires the `records:c:<type>` scope.
 
         Parameters
         ----------
+        upsert : typing.Optional[bool]
+            When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -294,7 +298,7 @@ class RecordsClient:
         Returns
         -------
         RecordResponse
-            Record created
+            A record with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
 
         Examples
         --------
@@ -312,6 +316,7 @@ class RecordsClient:
         )
         """
         _response = self._raw_client.create_record(
+            upsert=upsert,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,
@@ -1078,6 +1083,7 @@ class AsyncRecordsClient:
     async def create_record(
         self,
         *,
+        upsert: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -1092,10 +1098,13 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
         """
-        Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. Requires the `records:c:<type>` scope.
+        Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing record was returned) tells the two apart. To overwrite an existing record's content instead of returning it unchanged, set `?upsert=true` (this also requires the `records:u:<type>` scope). Requires the `records:c:<type>` scope.
 
         Parameters
         ----------
+        upsert : typing.Optional[bool]
+            When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -1135,7 +1144,7 @@ class AsyncRecordsClient:
         Returns
         -------
         RecordResponse
-            Record created
+            A record with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
 
         Examples
         --------
@@ -1161,6 +1170,7 @@ class AsyncRecordsClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create_record(
+            upsert=upsert,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,

@@ -109,6 +109,7 @@ class DocumentsClient:
         self,
         *,
         title: str,
+        upsert: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
@@ -123,12 +124,15 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Requires the `documents:c` scope.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
 
         Parameters
         ----------
         title : str
             Human-readable document title
+
+        upsert : typing.Optional[bool]
+            When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -169,7 +173,7 @@ class DocumentsClient:
         Returns
         -------
         DocumentResponse
-            Document created and queued for indexing.
+            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
 
         Examples
         --------
@@ -185,6 +189,7 @@ class DocumentsClient:
         """
         _response = self._raw_client.ingest_document(
             title=title,
+            upsert=upsert,
             text=text,
             index_mode=index_mode,
             store_text=store_text,
@@ -476,7 +481,7 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
-        Finds documents of a given type by a schema-declared lookup field. The document must be bound to a schema (via `schemaId`) that declares the field as a lookup field. A lookup on a sensitive field is rejected here, because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -484,7 +489,7 @@ class DocumentsClient:
             The document type to look up (the `type` of the bound schema).
 
         field : str
-            The name of the lookup field declared on the schema.
+            The field to look up by. Use `externalId` to look up by the document's external identifier, or the name of any lookup field declared on the bound schema.
 
         value : typing.Optional[str]
             Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Rejected for a sensitive field — use POST /v1/documents/lookup so the value isn't exposed in the URL.
@@ -568,7 +573,7 @@ class DocumentsClient:
             Document type to look up (the type defined by the bound schema).
 
         field : str
-            Name of a lookup field declared on the schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
+            The field to look up by. Use `externalId` to look up by the document's external identifier (no schema declaration required), or the name of any lookup field declared on the bound schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
 
         value : typing.Optional[str]
             Exact value to match (equality mode). Mutually exclusive with `from`/`to` and `prefix`.
@@ -738,6 +743,7 @@ class DocumentsClient:
         *,
         file_name: str,
         file_type: str,
+        upsert: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -749,7 +755,7 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Requires the `documents:c` scope.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body; `?upsert=true` requires the `documents:u` scope). Requires the `documents:c` scope.
 
         Parameters
         ----------
@@ -758,6 +764,9 @@ class DocumentsClient:
 
         file_type : str
             MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
+
+        upsert : typing.Optional[bool]
+            When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -789,7 +798,7 @@ class DocumentsClient:
         Returns
         -------
         FileUploadResponse
-            A presigned upload URL was generated.
+            A document with the same `externalId` already existed (`created: false`); a fresh presigned URL to its existing object was re-issued (idempotent upload).
 
         Examples
         --------
@@ -807,6 +816,7 @@ class DocumentsClient:
         _response = self._raw_client.upload_document(
             file_name=file_name,
             file_type=file_type,
+            upsert=upsert,
             index_mode=index_mode,
             folder_id=folder_id,
             payload=payload,
@@ -916,6 +926,7 @@ class AsyncDocumentsClient:
         self,
         *,
         title: str,
+        upsert: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
@@ -930,12 +941,15 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Requires the `documents:c` scope.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
 
         Parameters
         ----------
         title : str
             Human-readable document title
+
+        upsert : typing.Optional[bool]
+            When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -976,7 +990,7 @@ class AsyncDocumentsClient:
         Returns
         -------
         DocumentResponse
-            Document created and queued for indexing.
+            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
 
         Examples
         --------
@@ -1000,6 +1014,7 @@ class AsyncDocumentsClient:
         """
         _response = await self._raw_client.ingest_document(
             title=title,
+            upsert=upsert,
             text=text,
             index_mode=index_mode,
             store_text=store_text,
@@ -1325,7 +1340,7 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
-        Finds documents of a given type by a schema-declared lookup field. The document must be bound to a schema (via `schemaId`) that declares the field as a lookup field. A lookup on a sensitive field is rejected here, because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -1333,7 +1348,7 @@ class AsyncDocumentsClient:
             The document type to look up (the `type` of the bound schema).
 
         field : str
-            The name of the lookup field declared on the schema.
+            The field to look up by. Use `externalId` to look up by the document's external identifier, or the name of any lookup field declared on the bound schema.
 
         value : typing.Optional[str]
             Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Rejected for a sensitive field — use POST /v1/documents/lookup so the value isn't exposed in the URL.
@@ -1425,7 +1440,7 @@ class AsyncDocumentsClient:
             Document type to look up (the type defined by the bound schema).
 
         field : str
-            Name of a lookup field declared on the schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
+            The field to look up by. Use `externalId` to look up by the document's external identifier (no schema declaration required), or the name of any lookup field declared on the bound schema. For a sensitive field, this body variant is required (the GET variant rejects sensitive-field lookups).
 
         value : typing.Optional[str]
             Exact value to match (equality mode). Mutually exclusive with `from`/`to` and `prefix`.
@@ -1629,6 +1644,7 @@ class AsyncDocumentsClient:
         *,
         file_name: str,
         file_type: str,
+        upsert: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -1640,7 +1656,7 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Requires the `documents:c` scope.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body; `?upsert=true` requires the `documents:u` scope). Requires the `documents:c` scope.
 
         Parameters
         ----------
@@ -1649,6 +1665,9 @@ class AsyncDocumentsClient:
 
         file_type : str
             MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
+
+        upsert : typing.Optional[bool]
+            When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -1680,7 +1699,7 @@ class AsyncDocumentsClient:
         Returns
         -------
         FileUploadResponse
-            A presigned upload URL was generated.
+            A document with the same `externalId` already existed (`created: false`); a fresh presigned URL to its existing object was re-issued (idempotent upload).
 
         Examples
         --------
@@ -1706,6 +1725,7 @@ class AsyncDocumentsClient:
         _response = await self._raw_client.upload_document(
             file_name=file_name,
             file_type=file_type,
+            upsert=upsert,
             index_mode=index_mode,
             folder_id=folder_id,
             payload=payload,

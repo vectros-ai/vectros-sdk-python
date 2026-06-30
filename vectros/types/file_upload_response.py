@@ -13,6 +13,11 @@ class FileUploadResponse(UniversalBaseModel):
     Response containing the presigned upload URL and the assigned document ID.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new document. True when a new document was created; false when a document with the same `externalId` already existed and a fresh upload URL to its existing object was re-issued (idempotent upload). Present only on the upload response (POST /v1/documents/upload). The HTTP status mirrors it — 201 when created, 200 when an existing document was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     Document ID assigned to this upload. Poll `GET /v1/documents/{id}` to track indexing status after the upload completes.

@@ -11,6 +11,7 @@ from ..core.parse_error import ParsingError
 from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
 from ..errors.bad_request_error import BadRequestError
+from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..types.client_page import ClientPage
@@ -146,6 +147,7 @@ class RawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[ClientRequestStatus] = OMIT,
         org_id: typing.Optional[str] = OMIT,
@@ -154,12 +156,15 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ClientResponse]:
         """
-        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `clients:c` scope.
+        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
 
         name : typing.Optional[str]
             Display name for this client.
@@ -182,11 +187,14 @@ class RawIdentityClient:
         Returns
         -------
         HttpResponse[ClientResponse]
-            The client was created, or the existing client with the same `externalId` was returned.
+            A client with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/clients",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
@@ -194,6 +202,9 @@ class RawIdentityClient:
                 "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -210,6 +221,17 @@ class RawIdentityClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -729,6 +751,7 @@ class RawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[OrgRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -736,12 +759,15 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[OrgResponse]:
         """
-        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `orgs:c` scope.
+        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
 
         name : typing.Optional[str]
             Human-readable name for the organization.
@@ -761,17 +787,23 @@ class RawIdentityClient:
         Returns
         -------
         HttpResponse[OrgResponse]
-            The organization that was created, or the existing organization if one already matched the supplied `externalId`.
+            An organization with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/orgs",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
                 "status": status,
                 "payload": payload,
                 "schemaId": schema_id,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -788,6 +820,17 @@ class RawIdentityClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1295,6 +1338,7 @@ class RawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -1306,12 +1350,15 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[UserResponse]:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `users:c` scope.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -1343,11 +1390,14 @@ class RawIdentityClient:
         Returns
         -------
         HttpResponse[UserResponse]
-            The user was created, or an existing user with the same `externalId` was returned.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/users",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "email": email,
@@ -1358,6 +1408,9 @@ class RawIdentityClient:
                 "inviteToken": invite_token,
                 "externalSubject": external_subject,
                 "emailVerifiedAttestation": email_verified_attestation,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -1374,6 +1427,17 @@ class RawIdentityClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1920,6 +1984,7 @@ class AsyncRawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[ClientRequestStatus] = OMIT,
         org_id: typing.Optional[str] = OMIT,
@@ -1928,12 +1993,15 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ClientResponse]:
         """
-        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `clients:c` scope.
+        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
 
         name : typing.Optional[str]
             Display name for this client.
@@ -1956,11 +2024,14 @@ class AsyncRawIdentityClient:
         Returns
         -------
         AsyncHttpResponse[ClientResponse]
-            The client was created, or the existing client with the same `externalId` was returned.
+            A client with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/clients",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
@@ -1968,6 +2039,9 @@ class AsyncRawIdentityClient:
                 "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -1984,6 +2058,17 @@ class AsyncRawIdentityClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -2505,6 +2590,7 @@ class AsyncRawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[OrgRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -2512,12 +2598,15 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[OrgResponse]:
         """
-        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `orgs:c` scope.
+        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
 
         name : typing.Optional[str]
             Human-readable name for the organization.
@@ -2537,17 +2626,23 @@ class AsyncRawIdentityClient:
         Returns
         -------
         AsyncHttpResponse[OrgResponse]
-            The organization that was created, or the existing organization if one already matched the supplied `externalId`.
+            An organization with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/orgs",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
                 "status": status,
                 "payload": payload,
                 "schemaId": schema_id,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -2564,6 +2659,17 @@ class AsyncRawIdentityClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3075,6 +3181,7 @@ class AsyncRawIdentityClient:
         self,
         *,
         external_id: str,
+        upsert: typing.Optional[bool] = None,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -3086,12 +3193,15 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[UserResponse]:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. Requires the `users:c` scope.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
 
         Parameters
         ----------
         external_id : str
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -3123,11 +3233,14 @@ class AsyncRawIdentityClient:
         Returns
         -------
         AsyncHttpResponse[UserResponse]
-            The user was created, or an existing user with the same `externalId` was returned.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/users",
             method="POST",
+            params={
+                "upsert": upsert,
+            },
             json={
                 "externalId": external_id,
                 "email": email,
@@ -3138,6 +3251,9 @@ class AsyncRawIdentityClient:
                 "inviteToken": invite_token,
                 "externalSubject": external_subject,
                 "emailVerifiedAttestation": email_verified_attestation,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -3154,6 +3270,17 @@ class AsyncRawIdentityClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

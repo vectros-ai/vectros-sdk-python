@@ -13,6 +13,11 @@ class OrgResponse(UniversalBaseModel):
     An organization in your account — an organizational unit you define and control.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new organization. True when a new organization was created; false when an organization with the same `externalId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/orgs); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing organization was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     The Vectros-assigned ID (UUID) for this organization. Use it wherever you reference the organization elsewhere — for example as the owner of a record or as a filter value when listing records.

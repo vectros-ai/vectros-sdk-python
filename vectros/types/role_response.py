@@ -14,6 +14,11 @@ class RoleResponse(UniversalBaseModel):
     A role: a named, reusable set of scope clauses that can be assigned to users independently of any one identity.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new role. True when a new role was created; false when a role with the same `roleId` already existed and was returned unchanged (idempotent create) or updated (when `?upsert=true`). Present only on the create response (POST /v1/app-contexts/{contextId}/roles); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing role was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     The role's globally unique identifier, composed from your account, the app context, and the role ID. Pass this value as the pagination cursor to fetch the next page.

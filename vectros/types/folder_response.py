@@ -13,6 +13,11 @@ class FolderResponse(UniversalBaseModel):
     A folder used to organize your documents and records.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Present only on a create response: `true` when a new folder was created (HTTP 201), `false` when a folder with the same slug already existed under the same parent and was returned instead (HTTP 200). Omitted on reads, lists, and updates.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     Unique identifier for the folder, assigned by Vectros.

@@ -109,6 +109,7 @@ class SchemasClient:
         type_name: str,
         display_name: str,
         allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -123,7 +124,7 @@ class SchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. Requires the `schemas:w` scope.
+        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
 
         Parameters
         ----------
@@ -135,6 +136,9 @@ class SchemasClient:
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
             Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -175,7 +179,7 @@ class SchemasClient:
         Returns
         -------
         SchemaResponse
-            Schema created, or the existing schema returned when one with the same typeName already exists (idempotent).
+            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`.
 
         Examples
         --------
@@ -216,6 +220,7 @@ class SchemasClient:
             type_name=type_name,
             display_name=display_name,
             allowed_surfaces=allowed_surfaces,
+            upsert=upsert,
             description=description,
             fields=fields,
             lookup_fields=lookup_fields,
@@ -547,6 +552,7 @@ class AsyncSchemasClient:
         type_name: str,
         display_name: str,
         allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
+        upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -561,7 +567,7 @@ class AsyncSchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. Requires the `schemas:w` scope.
+        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
 
         Parameters
         ----------
@@ -573,6 +579,9 @@ class AsyncSchemasClient:
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
             Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+
+        upsert : typing.Optional[bool]
+            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -613,7 +622,7 @@ class AsyncSchemasClient:
         Returns
         -------
         SchemaResponse
-            Schema created, or the existing schema returned when one with the same typeName already exists (idempotent).
+            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`.
 
         Examples
         --------
@@ -662,6 +671,7 @@ class AsyncSchemasClient:
             type_name=type_name,
             display_name=display_name,
             allowed_surfaces=allowed_surfaces,
+            upsert=upsert,
             description=description,
             fields=fields,
             lookup_fields=lookup_fields,

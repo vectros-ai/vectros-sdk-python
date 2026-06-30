@@ -19,6 +19,11 @@ class SchemaResponse(UniversalBaseModel):
     A record schema, defining the structure and behavior of a record type.
     """
 
+    created: typing.Optional[bool] = pydantic.Field(default=None)
+    """
+    Whether this call created a new schema. True when a new schema was created; false when a schema with the same `typeName` already existed and was returned unchanged (idempotent create) or reconciled to the submitted shape (when `?upsert=true`). Present only on the create response (POST /v1/schemas); absent on reads. The HTTP status mirrors it — 201 when created, 200 when an existing schema was returned.
+    """
+
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
     Unique identifier for this schema.
