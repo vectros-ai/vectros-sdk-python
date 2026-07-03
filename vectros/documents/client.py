@@ -8,6 +8,7 @@ from ..types.document_download_response import DocumentDownloadResponse
 from ..types.document_lookup_page import DocumentLookupPage
 from ..types.document_page import DocumentPage
 from ..types.document_request_index_mode import DocumentRequestIndexMode
+from ..types.document_request_status import DocumentRequestStatus
 from ..types.document_response import DocumentResponse
 from ..types.document_text_response import DocumentTextResponse
 from ..types.file_upload_response import FileUploadResponse
@@ -121,6 +122,7 @@ class DocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -167,6 +169,9 @@ class DocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -201,6 +206,7 @@ class DocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -252,6 +258,7 @@ class DocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -297,6 +304,9 @@ class DocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -332,6 +342,7 @@ class DocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -382,6 +393,7 @@ class DocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -427,6 +439,9 @@ class DocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -462,6 +477,7 @@ class DocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -755,7 +771,7 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body; `?upsert=true` requires the `documents:u` scope). Requires the `documents:c` scope.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata).
 
         Parameters
         ----------
@@ -938,6 +954,7 @@ class AsyncDocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -984,6 +1001,9 @@ class AsyncDocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1026,6 +1046,7 @@ class AsyncDocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -1087,6 +1108,7 @@ class AsyncDocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -1132,6 +1154,9 @@ class AsyncDocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1175,6 +1200,7 @@ class AsyncDocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -1233,6 +1259,7 @@ class AsyncDocumentsClient:
         client_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
+        status: typing.Optional[DocumentRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
@@ -1278,6 +1305,9 @@ class AsyncDocumentsClient:
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
 
+        status : typing.Optional[DocumentRequestStatus]
+            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1321,6 +1351,7 @@ class AsyncDocumentsClient:
             client_id=client_id,
             external_id=external_id,
             expected_version=expected_version,
+            status=status,
             request_options=request_options,
         )
         return _response.data
@@ -1656,7 +1687,7 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body; `?upsert=true` requires the `documents:u` scope). Requires the `documents:c` scope.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata).
 
         Parameters
         ----------

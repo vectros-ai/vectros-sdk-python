@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .document_request_index_mode import DocumentRequestIndexMode
+from .document_request_status import DocumentRequestStatus
 
 
 class DocumentRequest(UniversalBaseModel):
@@ -101,6 +102,10 @@ class DocumentRequest(UniversalBaseModel):
             description="Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.",
         ),
     ] = None
+    status: typing.Optional[DocumentRequestStatus] = pydantic.Field(default=None)
+    """
+    Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+    """
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

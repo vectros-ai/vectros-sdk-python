@@ -63,8 +63,10 @@ if typing.TYPE_CHECKING:
     from .document_page import DocumentPage
     from .document_request import DocumentRequest
     from .document_request_index_mode import DocumentRequestIndexMode
+    from .document_request_status import DocumentRequestStatus
     from .document_response import DocumentResponse
     from .document_response_index_mode import DocumentResponseIndexMode
+    from .document_response_index_status import DocumentResponseIndexStatus
     from .document_response_status import DocumentResponseStatus
     from .document_storage import DocumentStorage
     from .document_text_response import DocumentTextResponse
@@ -253,8 +255,10 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DocumentPage": ".document_page",
     "DocumentRequest": ".document_request",
     "DocumentRequestIndexMode": ".document_request_index_mode",
+    "DocumentRequestStatus": ".document_request_status",
     "DocumentResponse": ".document_response",
     "DocumentResponseIndexMode": ".document_response_index_mode",
+    "DocumentResponseIndexStatus": ".document_response_index_status",
     "DocumentResponseStatus": ".document_response_status",
     "DocumentStorage": ".document_storage",
     "DocumentTextResponse": ".document_text_response",
@@ -465,8 +469,10 @@ __all__ = [
     "DocumentPage",
     "DocumentRequest",
     "DocumentRequestIndexMode",
+    "DocumentRequestStatus",
     "DocumentResponse",
     "DocumentResponseIndexMode",
+    "DocumentResponseIndexStatus",
     "DocumentResponseStatus",
     "DocumentStorage",
     "DocumentTextResponse",
