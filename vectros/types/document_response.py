@@ -65,7 +65,7 @@ class DocumentResponse(UniversalBaseModel):
         FieldMetadata(alias="storeText"),
         pydantic.Field(
             alias="storeText",
-            description="Whether the raw text is stored and retrievable via GET /v1/documents/{id}/text.",
+            description="Whether the document's text is retained after indexing — fixed at ingest time. Text-ingested documents always retain their body. File-uploaded documents retain their extracted text by default; uploaded with `storeText=false`, the extracted text is discarded once indexing completes (`/text` then returns 404 and `/ask` 409; search and the file download are unaffected). Note: documents created before this flag reached its current semantics may report `false` while their text was in fact retained (file documents from before the flag was settable, and text documents ingested under the old opt-in) — `GET /{id}/text` succeeding is the authoritative signal for those.",
         ),
     ] = None
     folder_id: typing_extensions.Annotated[

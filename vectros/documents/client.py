@@ -113,7 +113,6 @@ class DocumentsClient:
         upsert: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -141,9 +140,6 @@ class DocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -197,7 +193,6 @@ class DocumentsClient:
             upsert=upsert,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -249,7 +244,6 @@ class DocumentsClient:
         title: str,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -276,9 +270,6 @@ class DocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -333,7 +324,6 @@ class DocumentsClient:
             title=title,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -384,7 +374,6 @@ class DocumentsClient:
         title: str,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -397,7 +386,7 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `storeText`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode` and `externalId` are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
+        Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode`, `externalId`, and `storeText` (text retention is fixed at ingest) are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
 
         Parameters
         ----------
@@ -411,9 +400,6 @@ class DocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -468,7 +454,6 @@ class DocumentsClient:
             title=title,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -684,7 +669,7 @@ class DocumentsClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> DocumentTextResponse:
         """
-        Returns the full extracted or ingested text body for documents that were stored with `storeText=true`. Returns 404 when the document does not exist or when no text is available (because `storeText` was false, or extraction has not yet completed). Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -761,6 +746,7 @@ class DocumentsClient:
         file_type: str,
         upsert: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
+        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -786,6 +772,9 @@ class DocumentsClient:
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
+
+        store_text : typing.Optional[bool]
+            Whether the text extracted from this file is retained after indexing. Defaults to true: the extracted text stays retrievable via `GET /v1/documents/{id}/text` and usable by `POST /v1/documents/{id}/ask`. Set false to discard the extracted text once indexing completes — search results and the original file download are unaffected, but `/text` returns 404 and `/ask` returns 409 for the document. Fixed at ingest time: it cannot be changed later, and a re-upload to the same document keeps the original choice.
 
         folder_id : typing.Optional[str]
             ID of the folder in which to place this document. Omit to use your account's default root folder.
@@ -834,6 +823,7 @@ class DocumentsClient:
             file_type=file_type,
             upsert=upsert,
             index_mode=index_mode,
+            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -945,7 +935,6 @@ class AsyncDocumentsClient:
         upsert: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -973,9 +962,6 @@ class AsyncDocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -1037,7 +1023,6 @@ class AsyncDocumentsClient:
             upsert=upsert,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -1099,7 +1084,6 @@ class AsyncDocumentsClient:
         title: str,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -1126,9 +1110,6 @@ class AsyncDocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -1191,7 +1172,6 @@ class AsyncDocumentsClient:
             title=title,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -1250,7 +1230,6 @@ class AsyncDocumentsClient:
         title: str,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
-        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -1263,7 +1242,7 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `storeText`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode` and `externalId` are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
+        Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode`, `externalId`, and `storeText` (text retention is fixed at ingest) are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
 
         Parameters
         ----------
@@ -1277,9 +1256,6 @@ class AsyncDocumentsClient:
 
         index_mode : typing.Optional[DocumentRequestIndexMode]
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
-
-        store_text : typing.Optional[bool]
-            If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.
 
         folder_id : typing.Optional[str]
             ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
@@ -1342,7 +1318,6 @@ class AsyncDocumentsClient:
             title=title,
             text=text,
             index_mode=index_mode,
-            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,
@@ -1582,7 +1557,7 @@ class AsyncDocumentsClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> DocumentTextResponse:
         """
-        Returns the full extracted or ingested text body for documents that were stored with `storeText=true`. Returns 404 when the document does not exist or when no text is available (because `storeText` was false, or extraction has not yet completed). Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -1677,6 +1652,7 @@ class AsyncDocumentsClient:
         file_type: str,
         upsert: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
+        store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
@@ -1702,6 +1678,9 @@ class AsyncDocumentsClient:
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
+
+        store_text : typing.Optional[bool]
+            Whether the text extracted from this file is retained after indexing. Defaults to true: the extracted text stays retrievable via `GET /v1/documents/{id}/text` and usable by `POST /v1/documents/{id}/ask`. Set false to discard the extracted text once indexing completes — search results and the original file download are unaffected, but `/text` returns 404 and `/ask` returns 409 for the document. Fixed at ingest time: it cannot be changed later, and a re-upload to the same document keeps the original choice.
 
         folder_id : typing.Optional[str]
             ID of the folder in which to place this document. Omit to use your account's default root folder.
@@ -1758,6 +1737,7 @@ class AsyncDocumentsClient:
             file_type=file_type,
             upsert=upsert,
             index_mode=index_mode,
+            store_text=store_text,
             folder_id=folder_id,
             payload=payload,
             schema_id=schema_id,

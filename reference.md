@@ -4901,7 +4901,7 @@ client.documents.delete_document(
 <dl>
 <dd>
 
-Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `storeText`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode` and `externalId` are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
+Partially updates a document using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged: keys you send overwrite existing values (recursing into nested objects), a key set to `null` is deleted, and keys you omit are preserved — unlike PUT, which replaces the whole payload. Top-level fields (`title`, `folderId`, `schemaId`, ownership) are set when present and left unchanged when omitted; sending a top-level field as `null` is rejected. Supplying `text` re-ingests the document body (same as PUT). `indexMode`, `externalId`, and `storeText` (text retention is fixed at ingest) are immutable and rejected if present. The merged result is validated against the bound schema. Pass `expectedVersion` for optimistic concurrency (409 on conflict). Requires the `documents:u` scope.
 </dd>
 </dl>
 </dd>
@@ -5331,7 +5331,7 @@ client.documents.get_document_download_url(
 <dl>
 <dd>
 
-Returns the full extracted or ingested text body for documents that were stored with `storeText=true`. Returns 404 when the document does not exist or when no text is available (because `storeText` was false, or extraction has not yet completed). Requires the `documents:r` scope.
+Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -5549,6 +5549,14 @@ client.documents.upload_document(
 <dd>
 
 **index_mode:** `typing.Optional[FileUploadRequestIndexMode]` — Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**store_text:** `typing.Optional[bool]` — Whether the text extracted from this file is retained after indexing. Defaults to true: the extracted text stays retrievable via `GET /v1/documents/{id}/text` and usable by `POST /v1/documents/{id}/ask`. Set false to discard the extracted text once indexing completes — search results and the original file download are unaffected, but `/text` returns 404 and `/ask` returns 409 for the document. Fixed at ingest time: it cannot be changed later, and a re-upload to the same document keeps the original choice.
     
 </dd>
 </dl>

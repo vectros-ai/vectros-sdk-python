@@ -12,7 +12,7 @@ from .document_request_status import DocumentRequestStatus
 
 class DocumentRequest(UniversalBaseModel):
     """
-    Request body for creating or updating a text-ingested document. Update semantics (PUT): omitted fields are preserved — sending null does not clear a field; `payload` is replaced in full when supplied (not deep-merged); `indexMode` is fixed at creation and ignored on update; `text` is used only on the POST ingest path.
+    Request body for creating or updating a text-ingested document. Update semantics (PUT): omitted fields are preserved — sending null does not clear a field; `payload` is replaced in full when supplied (not deep-merged); `indexMode` is fixed at creation and ignored on update; `text` is used only on the POST ingest path. Text-ingested documents always retain their body (retrievable via `GET /{id}/text`); the `storeText` retention flag applies only to file uploads (`POST /v1/documents/upload`).
     """
 
     title: str = pydantic.Field()
@@ -31,14 +31,6 @@ class DocumentRequest(UniversalBaseModel):
         pydantic.Field(
             alias="indexMode",
             description="Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.",
-        ),
-    ] = None
-    store_text: typing_extensions.Annotated[
-        typing.Optional[bool],
-        FieldMetadata(alias="storeText"),
-        pydantic.Field(
-            alias="storeText",
-            description="If true, the raw text is retained so you can later fetch it via `GET /v1/documents/{id}/text`. Defaults to false to minimize storage costs.",
         ),
     ] = None
     folder_id: typing_extensions.Annotated[
