@@ -43,13 +43,14 @@ class RawDocumentsClient:
         user_id: typing.Optional[str] = None,
         org_id: typing.Optional[str] = None,
         client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[DocumentPage]:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, or `clientId`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -61,6 +62,9 @@ class RawDocumentsClient:
 
         client_id : typing.Optional[str]
             Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
+
+        scope : typing.Optional[str]
+            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
 
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
@@ -86,6 +90,7 @@ class RawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scope": scope,
                 "folderId": folder_id,
                 "startFrom": start_from,
                 "limit": limit,
@@ -116,6 +121,7 @@ class RawDocumentsClient:
         *,
         title: str,
         upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -124,6 +130,7 @@ class RawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -139,6 +146,9 @@ class RawDocumentsClient:
 
         upsert : typing.Optional[bool]
             When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -164,6 +174,9 @@ class RawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -186,6 +199,7 @@ class RawDocumentsClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "allowClear": allow_clear,
             },
             json={
                 "title": title,
@@ -197,6 +211,7 @@ class RawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -317,6 +332,7 @@ class RawDocumentsClient:
         id: str,
         *,
         title: str,
+        allow_clear: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -325,6 +341,7 @@ class RawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -339,6 +356,9 @@ class RawDocumentsClient:
 
         title : str
             Human-readable document title
+
+        allow_clear : typing.Optional[bool]
+            A `PUT` is a full replacement: if the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -364,6 +384,9 @@ class RawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -384,6 +407,9 @@ class RawDocumentsClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/documents/{encode_path_param(id)}",
             method="PUT",
+            params={
+                "allowClear": allow_clear,
+            },
             json={
                 "title": title,
                 "text": text,
@@ -394,6 +420,7 @@ class RawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -536,6 +563,7 @@ class RawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -575,6 +603,9 @@ class RawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -605,6 +636,7 @@ class RawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -1077,6 +1109,7 @@ class RawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FileUploadResponse]:
@@ -1118,6 +1151,9 @@ class RawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: initiating an upload again with the same `externalId` returns the same document plus a fresh presigned URL (idempotent — no duplicate), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -1146,6 +1182,7 @@ class RawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
             },
             headers={
@@ -1217,13 +1254,14 @@ class AsyncRawDocumentsClient:
         user_id: typing.Optional[str] = None,
         org_id: typing.Optional[str] = None,
         client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[DocumentPage]:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, or `clientId`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -1235,6 +1273,9 @@ class AsyncRawDocumentsClient:
 
         client_id : typing.Optional[str]
             Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
+
+        scope : typing.Optional[str]
+            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
 
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
@@ -1260,6 +1301,7 @@ class AsyncRawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scope": scope,
                 "folderId": folder_id,
                 "startFrom": start_from,
                 "limit": limit,
@@ -1290,6 +1332,7 @@ class AsyncRawDocumentsClient:
         *,
         title: str,
         upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1298,6 +1341,7 @@ class AsyncRawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -1313,6 +1357,9 @@ class AsyncRawDocumentsClient:
 
         upsert : typing.Optional[bool]
             When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -1338,6 +1385,9 @@ class AsyncRawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -1360,6 +1410,7 @@ class AsyncRawDocumentsClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "allowClear": allow_clear,
             },
             json={
                 "title": title,
@@ -1371,6 +1422,7 @@ class AsyncRawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -1491,6 +1543,7 @@ class AsyncRawDocumentsClient:
         id: str,
         *,
         title: str,
+        allow_clear: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1499,6 +1552,7 @@ class AsyncRawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -1513,6 +1567,9 @@ class AsyncRawDocumentsClient:
 
         title : str
             Human-readable document title
+
+        allow_clear : typing.Optional[bool]
+            A `PUT` is a full replacement: if the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -1538,6 +1595,9 @@ class AsyncRawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -1558,6 +1618,9 @@ class AsyncRawDocumentsClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/documents/{encode_path_param(id)}",
             method="PUT",
+            params={
+                "allowClear": allow_clear,
+            },
             json={
                 "title": title,
                 "text": text,
@@ -1568,6 +1631,7 @@ class AsyncRawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -1710,6 +1774,7 @@ class AsyncRawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         status: typing.Optional[DocumentRequestStatus] = OMIT,
@@ -1749,6 +1814,9 @@ class AsyncRawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -1779,6 +1847,7 @@ class AsyncRawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
@@ -2251,6 +2320,7 @@ class AsyncRawDocumentsClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FileUploadResponse]:
@@ -2292,6 +2362,9 @@ class AsyncRawDocumentsClient:
         client_id : typing.Optional[str]
             Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: initiating an upload again with the same `externalId` returns the same document plus a fresh presigned URL (idempotent — no duplicate), and it is the key other records use to reference this one. Max 256 characters.
 
@@ -2320,6 +2393,7 @@ class AsyncRawDocumentsClient:
                 "userId": user_id,
                 "orgId": org_id,
                 "clientId": client_id,
+                "scopes": scopes,
                 "externalId": external_id,
             },
             headers={

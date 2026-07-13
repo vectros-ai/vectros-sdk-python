@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .record_request_index_mode import RecordRequestIndexMode
+from .record_request_status import RecordRequestStatus
 
 
 class RecordRequest(UniversalBaseModel):
@@ -35,9 +36,9 @@ class RecordRequest(UniversalBaseModel):
     The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
     """
 
-    status: typing.Optional[str] = pydantic.Field(default=None)
+    status: typing.Optional[RecordRequestStatus] = pydantic.Field(default=None)
     """
-    Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+    Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
     """
 
     folder_id: typing_extensions.Annotated[
@@ -72,6 +73,11 @@ class RecordRequest(UniversalBaseModel):
             description="Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.",
         ),
     ] = None
+    scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+    """
+
     external_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="externalId"),
@@ -86,6 +92,14 @@ class RecordRequest(UniversalBaseModel):
         pydantic.Field(
             alias="indexMode",
             description="Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.",
+        ),
+    ] = None
+    expires_at: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="expiresAt"),
+        pydantic.Field(
+            alias="expiresAt",
+            description="Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.",
         ),
     ] = None
     expected_version: typing_extensions.Annotated[

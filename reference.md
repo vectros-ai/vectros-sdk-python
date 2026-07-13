@@ -1147,8 +1147,8 @@ client.auth.create_role(
     scopes=[
         ScopeClause(
             allowed_actions=[
-                "read",
-                "write"
+                "records:cru",
+                "search:r"
             ],
         )
     ],
@@ -1813,8 +1813,8 @@ client.auth.update_role(
     scopes=[
         ScopeClause(
             allowed_actions=[
-                "read",
-                "write"
+                "records:cru",
+                "search:r"
             ],
         )
     ],
@@ -4480,7 +4480,7 @@ client.identity.get_user_versions(
 <dl>
 <dd>
 
-Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, or `clientId`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -4506,6 +4506,7 @@ client.documents.list_documents(
     user_id="550e8400-e29b-41d4-a716-446655440000",
     org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
     client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    scope="group:eng-team",
     folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
     start_from="doc_prev123",
 )
@@ -4541,6 +4542,14 @@ client.documents.list_documents(
 <dd>
 
 **client_id:** `typing.Optional[str]` — Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
     
 </dd>
 </dl>
@@ -4645,6 +4654,14 @@ client.documents.ingest_document(
 <dd>
 
 **upsert:** `typing.Optional[bool]` — When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**allow_clear:** `typing.Optional[bool]` — Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
     
 </dd>
 </dl>
@@ -4798,6 +4815,14 @@ client.documents.update_document(
 <dd>
 
 **request:** `DocumentRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**allow_clear:** `typing.Optional[bool]` — A `PUT` is a full replacement: if the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
     
 </dd>
 </dl>
@@ -5605,6 +5630,14 @@ client.documents.upload_document(
 <dd>
 
 **client_id:** `typing.Optional[str]` — Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scopes:** `typing.Optional[typing.List[str]]` — The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
     
 </dd>
 </dl>
@@ -7234,7 +7267,7 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 </dd>
 </dl>
 </dd>
@@ -7262,6 +7295,7 @@ client.records.list_records(
     user_id="550e8400-e29b-41d4-a716-446655440000",
     org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
     client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    scope="group:eng-team",
     start_from="550e8400-e29b-41d4-a716-446655440000",
 )
 
@@ -7312,6 +7346,14 @@ client.records.list_records(
 <dd>
 
 **client_id:** `typing.Optional[str]` — Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
     
 </dd>
 </dl>
@@ -7430,6 +7472,14 @@ client.records.create_record(
 <dd>
 
 **upsert:** `typing.Optional[bool]` — When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**allow_clear:** `typing.Optional[bool]` — Only relevant with `?upsert=true`, which overwrites an existing record as a full replacement. If the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
     
 </dd>
 </dl>
@@ -7582,6 +7632,14 @@ client.records.update_record(
 <dd>
 
 **request:** `RecordRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**allow_clear:** `typing.Optional[bool]` — A `PUT` is a full replacement: if the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
     
 </dd>
 </dl>
@@ -8837,6 +8895,14 @@ client.search.content(
 <dd>
 
 **client_id:** `typing.Optional[str]` — Restrict results to content associated with this client — the Vectros-assigned UUID of a client in your account. Use `GET /v1/clients?externalId=` to look up a client's ID from your own identifier.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Restrict results to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Scope values are attached to records and documents at creation (the `scopes` field).
     
 </dd>
 </dl>

@@ -46,6 +46,11 @@ class RagSearch(UniversalBaseModel):
         FieldMetadata(alias="clientId"),
         pydantic.Field(alias="clientId", description="Restrict retrieval to content tagged with this client id."),
     ] = None
+    scope: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    Restrict retrieval to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
+    """
+
     content_types: typing_extensions.Annotated[
         typing.Optional[typing.List[RagSearchContentTypesItem]],
         FieldMetadata(alias="contentTypes"),

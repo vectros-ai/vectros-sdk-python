@@ -13,6 +13,7 @@ from ..types.record_lookup_response import RecordLookupResponse
 from ..types.record_page import RecordPage
 from ..types.record_request import RecordRequest
 from ..types.record_request_index_mode import RecordRequestIndexMode
+from ..types.record_request_status import RecordRequestStatus
 from ..types.record_response import RecordResponse
 from .raw_client import AsyncRawRecordsClient, RawRecordsClient
 from .types.batch_write_request_atomicity import BatchWriteRequestAtomicity
@@ -157,6 +158,7 @@ class RecordsClient:
         user_id: typing.Optional[str] = None,
         org_id: typing.Optional[str] = None,
         client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         include_payload: typing.Optional[str] = None,
@@ -164,7 +166,7 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordPage:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 
         Parameters
         ----------
@@ -182,6 +184,9 @@ class RecordsClient:
 
         client_id : typing.Optional[str]
             Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
+
+        scope : typing.Optional[str]
+            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
@@ -217,6 +222,7 @@ class RecordsClient:
             user_id="550e8400-e29b-41d4-a716-446655440000",
             org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            scope="group:eng-team",
             start_from="550e8400-e29b-41d4-a716-446655440000",
         )
         """
@@ -226,6 +232,7 @@ class RecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scope=scope,
             start_from=start_from,
             limit=limit,
             include_payload=include_payload,
@@ -238,16 +245,19 @@ class RecordsClient:
         self,
         *,
         upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -259,6 +269,9 @@ class RecordsClient:
         upsert : typing.Optional[bool]
             When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
 
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`, which overwrites an existing record as a full replacement. If the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -268,8 +281,8 @@ class RecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -283,11 +296,17 @@ class RecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -317,6 +336,7 @@ class RecordsClient:
         """
         _response = self._raw_client.create_record(
             upsert=upsert,
+            allow_clear=allow_clear,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,
@@ -325,8 +345,10 @@ class RecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -368,16 +390,19 @@ class RecordsClient:
         self,
         id: str,
         *,
+        allow_clear: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -389,6 +414,9 @@ class RecordsClient:
         id : str
             The Vectros-assigned UUID of the record to update.
 
+        allow_clear : typing.Optional[bool]
+            A `PUT` is a full replacement: if the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -398,8 +426,8 @@ class RecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -413,11 +441,17 @@ class RecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -444,6 +478,7 @@ class RecordsClient:
         """
         _response = self._raw_client.update_record(
             id,
+            allow_clear=allow_clear,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,
@@ -452,8 +487,10 @@ class RecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -497,13 +534,15 @@ class RecordsClient:
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -524,8 +563,8 @@ class RecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -539,11 +578,17 @@ class RecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -580,8 +625,10 @@ class RecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -995,6 +1042,7 @@ class AsyncRecordsClient:
         user_id: typing.Optional[str] = None,
         org_id: typing.Optional[str] = None,
         client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         include_payload: typing.Optional[str] = None,
@@ -1002,7 +1050,7 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordPage:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 
         Parameters
         ----------
@@ -1020,6 +1068,9 @@ class AsyncRecordsClient:
 
         client_id : typing.Optional[str]
             Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
+
+        scope : typing.Optional[str]
+            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
@@ -1060,6 +1111,7 @@ class AsyncRecordsClient:
                 user_id="550e8400-e29b-41d4-a716-446655440000",
                 org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
                 client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                scope="group:eng-team",
                 start_from="550e8400-e29b-41d4-a716-446655440000",
             )
 
@@ -1072,6 +1124,7 @@ class AsyncRecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scope=scope,
             start_from=start_from,
             limit=limit,
             include_payload=include_payload,
@@ -1084,16 +1137,19 @@ class AsyncRecordsClient:
         self,
         *,
         upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -1105,6 +1161,9 @@ class AsyncRecordsClient:
         upsert : typing.Optional[bool]
             When `true`, if a record with the same `externalId` already exists its content is overwritten (the submitted `payload` and mutable fields are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`/`typeName`, and ownership are never changed. A re-applied upsert whose content matches is a no-op (no version bump). Defaults to `false`. Requires the `records:u:<type>` scope in addition to `records:c:<type>`.
 
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`, which overwrites an existing record as a full replacement. If the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -1114,8 +1173,8 @@ class AsyncRecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -1129,11 +1188,17 @@ class AsyncRecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -1171,6 +1236,7 @@ class AsyncRecordsClient:
         """
         _response = await self._raw_client.create_record(
             upsert=upsert,
+            allow_clear=allow_clear,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,
@@ -1179,8 +1245,10 @@ class AsyncRecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -1230,16 +1298,19 @@ class AsyncRecordsClient:
         self,
         id: str,
         *,
+        allow_clear: typing.Optional[bool] = None,
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -1251,6 +1322,9 @@ class AsyncRecordsClient:
         id : str
             The Vectros-assigned UUID of the record to update.
 
+        allow_clear : typing.Optional[bool]
+            A `PUT` is a full replacement: if the submitted `payload` omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large record whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
         type_name : typing.Optional[str]
             The record type, matching a schema's record type. Provide `typeName` or `schemaId` (at least one is required); when only `schemaId` is given, the type is resolved from the schema, and when both are given they must agree. Immutable after creation and ignored on update.
 
@@ -1260,8 +1334,8 @@ class AsyncRecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -1275,11 +1349,17 @@ class AsyncRecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -1314,6 +1394,7 @@ class AsyncRecordsClient:
         """
         _response = await self._raw_client.update_record(
             id,
+            allow_clear=allow_clear,
             type_name=type_name,
             schema_id=schema_id,
             payload=payload,
@@ -1322,8 +1403,10 @@ class AsyncRecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -1375,13 +1458,15 @@ class AsyncRecordsClient:
         type_name: typing.Optional[str] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        status: typing.Optional[str] = OMIT,
+        status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
+        expires_at: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
@@ -1402,8 +1487,8 @@ class AsyncRecordsClient:
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The record's data payload — a JSON object whose structure is validated against the referenced schema. Fields the schema marks as searchable contribute to full-text and semantic search. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
 
-        status : typing.Optional[str]
-            Record lifecycle status. Defaults to ACTIVE. Use it to model soft-delete or workflow states without physically deleting records.
+        status : typing.Optional[RecordRequestStatus]
+            Record lifecycle status. `ACTIVE` (the default) keeps the record live and searchable; `ARCHIVED` retracts it from search and recall (`POST /v1/search` and RAG) while keeping it stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` — set it back to `ACTIVE` to re-index and restore. On update, omit to leave the current status unchanged.
 
         folder_id : typing.Optional[str]
             Identifier of the folder to group this record with related documents. On create, omit to leave the record ungrouped. On update, omit to leave it unchanged; once set, this field cannot be cleared.
@@ -1417,11 +1502,17 @@ class AsyncRecordsClient:
         client_id : typing.Optional[str]
             Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
 
+        scopes : typing.Optional[typing.Sequence[str]]
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
 
         index_mode : typing.Optional[RecordRequestIndexMode]
             Per-record override of the search-index mode. HYBRID, SEMANTIC, and TEXT index this record for search; NONE is store-only (persisted, retrievable by id, and findable by structured-field lookup, but not searchable). Optional — omit it to inherit the schema's type-level default index mode (which itself defaults to NONE when the schema declares none). When both are set, this per-record value wins. Immutable after create.
+
+        expires_at : typing.Optional[str]
+            Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
@@ -1466,8 +1557,10 @@ class AsyncRecordsClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             external_id=external_id,
             index_mode=index_mode,
+            expires_at=expires_at,
             expected_version=expected_version,
             request_options=request_options,
         )

@@ -108,6 +108,7 @@ class FoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -139,6 +140,9 @@ class FoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -172,6 +176,7 @@ class FoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -219,6 +224,7 @@ class FoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -249,6 +255,9 @@ class FoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -283,6 +292,7 @@ class FoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -329,6 +339,7 @@ class FoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -359,6 +370,9 @@ class FoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -393,6 +407,7 @@ class FoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -543,6 +558,7 @@ class AsyncFoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -574,6 +590,9 @@ class AsyncFoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -615,6 +634,7 @@ class AsyncFoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -670,6 +690,7 @@ class AsyncFoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -700,6 +721,9 @@ class AsyncFoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -742,6 +766,7 @@ class AsyncFoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )
@@ -796,6 +821,7 @@ class AsyncFoldersClient:
         user_id: typing.Optional[str] = OMIT,
         org_id: typing.Optional[str] = OMIT,
         client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FolderResponse:
@@ -826,6 +852,9 @@ class AsyncFoldersClient:
 
         client_id : typing.Optional[str]
             Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -868,6 +897,7 @@ class AsyncFoldersClient:
             user_id=user_id,
             org_id=org_id,
             client_id=client_id,
+            scopes=scopes,
             expected_version=expected_version,
             request_options=request_options,
         )

@@ -148,9 +148,11 @@ if typing.TYPE_CHECKING:
     from .record_page import RecordPage
     from .record_request import RecordRequest
     from .record_request_index_mode import RecordRequestIndexMode
+    from .record_request_status import RecordRequestStatus
     from .record_response import RecordResponse
     from .record_response_index_mode import RecordResponseIndexMode
     from .record_response_index_status import RecordResponseIndexStatus
+    from .record_response_status import RecordResponseStatus
     from .record_writes import RecordWrites
     from .records_section import RecordsSection
     from .region_pricing import RegionPricing
@@ -338,9 +340,11 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RecordPage": ".record_page",
     "RecordRequest": ".record_request",
     "RecordRequestIndexMode": ".record_request_index_mode",
+    "RecordRequestStatus": ".record_request_status",
     "RecordResponse": ".record_response",
     "RecordResponseIndexMode": ".record_response_index_mode",
     "RecordResponseIndexStatus": ".record_response_index_status",
+    "RecordResponseStatus": ".record_response_status",
     "RecordWrites": ".record_writes",
     "RecordsSection": ".records_section",
     "RegionPricing": ".region_pricing",
@@ -552,9 +556,11 @@ __all__ = [
     "RecordPage",
     "RecordRequest",
     "RecordRequestIndexMode",
+    "RecordRequestStatus",
     "RecordResponse",
     "RecordResponseIndexMode",
     "RecordResponseIndexStatus",
+    "RecordResponseStatus",
     "RecordWrites",
     "RecordsSection",
     "RegionPricing",

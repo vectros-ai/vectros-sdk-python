@@ -86,6 +86,14 @@ class DocumentResponse(UniversalBaseModel):
             description="True when this document's structured payload is large enough to be stored externally rather than inline. In that case `payload` on a list response holds only the inline subset of fields; fetch the full payload with a by-id GET.",
         ),
     ] = None
+    payload_partial: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="payloadPartial"),
+        pydantic.Field(
+            alias="payloadPartial",
+            description="True when THIS response returned only a PARTIAL structured payload — a large document's bulk fields are omitted from `payload` because you did not request them (a list or lookup without `includePayload=true`). Unlike `payloadExternalized` (also true on a by-id read that DID return the full payload), this tells you the payload in hand is incomplete: fetch the full payload with a by-id GET or `includePayload=true`. To UPDATE such a document, use `PATCH` (which preserves omitted fields) — a `PUT` built from this response would clear them unless you pass `?allowClear=true`. Null when the payload is complete. (The document's text/body is always preserved on a `PUT` that omits `text`.)",
+        ),
+    ] = None
     schema_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="schemaId"),
@@ -130,6 +138,11 @@ class DocumentResponse(UniversalBaseModel):
             description="The associated client — the Vectros-assigned UUID of a client in your account.",
         ),
     ] = None
+    scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    The document's scope ownership as canonical `namespace:value` entries (at most 2). `org:` and `client:` entries mirror the `orgId` and `clientId` fields; any other namespace is a custom scope attached at creation. Empty for a document owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
+    """
+
     file_type: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="fileType"),

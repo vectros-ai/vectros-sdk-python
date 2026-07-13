@@ -8,6 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .record_response_index_mode import RecordResponseIndexMode
 from .record_response_index_status import RecordResponseIndexStatus
+from .record_response_status import RecordResponseStatus
 
 
 class RecordResponse(UniversalBaseModel):
@@ -75,9 +76,17 @@ class RecordResponse(UniversalBaseModel):
             description="Size in bytes of the full externalized payload. Present only when `payloadExternalized` is true.",
         ),
     ] = None
-    status: typing.Optional[str] = pydantic.Field(default=None)
+    payload_partial: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="payloadPartial"),
+        pydantic.Field(
+            alias="payloadPartial",
+            description="True when THIS response returned only a PARTIAL payload — a large record's bulk fields are omitted from `payload` because you did not request them (a list or lookup without `includePayload=true`). Unlike `payloadExternalized` (which is also true on a by-id read that DID return the full payload), this tells you the payload in hand is incomplete. To get the full payload, fetch the record by id (`GET /v1/records/{id}`) or pass `includePayload=true`. To UPDATE such a record, use `PATCH` (which preserves omitted fields) — a `PUT` built from this response would clear the omitted fields unless you pass `?allowClear=true`. Null (omitted) when the payload is complete.",
+        ),
+    ] = None
+    status: typing.Optional[RecordResponseStatus] = pydantic.Field(default=None)
     """
-    Record lifecycle status. ACTIVE records are live. Use this field to model soft-delete or workflow states without physically deleting records.
+    Record lifecycle status. `ACTIVE` records are live and searchable; `ARCHIVED` records are retracted from search and recall while kept stored, retrievable by id, findable by structured-field lookup, and listed by `GET /v1/records` (set `status` back to `ACTIVE` to restore).
     """
 
     folder_id: typing_extensions.Annotated[
@@ -112,6 +121,11 @@ class RecordResponse(UniversalBaseModel):
             description="Identifier of the associated client (a Vectros-assigned UUID). Set automatically from the calling token's identity when the token carries a client identity.",
         ),
     ] = None
+    scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    The record's scope ownership as canonical `namespace:value` entries (at most 2). `org:` and `client:` entries mirror the `orgId` and `clientId` fields; any other namespace is a custom scope attached at creation. Empty for a record owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
+    """
+
     index_status: typing_extensions.Annotated[
         typing.Optional[RecordResponseIndexStatus],
         FieldMetadata(alias="indexStatus"),
@@ -152,6 +166,15 @@ class RecordResponse(UniversalBaseModel):
     """
     Optimistic-concurrency version. Pass this value back as `expectedVersion` on a later update to avoid silently overwriting a concurrent change — the update is rejected with 409 VERSION_CONFLICT if the record changed in the meantime. Incremented on every successful write.
     """
+
+    expires_at: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="expiresAt"),
+        pydantic.Field(
+            alias="expiresAt",
+            description="The record's absolute expiry as an ISO-8601 UTC timestamp, when a TTL is set (#630) — the record is automatically deleted at (or shortly after) this time. Null when the record has no expiry.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

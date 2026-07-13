@@ -725,7 +725,7 @@ class AuthClient:
             name="Engineering Team Member",
             scopes=[
                 ScopeClause(
-                    allowed_actions=["read", "write"],
+                    allowed_actions=["records:cru", "search:r"],
                 )
             ],
         )
@@ -1098,7 +1098,7 @@ class AuthClient:
             name="Engineering Team Member",
             scopes=[
                 ScopeClause(
-                    allowed_actions=["read", "write"],
+                    allowed_actions=["records:cru", "search:r"],
                 )
             ],
         )
@@ -2374,7 +2374,7 @@ class AsyncAuthClient:
                 name="Engineering Team Member",
                 scopes=[
                     ScopeClause(
-                        allowed_actions=["read", "write"],
+                        allowed_actions=["records:cru", "search:r"],
                     )
                 ],
             )
@@ -2815,7 +2815,7 @@ class AsyncAuthClient:
                 name="Engineering Team Member",
                 scopes=[
                     ScopeClause(
-                        allowed_actions=["read", "write"],
+                        allowed_actions=["records:cru", "search:r"],
                     )
                 ],
             )
