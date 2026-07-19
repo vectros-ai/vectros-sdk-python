@@ -122,25 +122,9 @@ class DocumentResponse(UniversalBaseModel):
             alias="userId", description="The owning user — the Vectros-assigned UUID of a user in your account."
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId",
-            description="The owning organization — the Vectros-assigned UUID of an organization in your account.",
-        ),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="The associated client — the Vectros-assigned UUID of a client in your account.",
-        ),
-    ] = None
     scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
     """
-    The document's scope ownership as canonical `namespace:value` entries (at most 2). `org:` and `client:` entries mirror the `orgId` and `clientId` fields; any other namespace is a custom scope attached at creation. Empty for a document owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
+    The document's scope ownership as canonical `namespace:value` entries (at most 2). `org` and `client` are built-in namespaces; any other is a custom scope you define. Set at creation, either explicitly or automatically from the calling token's identity. Empty for a document owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
     """
 
     file_type: typing_extensions.Annotated[

@@ -2,6 +2,4 @@
 
 import typing
 
-SchemaResponseAllowedSurfacesItem = typing.Union[
-    typing.Literal["record", "document", "user", "org", "client"], typing.Any
-]
+SchemaResponseAllowedSurfacesItem = typing.Union[typing.Literal["record", "document", "user", "entity"], typing.Any]

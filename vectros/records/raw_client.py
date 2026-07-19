@@ -314,8 +314,6 @@ class RawRecordsClient:
         type: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
@@ -324,7 +322,7 @@ class RawRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[RecordPage]:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 
         Parameters
         ----------
@@ -337,14 +335,8 @@ class RawRecordsClient:
         user_id : typing.Optional[str]
             Filter to records owned by this user. The value is the Vectros-assigned UUID of a user; resolve one from your own ID via `GET /v1/users?externalId=`.
 
-        org_id : typing.Optional[str]
-            Filter to records owned by this organization. The value is the Vectros-assigned UUID of an organization; resolve one via `GET /v1/orgs?externalId=`.
-
-        client_id : typing.Optional[str]
-            Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
-
         scope : typing.Optional[str]
-            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
+            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
@@ -373,8 +365,6 @@ class RawRecordsClient:
                 "type": type,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scope": scope,
                 "startFrom": start_from,
                 "limit": limit,
@@ -413,8 +403,6 @@ class RawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -451,14 +439,8 @@ class RawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -494,8 +476,6 @@ class RawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,
@@ -625,8 +605,6 @@ class RawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -663,14 +641,8 @@ class RawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -705,8 +677,6 @@ class RawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,
@@ -847,8 +817,6 @@ class RawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -857,7 +825,7 @@ class RawRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[RecordResponse]:
         """
-        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `orgId`, `clientId`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 
         Parameters
         ----------
@@ -882,14 +850,8 @@ class RawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -921,8 +883,6 @@ class RawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,
@@ -1629,8 +1589,6 @@ class AsyncRawRecordsClient:
         type: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
@@ -1639,7 +1597,7 @@ class AsyncRawRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[RecordPage]:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 
         Parameters
         ----------
@@ -1652,14 +1610,8 @@ class AsyncRawRecordsClient:
         user_id : typing.Optional[str]
             Filter to records owned by this user. The value is the Vectros-assigned UUID of a user; resolve one from your own ID via `GET /v1/users?externalId=`.
 
-        org_id : typing.Optional[str]
-            Filter to records owned by this organization. The value is the Vectros-assigned UUID of an organization; resolve one via `GET /v1/orgs?externalId=`.
-
-        client_id : typing.Optional[str]
-            Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
-
         scope : typing.Optional[str]
-            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
+            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
@@ -1688,8 +1640,6 @@ class AsyncRawRecordsClient:
                 "type": type,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scope": scope,
                 "startFrom": start_from,
                 "limit": limit,
@@ -1728,8 +1678,6 @@ class AsyncRawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -1766,14 +1714,8 @@ class AsyncRawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -1809,8 +1751,6 @@ class AsyncRawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,
@@ -1940,8 +1880,6 @@ class AsyncRawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -1978,14 +1916,8 @@ class AsyncRawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -2020,8 +1952,6 @@ class AsyncRawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,
@@ -2164,8 +2094,6 @@ class AsyncRawRecordsClient:
         status: typing.Optional[RecordRequestStatus] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[RecordRequestIndexMode] = OMIT,
@@ -2174,7 +2102,7 @@ class AsyncRawRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[RecordResponse]:
         """
-        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `orgId`, `clientId`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 
         Parameters
         ----------
@@ -2199,14 +2127,8 @@ class AsyncRawRecordsClient:
         user_id : typing.Optional[str]
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
-        org_id : typing.Optional[str]
-            Identifier of the owning organization — the Vectros-assigned UUID of an organization in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/orgs?externalId=` to resolve the UUID from your own identifier.
-
-        client_id : typing.Optional[str]
-            Identifier of the associated client — the Vectros-assigned UUID of a client in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/clients?externalId=` to resolve the UUID from your own identifier.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -2238,8 +2160,6 @@ class AsyncRawRecordsClient:
                 "status": status,
                 "folderId": folder_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "indexMode": index_mode,

@@ -44,25 +44,9 @@ class FolderRequest(UniversalBaseModel):
             description="Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.",
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId",
-            description="Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.",
-        ),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.",
-        ),
-    ] = None
     scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
     """
-    The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+    The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
     """
 
     expected_version: typing_extensions.Annotated[

@@ -41,7 +41,7 @@ class AccessProfileRequest(UniversalBaseModel):
         FieldMetadata(alias="identityOverrides"),
         pydantic.Field(
             alias="identityOverrides",
-            description="Optional per-context identity overrides. Only `orgId` and `clientId` may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.",
+            description="Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.",
         ),
     ] = None
     status: typing.Optional[AccessProfileRequestStatus] = pydantic.Field(default=None)

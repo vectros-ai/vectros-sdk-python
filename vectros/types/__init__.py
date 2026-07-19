@@ -34,10 +34,6 @@ if typing.TYPE_CHECKING:
         ChatStreamEvent_Done,
         ChatStreamEvent_Error,
     )
-    from .client_page import ClientPage
-    from .client_request import ClientRequest
-    from .client_request_status import ClientRequestStatus
-    from .client_response import ClientResponse
     from .content_delta_event import ContentDeltaEvent
     from .content_delta_event_event import ContentDeltaEventEvent
     from .context_detail import ContextDetail
@@ -74,12 +70,15 @@ if typing.TYPE_CHECKING:
     from .done_event import DoneEvent
     from .done_event_event import DoneEventEvent
     from .downloads import Downloads
+    from .entity_page import EntityPage
+    from .entity_request import EntityRequest
+    from .entity_request_status import EntityRequestStatus
+    from .entity_response import EntityResponse
     from .erasure_certificate import ErasureCertificate
     from .erasure_certificate_audit_disposition import ErasureCertificateAuditDisposition
     from .erasure_context_result import ErasureContextResult
     from .erasure_request_response import ErasureRequestResponse
     from .erasure_request_response_status import ErasureRequestResponseStatus
-    from .erasure_request_response_subject_type import ErasureRequestResponseSubjectType
     from .error_event import ErrorEvent
     from .error_event_event import ErrorEventEvent
     from .export_manifest import ExportManifest
@@ -87,10 +86,8 @@ if typing.TYPE_CHECKING:
     from .export_request_response import ExportRequestResponse
     from .export_request_response_scope import ExportRequestResponseScope
     from .export_request_response_status import ExportRequestResponseStatus
-    from .export_request_response_subject_type import ExportRequestResponseSubjectType
     from .field_def import FieldDef
     from .field_def_field_type import FieldDefFieldType
-    from .field_def_target_surface import FieldDefTargetSurface
     from .file_upload_response import FileUploadResponse
     from .filter_condition import FilterCondition
     from .filter_value import FilterValue
@@ -117,10 +114,9 @@ if typing.TYPE_CHECKING:
     from .model_data_version_response_change_type import ModelDataVersionResponseChangeType
     from .model_info import ModelInfo
     from .models_response import ModelsResponse
-    from .org_page import OrgPage
-    from .org_request import OrgRequest
-    from .org_request_status import OrgRequestStatus
-    from .org_response import OrgResponse
+    from .namespace_page import NamespacePage
+    from .namespace_request import NamespaceRequest
+    from .namespace_response import NamespaceResponse
     from .ping_response import PingResponse
     from .ping_response_environment import PingResponseEnvironment
     from .ping_response_principal_type import PingResponsePrincipalType
@@ -140,7 +136,6 @@ if typing.TYPE_CHECKING:
     from .read_access_log_page import ReadAccessLogPage
     from .read_access_log_response import ReadAccessLogResponse
     from .read_access_log_response_action import ReadAccessLogResponseAction
-    from .read_access_log_response_subject_type import ReadAccessLogResponseSubjectType
     from .read_access_section import ReadAccessSection
     from .read_calls import ReadCalls
     from .reads_section import ReadsSection
@@ -230,10 +225,6 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ChatStreamEvent_ContentDelta": ".chat_stream_event",
     "ChatStreamEvent_Done": ".chat_stream_event",
     "ChatStreamEvent_Error": ".chat_stream_event",
-    "ClientPage": ".client_page",
-    "ClientRequest": ".client_request",
-    "ClientRequestStatus": ".client_request_status",
-    "ClientResponse": ".client_response",
     "ContentDeltaEvent": ".content_delta_event",
     "ContentDeltaEventEvent": ".content_delta_event_event",
     "ContextDetail": ".context_detail",
@@ -268,12 +259,15 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DoneEvent": ".done_event",
     "DoneEventEvent": ".done_event_event",
     "Downloads": ".downloads",
+    "EntityPage": ".entity_page",
+    "EntityRequest": ".entity_request",
+    "EntityRequestStatus": ".entity_request_status",
+    "EntityResponse": ".entity_response",
     "ErasureCertificate": ".erasure_certificate",
     "ErasureCertificateAuditDisposition": ".erasure_certificate_audit_disposition",
     "ErasureContextResult": ".erasure_context_result",
     "ErasureRequestResponse": ".erasure_request_response",
     "ErasureRequestResponseStatus": ".erasure_request_response_status",
-    "ErasureRequestResponseSubjectType": ".erasure_request_response_subject_type",
     "ErrorEvent": ".error_event",
     "ErrorEventEvent": ".error_event_event",
     "ExportManifest": ".export_manifest",
@@ -281,10 +275,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ExportRequestResponse": ".export_request_response",
     "ExportRequestResponseScope": ".export_request_response_scope",
     "ExportRequestResponseStatus": ".export_request_response_status",
-    "ExportRequestResponseSubjectType": ".export_request_response_subject_type",
     "FieldDef": ".field_def",
     "FieldDefFieldType": ".field_def_field_type",
-    "FieldDefTargetSurface": ".field_def_target_surface",
     "FileUploadResponse": ".file_upload_response",
     "FilterCondition": ".filter_condition",
     "FilterValue": ".filter_value",
@@ -311,10 +303,9 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ModelDataVersionResponseChangeType": ".model_data_version_response_change_type",
     "ModelInfo": ".model_info",
     "ModelsResponse": ".models_response",
-    "OrgPage": ".org_page",
-    "OrgRequest": ".org_request",
-    "OrgRequestStatus": ".org_request_status",
-    "OrgResponse": ".org_response",
+    "NamespacePage": ".namespace_page",
+    "NamespaceRequest": ".namespace_request",
+    "NamespaceResponse": ".namespace_response",
     "PingResponse": ".ping_response",
     "PingResponseEnvironment": ".ping_response_environment",
     "PingResponsePrincipalType": ".ping_response_principal_type",
@@ -332,7 +323,6 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ReadAccessLogPage": ".read_access_log_page",
     "ReadAccessLogResponse": ".read_access_log_response",
     "ReadAccessLogResponseAction": ".read_access_log_response_action",
-    "ReadAccessLogResponseSubjectType": ".read_access_log_response_subject_type",
     "ReadAccessSection": ".read_access_section",
     "ReadCalls": ".read_calls",
     "ReadsSection": ".reads_section",
@@ -446,10 +436,6 @@ __all__ = [
     "ChatStreamEvent_ContentDelta",
     "ChatStreamEvent_Done",
     "ChatStreamEvent_Error",
-    "ClientPage",
-    "ClientRequest",
-    "ClientRequestStatus",
-    "ClientResponse",
     "ContentDeltaEvent",
     "ContentDeltaEventEvent",
     "ContextDetail",
@@ -484,12 +470,15 @@ __all__ = [
     "DoneEvent",
     "DoneEventEvent",
     "Downloads",
+    "EntityPage",
+    "EntityRequest",
+    "EntityRequestStatus",
+    "EntityResponse",
     "ErasureCertificate",
     "ErasureCertificateAuditDisposition",
     "ErasureContextResult",
     "ErasureRequestResponse",
     "ErasureRequestResponseStatus",
-    "ErasureRequestResponseSubjectType",
     "ErrorEvent",
     "ErrorEventEvent",
     "ExportManifest",
@@ -497,10 +486,8 @@ __all__ = [
     "ExportRequestResponse",
     "ExportRequestResponseScope",
     "ExportRequestResponseStatus",
-    "ExportRequestResponseSubjectType",
     "FieldDef",
     "FieldDefFieldType",
-    "FieldDefTargetSurface",
     "FileUploadResponse",
     "FilterCondition",
     "FilterValue",
@@ -527,10 +514,9 @@ __all__ = [
     "ModelDataVersionResponseChangeType",
     "ModelInfo",
     "ModelsResponse",
-    "OrgPage",
-    "OrgRequest",
-    "OrgRequestStatus",
-    "OrgResponse",
+    "NamespacePage",
+    "NamespaceRequest",
+    "NamespaceResponse",
     "PingResponse",
     "PingResponseEnvironment",
     "PingResponsePrincipalType",
@@ -548,7 +534,6 @@ __all__ = [
     "ReadAccessLogPage",
     "ReadAccessLogResponse",
     "ReadAccessLogResponseAction",
-    "ReadAccessLogResponseSubjectType",
     "ReadAccessSection",
     "ReadCalls",
     "ReadsSection",

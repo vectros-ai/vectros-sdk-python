@@ -41,8 +41,6 @@ class RawDocumentsClient:
         self,
         *,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
@@ -50,21 +48,15 @@ class RawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[DocumentPage]:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId` or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 
         Parameters
         ----------
         user_id : typing.Optional[str]
             Filter by owning user — the Vectros-assigned UUID of a user. To resolve from your own identifier, call GET /v1/users?externalId=.
 
-        org_id : typing.Optional[str]
-            Filter by owning organization — the Vectros-assigned UUID of an organization. To resolve from your own identifier, call GET /v1/orgs?externalId=.
-
-        client_id : typing.Optional[str]
-            Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
-
         scope : typing.Optional[str]
-            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
+            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
@@ -88,8 +80,6 @@ class RawDocumentsClient:
             method="GET",
             params={
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scope": scope,
                 "folderId": folder_id,
                 "startFrom": start_from,
@@ -128,8 +118,6 @@ class RawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -168,14 +156,8 @@ class RawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -209,8 +191,6 @@ class RawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -339,8 +319,6 @@ class RawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -378,14 +356,8 @@ class RawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -418,8 +390,6 @@ class RawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -561,8 +531,6 @@ class RawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -597,14 +565,8 @@ class RawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -634,8 +596,6 @@ class RawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -1107,8 +1067,6 @@ class RawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -1145,14 +1103,8 @@ class RawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: initiating an upload again with the same `externalId` returns the same document plus a fresh presigned URL (idempotent — no duplicate), and it is the key other records use to reference this one. Max 256 characters.
@@ -1180,8 +1132,6 @@ class RawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
             },
@@ -1252,8 +1202,6 @@ class AsyncRawDocumentsClient:
         self,
         *,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
@@ -1261,21 +1209,15 @@ class AsyncRawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[DocumentPage]:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId` or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 
         Parameters
         ----------
         user_id : typing.Optional[str]
             Filter by owning user — the Vectros-assigned UUID of a user. To resolve from your own identifier, call GET /v1/users?externalId=.
 
-        org_id : typing.Optional[str]
-            Filter by owning organization — the Vectros-assigned UUID of an organization. To resolve from your own identifier, call GET /v1/orgs?externalId=.
-
-        client_id : typing.Optional[str]
-            Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
-
         scope : typing.Optional[str]
-            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
+            Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
@@ -1299,8 +1241,6 @@ class AsyncRawDocumentsClient:
             method="GET",
             params={
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scope": scope,
                 "folderId": folder_id,
                 "startFrom": start_from,
@@ -1339,8 +1279,6 @@ class AsyncRawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -1379,14 +1317,8 @@ class AsyncRawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -1420,8 +1352,6 @@ class AsyncRawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -1550,8 +1480,6 @@ class AsyncRawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -1589,14 +1517,8 @@ class AsyncRawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -1629,8 +1551,6 @@ class AsyncRawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -1772,8 +1692,6 @@ class AsyncRawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
@@ -1808,14 +1726,8 @@ class AsyncRawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
@@ -1845,8 +1757,6 @@ class AsyncRawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
                 "expectedVersion": expected_version,
@@ -2318,8 +2228,6 @@ class AsyncRawDocumentsClient:
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -2356,14 +2264,8 @@ class AsyncRawDocumentsClient:
         user_id : typing.Optional[str]
             Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
-        client_id : typing.Optional[str]
-            Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: initiating an upload again with the same `externalId` returns the same document plus a fresh presigned URL (idempotent — no duplicate), and it is the key other records use to reference this one. Max 256 characters.
@@ -2391,8 +2293,6 @@ class AsyncRawDocumentsClient:
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "externalId": external_id,
             },

@@ -80,7 +80,7 @@ class SchemaRequest(UniversalBaseModel):
         FieldMetadata(alias="allowedSurfaces"),
         pydantic.Field(
             alias="allowedSurfaces",
-            description="Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.",
+            description="Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.",
         ),
     ]
     active: typing.Optional[bool] = pydantic.Field(default=None)
@@ -96,22 +96,10 @@ class SchemaRequest(UniversalBaseModel):
             description="Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.",
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId",
-            description="Owning organization — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, this sets the schema's owning organization explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.",
-        ),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="Associated client — the Vectros-assigned UUID of a client in your account. Optional. With an API key, this sets the schema's client explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.",
-        ),
-    ] = None
+    scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+    """
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

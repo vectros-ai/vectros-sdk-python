@@ -32,29 +32,25 @@ class RawFoldersClient:
         self,
         *,
         parent_folder_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FolderPage]:
         """
-        Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId`, `orgId`, or `clientId`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
+        Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId` or `scope`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
 
         Parameters
         ----------
         parent_folder_id : typing.Optional[str]
             List only the direct children of this folder — the Vectros-assigned UUID of a folder — for tree navigation. Omit for a flat list across your account.
 
-        org_id : typing.Optional[str]
-            Filter to folders owned by this organization — the Vectros-assigned UUID of an organization. Use `GET /v1/orgs?externalId=` to resolve your own external ID to this UUID.
-
         user_id : typing.Optional[str]
             Filter to folders owned by this user — the Vectros-assigned UUID of a user. Use `GET /v1/users?externalId=` to resolve your own external ID to this UUID.
 
-        client_id : typing.Optional[str]
-            Filter to folders associated with this client — the Vectros-assigned UUID of a client. Use `GET /v1/clients?externalId=` to resolve your own external ID to this UUID.
+        scope : typing.Optional[str]
+            Filter to folders carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page; omit it for the first page.
@@ -75,9 +71,8 @@ class RawFoldersClient:
             method="GET",
             params={
                 "parentFolderId": parent_folder_id,
-                "orgId": org_id,
                 "userId": user_id,
-                "clientId": client_id,
+                "scope": scope,
                 "startFrom": start_from,
                 "limit": limit,
             },
@@ -111,8 +106,6 @@ class RawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -140,14 +133,8 @@ class RawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -172,8 +159,6 @@ class RawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },
@@ -297,8 +282,6 @@ class RawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -325,14 +308,8 @@ class RawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -354,8 +331,6 @@ class RawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },
@@ -480,14 +455,12 @@ class RawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FolderResponse]:
         """
-        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `orgId`, `clientId`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 
         Parameters
         ----------
@@ -508,14 +481,8 @@ class RawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -537,8 +504,6 @@ class RawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },
@@ -684,29 +649,25 @@ class AsyncRawFoldersClient:
         self,
         *,
         parent_folder_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FolderPage]:
         """
-        Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId`, `orgId`, or `clientId`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
+        Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId` or `scope`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
 
         Parameters
         ----------
         parent_folder_id : typing.Optional[str]
             List only the direct children of this folder — the Vectros-assigned UUID of a folder — for tree navigation. Omit for a flat list across your account.
 
-        org_id : typing.Optional[str]
-            Filter to folders owned by this organization — the Vectros-assigned UUID of an organization. Use `GET /v1/orgs?externalId=` to resolve your own external ID to this UUID.
-
         user_id : typing.Optional[str]
             Filter to folders owned by this user — the Vectros-assigned UUID of a user. Use `GET /v1/users?externalId=` to resolve your own external ID to this UUID.
 
-        client_id : typing.Optional[str]
-            Filter to folders associated with this client — the Vectros-assigned UUID of a client. Use `GET /v1/clients?externalId=` to resolve your own external ID to this UUID.
+        scope : typing.Optional[str]
+            Filter to folders carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page; omit it for the first page.
@@ -727,9 +688,8 @@ class AsyncRawFoldersClient:
             method="GET",
             params={
                 "parentFolderId": parent_folder_id,
-                "orgId": org_id,
                 "userId": user_id,
-                "clientId": client_id,
+                "scope": scope,
                 "startFrom": start_from,
                 "limit": limit,
             },
@@ -763,8 +723,6 @@ class AsyncRawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -792,14 +750,8 @@ class AsyncRawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -824,8 +776,6 @@ class AsyncRawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },
@@ -949,8 +899,6 @@ class AsyncRawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
@@ -977,14 +925,8 @@ class AsyncRawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -1006,8 +948,6 @@ class AsyncRawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },
@@ -1134,14 +1074,12 @@ class AsyncRawFoldersClient:
         parent_folder_id: typing.Optional[str] = OMIT,
         slug: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FolderResponse]:
         """
-        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `orgId`, `clientId`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 
         Parameters
         ----------
@@ -1162,14 +1100,8 @@ class AsyncRawFoldersClient:
         user_id : typing.Optional[str]
             Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Optional ID of the organization that should own this folder — the Vectros-assigned UUID of an organization in your account. With an API key, this sets the owning organization directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Optional ID of the client to associate with this folder — the Vectros-assigned UUID of a client in your account. With an API key, this sets the client directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
-
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default.
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -1191,8 +1123,6 @@ class AsyncRawFoldersClient:
                 "parentFolderId": parent_folder_id,
                 "slug": slug,
                 "userId": user_id,
-                "orgId": org_id,
-                "clientId": client_id,
                 "scopes": scopes,
                 "expectedVersion": expected_version,
             },

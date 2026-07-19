@@ -7,7 +7,6 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .read_access_log_response_action import ReadAccessLogResponseAction
-from .read_access_log_response_subject_type import ReadAccessLogResponseSubjectType
 
 
 class ReadAccessLogResponse(UniversalBaseModel):
@@ -28,24 +27,17 @@ class ReadAccessLogResponse(UniversalBaseModel):
         ),
     ] = None
     subject_type: typing_extensions.Annotated[
-        typing.Optional[ReadAccessLogResponseSubjectType],
+        typing.Optional[str],
         FieldMetadata(alias="subjectType"),
         pydantic.Field(
-            alias="subjectType", description="The kind of subject whose PHI was read: `user`, `client`, or `org`."
+            alias="subjectType",
+            description="The kind of subject whose PHI was read: `user`, or an ownership namespace such as `org` or `client`.",
         ),
     ] = None
     subject_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="subjectId"),
         pydantic.Field(alias="subjectId", description="Identifier of the data subject whose PHI was read."),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="Identifier of the nested client/patient the read was scoped to, when applicable.",
-        ),
     ] = None
     caller_key_id: typing_extensions.Annotated[
         typing.Optional[str],

@@ -13,8 +13,7 @@ class IdentitySection(UniversalBaseModel):
     """
 
     users: typing.Optional[IdentitySurface] = None
-    orgs: typing.Optional[IdentitySurface] = None
-    clients: typing.Optional[IdentitySurface] = None
+    entities: typing.Optional[IdentitySurface] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

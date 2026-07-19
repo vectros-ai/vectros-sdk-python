@@ -88,8 +88,8 @@ class VectrosApi:
             logging=logging,
         )
         self._auth: typing.Optional[AuthClient] = None
-        self._identity: typing.Optional[IdentityClient] = None
         self._documents: typing.Optional[DocumentsClient] = None
+        self._identity: typing.Optional[IdentityClient] = None
         self._compliance: typing.Optional[ComplianceClient] = None
         self._folders: typing.Optional[FoldersClient] = None
         self._inference: typing.Optional[InferenceClient] = None
@@ -106,20 +106,20 @@ class VectrosApi:
         return self._auth
 
     @property
-    def identity(self):
-        if self._identity is None:
-            from .identity.client import IdentityClient  # noqa: E402
-
-            self._identity = IdentityClient(client_wrapper=self._client_wrapper)
-        return self._identity
-
-    @property
     def documents(self):
         if self._documents is None:
             from .documents.client import DocumentsClient  # noqa: E402
 
             self._documents = DocumentsClient(client_wrapper=self._client_wrapper)
         return self._documents
+
+    @property
+    def identity(self):
+        if self._identity is None:
+            from .identity.client import IdentityClient  # noqa: E402
+
+            self._identity = IdentityClient(client_wrapper=self._client_wrapper)
+        return self._identity
 
     @property
     def compliance(self):
@@ -259,8 +259,8 @@ class AsyncVectrosApi:
             logging=logging,
         )
         self._auth: typing.Optional[AsyncAuthClient] = None
-        self._identity: typing.Optional[AsyncIdentityClient] = None
         self._documents: typing.Optional[AsyncDocumentsClient] = None
+        self._identity: typing.Optional[AsyncIdentityClient] = None
         self._compliance: typing.Optional[AsyncComplianceClient] = None
         self._folders: typing.Optional[AsyncFoldersClient] = None
         self._inference: typing.Optional[AsyncInferenceClient] = None
@@ -277,20 +277,20 @@ class AsyncVectrosApi:
         return self._auth
 
     @property
-    def identity(self):
-        if self._identity is None:
-            from .identity.client import AsyncIdentityClient  # noqa: E402
-
-            self._identity = AsyncIdentityClient(client_wrapper=self._client_wrapper)
-        return self._identity
-
-    @property
     def documents(self):
         if self._documents is None:
             from .documents.client import AsyncDocumentsClient  # noqa: E402
 
             self._documents = AsyncDocumentsClient(client_wrapper=self._client_wrapper)
         return self._documents
+
+    @property
+    def identity(self):
+        if self._identity is None:
+            from .identity.client import AsyncIdentityClient  # noqa: E402
+
+            self._identity = AsyncIdentityClient(client_wrapper=self._client_wrapper)
+        return self._identity
 
     @property
     def compliance(self):

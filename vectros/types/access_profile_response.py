@@ -55,7 +55,7 @@ class AccessProfileResponse(UniversalBaseModel):
         FieldMetadata(alias="identityOverrides"),
         pydantic.Field(
             alias="identityOverrides",
-            description="Per-context identity overrides. Only `orgId` and `clientId` may be overridden.",
+            description="Per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form (for example `scope:org`, `scope:client`, `scope:group`). Read back exactly as authored.",
         ),
     ] = None
     status: typing.Optional[str] = pydantic.Field(default=None)

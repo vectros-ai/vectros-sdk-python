@@ -105,25 +105,9 @@ class RecordResponse(UniversalBaseModel):
             description="Identifier of the owning user (a Vectros-assigned UUID). Set automatically from the calling token's identity when the token carries a user identity.",
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId",
-            description="Identifier of the owning organization (a Vectros-assigned UUID). Set automatically from the calling token's identity when the token carries an organization identity.",
-        ),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="Identifier of the associated client (a Vectros-assigned UUID). Set automatically from the calling token's identity when the token carries a client identity.",
-        ),
-    ] = None
     scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
     """
-    The record's scope ownership as canonical `namespace:value` entries (at most 2). `org:` and `client:` entries mirror the `orgId` and `clientId` fields; any other namespace is a custom scope attached at creation. Empty for a record owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
+    The record's scope ownership as canonical `namespace:value` entries (at most 2). `org` and `client` are built-in namespaces; any other is a custom scope you define. Set at creation, either explicitly or automatically from the calling token's identity. Empty for a record owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
     """
 
     index_status: typing_extensions.Annotated[

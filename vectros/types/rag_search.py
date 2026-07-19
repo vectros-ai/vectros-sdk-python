@@ -36,19 +36,9 @@ class RagSearch(UniversalBaseModel):
         FieldMetadata(alias="userId"),
         pydantic.Field(alias="userId", description="Restrict retrieval to content owned by this user id."),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(alias="orgId", description="Restrict retrieval to content owned by this organization id."),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(alias="clientId", description="Restrict retrieval to content tagged with this client id."),
-    ] = None
     scope: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Restrict retrieval to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
+    Restrict retrieval to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
     """
 
     content_types: typing_extensions.Annotated[

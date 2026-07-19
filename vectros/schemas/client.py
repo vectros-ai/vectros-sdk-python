@@ -38,7 +38,7 @@ class SchemasClient:
         self,
         *,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         surface: typing.Optional[str] = None,
         record_type: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
@@ -46,21 +46,21 @@ class SchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaPage:
         """
-        Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `orgId` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (user, org, or client) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
+        Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `scope` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (`user` or `entity`) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
 
         Parameters
         ----------
         user_id : typing.Optional[str]
             Filter to schemas owned by this user — the Vectros-assigned UUID of a user in your account. Use `GET /v1/users?externalId=` to resolve a UUID from your own external id.
 
-        org_id : typing.Optional[str]
-            Filter to schemas owned by this organization — the Vectros-assigned UUID of an organization in your account. Use `GET /v1/orgs?externalId=` to resolve a UUID from your own external id.
+        scope : typing.Optional[str]
+            Filter to schemas carrying this scope value, as a single `namespace:value` entry — for example `org:6ba7b810-9dad-11d1-80b4-00c04fd430c8` or `group:eng-team`. `org` and `client` are built-in namespaces; others are custom scopes you define. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`.
 
         surface : typing.Optional[str]
-            Filter to schemas bindable to this surface: record, document, user, org, or client. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (user, org, client) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas record and document list within the calling context.
+            Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user`, `org`, or `client` to resolve an account-wide identity schema. Mutually exclusive with `userId`/`orgId` — when supplied, `recordType` takes precedence.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -86,7 +86,7 @@ class SchemasClient:
         )
         client.schemas.list_schemas(
             user_id="550e8400-e29b-41d4-a716-446655440000",
-            org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             surface="document",
             record_type="intake_form",
             start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
@@ -94,7 +94,7 @@ class SchemasClient:
         """
         _response = self._raw_client.list_schemas(
             user_id=user_id,
-            org_id=org_id,
+            scope=scope,
             surface=surface,
             record_type=record_type,
             start_from=start_from,
@@ -119,8 +119,7 @@ class SchemasClient:
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -135,7 +134,7 @@ class SchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
@@ -167,11 +166,8 @@ class SchemasClient:
         user_id : typing.Optional[str]
             Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, this sets the schema's owning organization explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Associated client — the Vectros-assigned UUID of a client in your account. Optional. With an API key, this sets the schema's client explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
+        scopes : typing.Optional[typing.Sequence[str]]
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -230,8 +226,7 @@ class SchemasClient:
             storage_profile=storage_profile,
             active=active,
             user_id=user_id,
-            org_id=org_id,
-            client_id=client_id,
+            scopes=scopes,
             request_options=request_options,
         )
         return _response.data
@@ -284,8 +279,7 @@ class SchemasClient:
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -303,7 +297,7 @@ class SchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -332,11 +326,8 @@ class SchemasClient:
         user_id : typing.Optional[str]
             Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, this sets the schema's owning organization explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Associated client — the Vectros-assigned UUID of a client in your account. Optional. With an API key, this sets the schema's client explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
+        scopes : typing.Optional[typing.Sequence[str]]
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -375,8 +366,7 @@ class SchemasClient:
             storage_profile=storage_profile,
             active=active,
             user_id=user_id,
-            org_id=org_id,
-            client_id=client_id,
+            scopes=scopes,
             request_options=request_options,
         )
         return _response.data
@@ -473,7 +463,7 @@ class AsyncSchemasClient:
         self,
         *,
         user_id: typing.Optional[str] = None,
-        org_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         surface: typing.Optional[str] = None,
         record_type: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
@@ -481,21 +471,21 @@ class AsyncSchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaPage:
         """
-        Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `orgId` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (user, org, or client) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
+        Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `scope` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (`user` or `entity`) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
 
         Parameters
         ----------
         user_id : typing.Optional[str]
             Filter to schemas owned by this user — the Vectros-assigned UUID of a user in your account. Use `GET /v1/users?externalId=` to resolve a UUID from your own external id.
 
-        org_id : typing.Optional[str]
-            Filter to schemas owned by this organization — the Vectros-assigned UUID of an organization in your account. Use `GET /v1/orgs?externalId=` to resolve a UUID from your own external id.
+        scope : typing.Optional[str]
+            Filter to schemas carrying this scope value, as a single `namespace:value` entry — for example `org:6ba7b810-9dad-11d1-80b4-00c04fd430c8` or `group:eng-team`. `org` and `client` are built-in namespaces; others are custom scopes you define. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`.
 
         surface : typing.Optional[str]
-            Filter to schemas bindable to this surface: record, document, user, org, or client. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (user, org, client) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas record and document list within the calling context.
+            Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user`, `org`, or `client` to resolve an account-wide identity schema. Mutually exclusive with `userId`/`orgId` — when supplied, `recordType` takes precedence.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -526,7 +516,7 @@ class AsyncSchemasClient:
         async def main() -> None:
             await client.schemas.list_schemas(
                 user_id="550e8400-e29b-41d4-a716-446655440000",
-                org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+                scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
                 surface="document",
                 record_type="intake_form",
                 start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
@@ -537,7 +527,7 @@ class AsyncSchemasClient:
         """
         _response = await self._raw_client.list_schemas(
             user_id=user_id,
-            org_id=org_id,
+            scope=scope,
             surface=surface,
             record_type=record_type,
             start_from=start_from,
@@ -562,8 +552,7 @@ class AsyncSchemasClient:
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -578,7 +567,7 @@ class AsyncSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
@@ -610,11 +599,8 @@ class AsyncSchemasClient:
         user_id : typing.Optional[str]
             Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, this sets the schema's owning organization explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Associated client — the Vectros-assigned UUID of a client in your account. Optional. With an API key, this sets the schema's client explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
+        scopes : typing.Optional[typing.Sequence[str]]
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -681,8 +667,7 @@ class AsyncSchemasClient:
             storage_profile=storage_profile,
             active=active,
             user_id=user_id,
-            org_id=org_id,
-            client_id=client_id,
+            scopes=scopes,
             request_options=request_options,
         )
         return _response.data
@@ -743,8 +728,7 @@ class AsyncSchemasClient:
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
-        client_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -762,7 +746,7 @@ class AsyncSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: record, document, user, org, or client. Required and must be non-empty. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -791,11 +775,8 @@ class AsyncSchemasClient:
         user_id : typing.Optional[str]
             Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
 
-        org_id : typing.Optional[str]
-            Owning organization — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, this sets the schema's owning organization explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
-
-        client_id : typing.Optional[str]
-            Associated client — the Vectros-assigned UUID of a client in your account. Optional. With an API key, this sets the schema's client explicitly. With a scoped token, it must match the token's identity claim (if set) or fall within the token's data scope.
+        scopes : typing.Optional[typing.Sequence[str]]
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -842,8 +823,7 @@ class AsyncSchemasClient:
             storage_profile=storage_profile,
             active=active,
             user_id=user_id,
-            org_id=org_id,
-            client_id=client_id,
+            scopes=scopes,
             request_options=request_options,
         )
         return _response.data

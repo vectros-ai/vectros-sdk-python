@@ -6,15 +6,15 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
-from .client_response import ClientResponse
+from .namespace_response import NamespaceResponse
 
 
-class ClientPage(UniversalBaseModel):
+class NamespacePage(UniversalBaseModel):
     """
-    A page of clients as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
+    A page of scope-namespace registrations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
     """
 
-    data: typing.Optional[typing.List[ClientResponse]] = pydantic.Field(default=None)
+    data: typing.Optional[typing.List[NamespaceResponse]] = pydantic.Field(default=None)
     """
     The items on this page, in the endpoint's natural order. Empty when there are no results.
     """

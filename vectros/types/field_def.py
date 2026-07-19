@@ -7,7 +7,6 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .field_def_field_type import FieldDefFieldType
-from .field_def_target_surface import FieldDefTargetSurface
 
 
 class FieldDef(UniversalBaseModel):
@@ -80,11 +79,11 @@ class FieldDef(UniversalBaseModel):
     """
 
     target_surface: typing_extensions.Annotated[
-        typing.Optional[FieldDefTargetSurface],
+        typing.Optional[str],
         FieldMetadata(alias="targetSurface"),
         pydantic.Field(
             alias="targetSurface",
-            description="For a `reference` field: which surface the target lives on — record, document, user, org, or client. Required for reference fields. The same type name can exist on more than one surface, so this disambiguates which lookup resolves the reference.",
+            description="For a `reference` field: where the target lives — `record`, `document`, `user`, or the name of an identity namespace (`org`, `client`, or one you registered, such as `team`). Required for reference fields. The same type name can exist in more than one place, so this disambiguates which lookup resolves the reference. A namespace must already be registered and entity-backed, otherwise the schema is rejected — a reference that could never resolve fails when you define it, not on every write.",
         ),
     ] = None
     sensitive: typing.Optional[bool] = pydantic.Field(default=None)

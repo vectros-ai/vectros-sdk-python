@@ -7,16 +7,12 @@ from importlib import import_module
 
 if typing.TYPE_CHECKING:
     from .erasure_request_audit_disposition import ErasureRequestAuditDisposition
-    from .erasure_request_subject_type import ErasureRequestSubjectType
     from .export_request_format import ExportRequestFormat
     from .export_request_scope import ExportRequestScope
-    from .export_request_subject_type import ExportRequestSubjectType
 _dynamic_imports: typing.Dict[str, str] = {
     "ErasureRequestAuditDisposition": ".erasure_request_audit_disposition",
-    "ErasureRequestSubjectType": ".erasure_request_subject_type",
     "ExportRequestFormat": ".export_request_format",
     "ExportRequestScope": ".export_request_scope",
-    "ExportRequestSubjectType": ".export_request_subject_type",
 }
 
 
@@ -41,10 +37,4 @@ def __dir__():
     return sorted(lazy_attrs)
 
 
-__all__ = [
-    "ErasureRequestAuditDisposition",
-    "ErasureRequestSubjectType",
-    "ExportRequestFormat",
-    "ExportRequestScope",
-    "ExportRequestSubjectType",
-]
+__all__ = ["ErasureRequestAuditDisposition", "ExportRequestFormat", "ExportRequestScope"]

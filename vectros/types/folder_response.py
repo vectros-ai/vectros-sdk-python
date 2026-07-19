@@ -66,25 +66,9 @@ class FolderResponse(UniversalBaseModel):
             description="ID of the user that owns this folder — the Vectros-assigned UUID of a user in your account. Null if the folder is not owned by a specific user.",
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId",
-            description="ID of the organization that owns this folder — the Vectros-assigned UUID of an organization in your account. Null if the folder is not owned by a specific organization.",
-        ),
-    ] = None
-    client_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="clientId"),
-        pydantic.Field(
-            alias="clientId",
-            description="ID of the client associated with this folder — the Vectros-assigned UUID of a client in your account. Null if the folder is not associated with a specific client.",
-        ),
-    ] = None
     scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
     """
-    The folder's scope ownership as canonical `namespace:value` entries (at most 2). `org:` and `client:` entries mirror the `orgId` and `clientId` fields; any other namespace is a custom scope attached at creation. Empty for a folder owned by a user alone (or unowned).
+    The folder's scope ownership as canonical `namespace:value` entries (at most 2). `org` and `client` are built-in namespaces; any other is a custom scope you define. Set at creation, either explicitly or automatically from the calling token's identity. Empty for a folder owned by a user alone (or unowned).
     """
 
     created_at: typing_extensions.Annotated[

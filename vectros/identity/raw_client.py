@@ -14,20 +14,18 @@ from ..errors.bad_request_error import BadRequestError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
-from ..types.client_page import ClientPage
-from ..types.client_request_status import ClientRequestStatus
-from ..types.client_response import ClientResponse
+from ..types.entity_page import EntityPage
+from ..types.entity_request_status import EntityRequestStatus
+from ..types.entity_response import EntityResponse
 from ..types.identity_lookup_request_order import IdentityLookupRequestOrder
 from ..types.model_data_version_page import ModelDataVersionPage
-from ..types.org_page import OrgPage
-from ..types.org_request_status import OrgRequestStatus
-from ..types.org_response import OrgResponse
+from ..types.namespace_page import NamespacePage
+from ..types.namespace_response import NamespaceResponse
 from ..types.user_page import UserPage
 from ..types.user_request_status import UserRequestStatus
 from ..types.user_request_type import UserRequestType
 from ..types.user_response import UserResponse
-from .types.list_clients_request_order import ListClientsRequestOrder
-from .types.list_orgs_request_order import ListOrgsRequestOrder
+from .types.list_entities_request_order import ListEntitiesRequestOrder
 from .types.list_users_request_order import ListUsersRequestOrder
 from pydantic import ValidationError
 
@@ -39,81 +37,83 @@ class RawIdentityClient:
     def __init__(self, *, client_wrapper: SyncClientWrapper):
         self._client_wrapper = client_wrapper
 
-    def list_clients(
+    def list_entities(
         self,
+        namespace: str,
         *,
-        org_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
         external_id: typing.Optional[str] = None,
-        start_from: typing.Optional[str] = None,
-        limit: typing.Optional[int] = None,
+        scope: typing.Optional[str] = None,
         type: typing.Optional[str] = None,
         field: typing.Optional[str] = None,
         value: typing.Optional[str] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
-        order: typing.Optional[ListClientsRequestOrder] = None,
+        order: typing.Optional[ListEntitiesRequestOrder] = None,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ClientPage]:
+    ) -> HttpResponse[EntityPage]:
         """
-        Returns a paginated list of clients in your account. Narrow the results with `orgId` or `userId`, or use `externalId` for an exact lookup by your own identifier. For schema-bound clients, you can also query by a schema-declared lookup field using `type`, `field`, and one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `clients:r` scope.
+        Returns a paginated list of entities in a namespace. Filter by `userId` (entities owned by a user), by `externalId` (exact lookup by your own identifier), or by `scope` (`scope=<namespace>:<value>` — entities that have that value as a parent, e.g. `scope=org:6ba7...`). Naming this namespace's own name in `scope` resolves the entity itself (`scope=team:6ba7...` on `/v1/entities/team` returns that team), since an entity is always in its own scope. `userId` and `scope` can be combined to narrow on both dimensions at once; `externalId` identifies a single entity and cannot be combined with either. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
-        org_id : typing.Optional[str]
-            Return only clients belonging to this organization. Pass the Vectros-assigned UUID of an org; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        namespace : str
+            The entity namespace.
 
         user_id : typing.Optional[str]
-            Return only clients owned by this user. Pass the Vectros-assigned UUID of a user; use `GET /v1/users?externalId=` to resolve your own identifier to this UUID.
+            Return only entities owned by this user (Vectros user ID).
 
         external_id : typing.Optional[str]
-            Look up a client by your own `externalId`. Returns a single-element list, or an empty list if no client matches.
+            Look up an entity by your own identifier. Returns a list with the single match, or empty.
 
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-
-        limit : typing.Optional[int]
-            Maximum number of clients to return per page (1–100; defaults to 20).
+        scope : typing.Optional[str]
+            Filter by parent edge as `<namespace>:<value>` (e.g. `org:6ba7...`). Matches any of the entity's parents, not just its first. Naming this route's own namespace resolves the entity itself.
 
         type : typing.Optional[str]
-            Record type of the schema whose lookup fields you are querying. Must be supplied together with `field` and exactly one lookup mode.
+            Schema record type whose lookup fields you want to query. Supply with `field` and one lookup mode (`value`, `from`/`to`, or `prefix`).
 
         field : typing.Optional[str]
-            Name of the lookup field to filter by. Must be declared as a lookup field on the schema identified by `type`. Supply it together with `type` and exactly one lookup mode.
+            The schema-declared lookup field to filter on. Supply with `type` and one lookup mode.
 
         value : typing.Optional[str]
-            Exact value to match for `field` (equality mode). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/clients/lookup` instead so the value is not exposed in the URL.
+            Exact value to match for `field` (equality). Not allowed for a sensitive field — use `POST /v1/entities/{namespace}/lookup`.
 
         from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup. Requires `to`, and is only allowed on non-sensitive fields that have range queries enabled. Mutually exclusive with `value` and `prefix`.
+            Inclusive lower bound for a range lookup (requires `to`; range-enabled fields).
 
         to : typing.Optional[str]
-            Inclusive upper bound for a range lookup. Requires `from`.
+            Inclusive upper bound for a range lookup (requires `from`).
 
         prefix : typing.Optional[str]
-            Match clients whose value for `field` starts with this prefix. Only allowed on string fields that have range queries enabled. Mutually exclusive with `value` and `from`/`to`.
+            Match all values of `field` starting with this prefix (range-enabled string fields).
 
-        order : typing.Optional[ListClientsRequestOrder]
-            Sort direction for the results: `asc` (the default) or `desc`.
+        order : typing.Optional[ListEntitiesRequestOrder]
+            Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
+
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum entities per page (1-100; defaults to 20).
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[ClientPage]
-            A page of clients as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+        HttpResponse[EntityPage]
+            A page of entities as a `{data, nextCursor}` envelope.
         """
         _response = self._client_wrapper.httpx_client.request(
-            "v1/clients",
+            f"v1/entities/{encode_path_param(namespace)}",
             method="GET",
             params={
-                "orgId": org_id,
                 "userId": user_id,
                 "externalId": external_id,
-                "startFrom": start_from,
-                "limit": limit,
+                "scope": scope,
                 "type": type,
                 "field": field,
                 "value": value,
@@ -121,15 +121,17 @@ class RawIdentityClient:
                 "to": to,
                 "prefix": prefix,
                 "order": order,
+                "startFrom": start_from,
+                "limit": limit,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientPage,
+                    EntityPage,
                     parse_obj_as(
-                        type_=ClientPage,  # type: ignore
+                        type_=EntityPage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -143,54 +145,58 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def create_client(
+    def create_entity(
         self,
+        namespace: str,
         *,
         external_id: str,
         upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
-        status: typing.Optional[ClientRequestStatus] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
+        status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ClientResponse]:
+    ) -> HttpResponse[EntityResponse]:
         """
-        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
+        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         external_id : str
-            Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
+            When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
 
         name : typing.Optional[str]
-            Display name for this client.
+            Human-readable name for the entity.
 
-        status : typing.Optional[ClientRequestStatus]
-            Lifecycle status of the client. `ACTIVE` clients can be used normally; `SUSPENDED` clients are retained but blocked from new operations. Defaults to `ACTIVE`.
-
-        org_id : typing.Optional[str]
-            The organization this client belongs to. Must be the Vectros-assigned UUID of an org created via `POST /v1/orgs`; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        status : typing.Optional[EntityRequestStatus]
+            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with this client — handy for keeping extra data from your system without defining a schema. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
+            Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a schema (created via `POST /v1/schemas`) that validates this client's payload and drives its lookup indexing. When set, the schema must belong to your account, the payload is validated against the schema's fields on save, and the schema's declared lookup fields become queryable via `GET /v1/clients?type=...&field=...&value=...`. When omitted, the payload is free-form and no lookup rows are written. On update, omit this field to leave it unchanged; once set, it cannot be cleared.
+            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[ClientResponse]
-            A client with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+        HttpResponse[EntityResponse]
+            An entity with the same `externalId` already existed and was returned (`created: false`).
         """
         _response = self._client_wrapper.httpx_client.request(
-            "v1/clients",
+            f"v1/entities/{encode_path_param(namespace)}",
             method="POST",
             params={
                 "upsert": upsert,
@@ -199,9 +205,9 @@ class RawIdentityClient:
                 "externalId": external_id,
                 "name": name,
                 "status": status,
-                "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+                "scopes": scopes,
             },
             headers={
                 "content-type": "application/json",
@@ -212,9 +218,9 @@ class RawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -261,36 +267,39 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def get_client(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> HttpResponse[ClientResponse]:
+    def get_entity(
+        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[EntityResponse]:
         """
-        Returns a single client by its Vectros-assigned UUID. Requires the `clients:r` scope.
+        Retrieves a single entity by its namespace and Vectros-assigned ID. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
-            The Vectros-assigned UUID of the client to retrieve.
+            The Vectros-assigned ID (UUID) of the entity.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[ClientResponse]
-            The requested client.
+        HttpResponse[EntityResponse]
+            The requested entity.
         """
         _response = self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="GET",
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -315,61 +324,65 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def update_client(
+    def update_entity(
         self,
+        namespace: str,
         id: str,
         *,
         external_id: str,
         name: typing.Optional[str] = OMIT,
-        status: typing.Optional[ClientRequestStatus] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
+        status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ClientResponse]:
+    ) -> HttpResponse[EntityResponse]:
         """
-        Updates mutable fields on an existing client. Omitted fields are preserved (a null does not clear a field); when `payload` is supplied it replaces the stored payload in full rather than being deep-merged. Requires the `clients:u` scope.
+        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
 
         external_id : str
-            Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
 
         name : typing.Optional[str]
-            Display name for this client.
+            Human-readable name for the entity.
 
-        status : typing.Optional[ClientRequestStatus]
-            Lifecycle status of the client. `ACTIVE` clients can be used normally; `SUSPENDED` clients are retained but blocked from new operations. Defaults to `ACTIVE`.
-
-        org_id : typing.Optional[str]
-            The organization this client belongs to. Must be the Vectros-assigned UUID of an org created via `POST /v1/orgs`; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        status : typing.Optional[EntityRequestStatus]
+            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with this client — handy for keeping extra data from your system without defining a schema. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
+            Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a schema (created via `POST /v1/schemas`) that validates this client's payload and drives its lookup indexing. When set, the schema must belong to your account, the payload is validated against the schema's fields on save, and the schema's declared lookup fields become queryable via `GET /v1/clients?type=...&field=...&value=...`. When omitted, the payload is free-form and no lookup rows are written. On update, omit this field to leave it unchanged; once set, it cannot be cleared.
+            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[ClientResponse]
-            The updated client.
+        HttpResponse[EntityResponse]
+            The updated entity.
         """
         _response = self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="PUT",
             json={
                 "externalId": external_id,
                 "name": name,
                 "status": status,
-                "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+                "scopes": scopes,
             },
             headers={
                 "content-type": "application/json",
@@ -380,9 +393,9 @@ class RawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -418,12 +431,17 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def delete_client(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
+    def delete_entity(
+        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[None]:
         """
-        Permanently deletes the client. This action cannot be undone. Requires the `clients:d` scope.
+        Permanently deletes an entity. This action cannot be undone. Requires the `entities:d:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
 
         request_options : typing.Optional[RequestOptions]
@@ -434,7 +452,7 @@ class RawIdentityClient:
         HttpResponse[None]
         """
         _response = self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="DELETE",
             request_options=request_options,
         )
@@ -472,8 +490,9 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def lookup_clients(
+    def lookup_entities(
         self,
+        namespace: str,
         *,
         type: str,
         field: str,
@@ -485,12 +504,15 @@ class RawIdentityClient:
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[IdentityLookupRequestOrder] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ClientPage]:
+    ) -> HttpResponse[EntityPage]:
         """
-        Body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/clients`. Use this when looking up by a sensitive (blind-indexed) field: the value travels in the request body rather than the URL. The `GET` list rejects a sensitive field's value and directs you here. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
+        Looks up entities in a namespace by a schema-declared field value, with the criteria in the request body instead of the URL. Use this for a sensitive field: the value travels in the body and never appears in the URL. Body equivalent of the `type`/`field`/`value` lookup on `GET /v1/entities/{namespace}`, which rejects sensitive-field values and directs you here. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         type : str
             The identity schema type whose lookup fields you are querying (for example, `person_v1`).
 
@@ -523,11 +545,11 @@ class RawIdentityClient:
 
         Returns
         -------
-        HttpResponse[ClientPage]
-            A page of matching clients as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+        HttpResponse[EntityPage]
+            A page of matching entities as a `{data, nextCursor}` envelope.
         """
         _response = self._client_wrapper.httpx_client.request(
-            "v1/clients/lookup",
+            f"v1/entities/{encode_path_param(namespace)}/lookup",
             method="POST",
             json={
                 "type": type,
@@ -540,15 +562,18 @@ class RawIdentityClient:
                 "limit": limit,
                 "order": order,
             },
+            headers={
+                "content-type": "application/json",
+            },
             request_options=request_options,
             omit=OMIT,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientPage,
+                    EntityPage,
                     parse_obj_as(
-                        type_=ClientPage,  # type: ignore
+                        type_=EntityPage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -584,23 +609,27 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def get_client_versions(
+    def get_entity_versions(
         self,
+        namespace: str,
         id: str,
         *,
         start_from: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ModelDataVersionPage]:
         """
-        Returns the audit trail of changes to a client, newest first. Identity auditing is always on, so this history is always available; sensitive field values are redacted in each version. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
+        Returns the audit trail of changes made to an entity, newest first. Sensitive field values are redacted in the history. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
-            The Vectros-assigned UUID of the client whose history you want.
+            The Vectros-assigned ID (UUID) of the entity.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor from a previous page's `nextCursor`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -608,10 +637,10 @@ class RawIdentityClient:
         Returns
         -------
         HttpResponse[ModelDataVersionPage]
-            A page of version-history entries as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+            A page of historical versions as a `{data, nextCursor}` envelope.
         """
         _response = self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}/versions",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}/versions",
             method="GET",
             params={
                 "startFrom": start_from,
@@ -648,92 +677,269 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def list_orgs(
-        self,
-        *,
-        user_id: typing.Optional[str] = None,
-        external_id: typing.Optional[str] = None,
-        start_from: typing.Optional[str] = None,
-        limit: typing.Optional[int] = None,
-        type: typing.Optional[str] = None,
-        field: typing.Optional[str] = None,
-        value: typing.Optional[str] = None,
-        from_: typing.Optional[str] = None,
-        to: typing.Optional[str] = None,
-        prefix: typing.Optional[str] = None,
-        order: typing.Optional[ListOrgsRequestOrder] = None,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[OrgPage]:
+    def get_namespace(
+        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[NamespaceResponse]:
         """
-        Returns a paginated list of organizations in your account. Filter by `userId` to return only the organizations owned by a specific user, or by `externalId` for an exact lookup using your own identifier. You can also query schema-declared lookup fields by supplying `type` and `field` together with one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). Requires the `orgs:r` scope.
+        Retrieves a single scope-namespace registration by name. The reserved built-ins `org` and `client` are always resolvable.
 
         Parameters
         ----------
-        user_id : typing.Optional[str]
-            Return only organizations owned by this user, given as the Vectros-assigned ID (UUID) of a user. To resolve a user ID from your own identifier, call `GET /v1/users?externalId=`.
-
-        external_id : typing.Optional[str]
-            Look up an organization by your own identifier. Returns a list with the single matching organization, or an empty list if none matches.
-
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-
-        limit : typing.Optional[int]
-            Maximum number of organizations to return per page (1–100; defaults to 20).
-
-        type : typing.Optional[str]
-            The schema record type whose lookup fields you want to query. Must be supplied together with `field` and exactly one lookup mode (`value`, `from`/`to`, or `prefix`).
-
-        field : typing.Optional[str]
-            The schema-declared lookup field to filter on. Must be one of the lookup fields defined on the schema named by `type`. Supplied together with `type` and one lookup mode.
-
-        value : typing.Optional[str]
-            Exact value to match for `field` (equality lookup). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/orgs/lookup` instead so the value is not exposed in the URL.
-
-        from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup. Requires `to`, and is only supported on non-sensitive fields that have range lookups enabled. Mutually exclusive with `value` and `prefix`.
-
-        to : typing.Optional[str]
-            Inclusive upper bound for a range lookup. Requires `from`.
-
-        prefix : typing.Optional[str]
-            Match all values for `field` that start with this prefix. Only supported on string fields that have range lookups enabled. Mutually exclusive with `value` and `from`/`to`.
-
-        order : typing.Optional[ListOrgsRequestOrder]
-            Sort direction for lookup results: `asc` (ascending, the default) or `desc` (descending).
+        namespace : str
+            The namespace name.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[OrgPage]
-            A page of organizations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
+        HttpResponse[NamespaceResponse]
+            The requested namespace.
         """
         _response = self._client_wrapper.httpx_client.request(
-            "v1/orgs",
+            f"v1/namespaces/{encode_path_param(namespace)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    NamespaceResponse,
+                    parse_obj_as(
+                        type_=NamespaceResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def update_namespace(
+        self,
+        namespace_: str,
+        *,
+        namespace: str,
+        entity_backed: typing.Optional[bool] = OMIT,
+        default_schema_id: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[NamespaceResponse]:
+        """
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+
+        Parameters
+        ----------
+        namespace_ : str
+            The namespace name.
+
+        namespace : str
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        entity_backed : typing.Optional[bool]
+            When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
+
+        default_schema_id : typing.Optional[str]
+            Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[NamespaceResponse]
+            The updated namespace.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/namespaces/{encode_path_param(namespace_)}",
+            method="PUT",
+            json={
+                "namespace": namespace,
+                "entityBacked": entity_backed,
+                "defaultSchemaId": default_schema_id,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    NamespaceResponse,
+                    parse_obj_as(
+                        type_=NamespaceResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def delete_namespace(
+        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[None]:
+        """
+        Deletes a registered scope namespace. Requires a root API key. The reserved built-ins cannot be deleted. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
+
+        Parameters
+        ----------
+        namespace : str
+            The namespace name.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[None]
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/namespaces/{encode_path_param(namespace)}",
+            method="DELETE",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                return HttpResponse(response=_response, data=None)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def list_namespaces(
+        self,
+        *,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[NamespacePage]:
+        """
+        Returns the scope namespaces registered in your account, with the reserved built-ins `org` and `client` listed first. Returns a `{data, nextCursor}` envelope.
+
+        Parameters
+        ----------
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum registrations per page (1-100; defaults to 20).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[NamespacePage]
+            A page of namespaces as a `{data, nextCursor}` envelope.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/namespaces",
             method="GET",
             params={
-                "userId": user_id,
-                "externalId": external_id,
                 "startFrom": start_from,
                 "limit": limit,
-                "type": type,
-                "field": field,
-                "value": value,
-                "from": from_,
-                "to": to,
-                "prefix": prefix,
-                "order": order,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    OrgPage,
+                    NamespacePage,
                     parse_obj_as(
-                        type_=OrgPage,  # type: ignore
+                        type_=NamespacePage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -747,63 +953,43 @@ class RawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    def create_org(
+    def register_namespace(
         self,
         *,
-        external_id: str,
-        upsert: typing.Optional[bool] = None,
-        name: typing.Optional[str] = OMIT,
-        status: typing.Optional[OrgRequestStatus] = OMIT,
-        payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        schema_id: typing.Optional[str] = OMIT,
+        namespace: str,
+        entity_backed: typing.Optional[bool] = OMIT,
+        default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[OrgResponse]:
+    ) -> HttpResponse[NamespaceResponse]:
         """
-        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
 
         Parameters
         ----------
-        external_id : str
-            Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
+        namespace : str
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
-        upsert : typing.Optional[bool]
-            When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
+        entity_backed : typing.Optional[bool]
+            When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
-        name : typing.Optional[str]
-            Human-readable name for the organization.
-
-        status : typing.Optional[OrgRequestStatus]
-            Lifecycle status of the organization. `ACTIVE` organizations can be used normally; `SUSPENDED` organizations are retained but blocked from new operations.
-
-        payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with the organization — use it to attach additional data from your own system. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
-
-        schema_id : typing.Optional[str]
-            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this organization, and must belong to your account. When set, the payload is validated against the schema on save and the schema's declared lookup fields become queryable via `GET /v1/orgs?type=...&field=...&value=...`; when omitted, the payload is free-form and no lookup fields are indexed. Once set, this reference cannot currently be cleared.
+        default_schema_id : typing.Optional[str]
+            Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[OrgResponse]
-            An organization with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+        HttpResponse[NamespaceResponse]
+            The namespace was registered.
         """
         _response = self._client_wrapper.httpx_client.request(
-            "v1/orgs",
+            "v1/namespaces",
             method="POST",
-            params={
-                "upsert": upsert,
-            },
             json={
-                "externalId": external_id,
-                "name": name,
-                "status": status,
-                "payload": payload,
-                "schemaId": schema_id,
-            },
-            headers={
-                "content-type": "application/json",
+                "namespace": namespace,
+                "entityBacked": entity_backed,
+                "defaultSchemaId": default_schema_id,
             },
             request_options=request_options,
             omit=OMIT,
@@ -811,9 +997,9 @@ class RawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    OrgResponse,
+                    NamespaceResponse,
                     parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
+                        type_=NamespaceResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -842,386 +1028,6 @@ class RawIdentityClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def get_org(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[OrgResponse]:
-        """
-        Retrieves a single organization by its Vectros-assigned ID, returning its current name, status, payload, and schema binding. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        id : str
-            The Vectros-assigned ID (UUID) of the organization to retrieve.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[OrgResponse]
-            The requested organization.
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="GET",
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgResponse,
-                    parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return HttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def update_org(
-        self,
-        id: str,
-        *,
-        external_id: str,
-        name: typing.Optional[str] = OMIT,
-        status: typing.Optional[OrgRequestStatus] = OMIT,
-        payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        schema_id: typing.Optional[str] = OMIT,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[OrgResponse]:
-        """
-        Updates the mutable fields of an organization. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied rather than deep-merged. Requires the `orgs:u` scope.
-
-        Parameters
-        ----------
-        id : str
-
-        external_id : str
-            Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
-
-        name : typing.Optional[str]
-            Human-readable name for the organization.
-
-        status : typing.Optional[OrgRequestStatus]
-            Lifecycle status of the organization. `ACTIVE` organizations can be used normally; `SUSPENDED` organizations are retained but blocked from new operations.
-
-        payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with the organization — use it to attach additional data from your own system. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
-
-        schema_id : typing.Optional[str]
-            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this organization, and must belong to your account. When set, the payload is validated against the schema on save and the schema's declared lookup fields become queryable via `GET /v1/orgs?type=...&field=...&value=...`; when omitted, the payload is free-form and no lookup fields are indexed. Once set, this reference cannot currently be cleared.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[OrgResponse]
-            The updated organization.
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="PUT",
-            json={
-                "externalId": external_id,
-                "name": name,
-                "status": status,
-                "payload": payload,
-                "schemaId": schema_id,
-            },
-            headers={
-                "content-type": "application/json",
-            },
-            request_options=request_options,
-            omit=OMIT,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgResponse,
-                    parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return HttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def delete_org(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
-        """
-        Permanently deletes an organization. This action cannot be undone. Requires the `orgs:d` scope.
-
-        Parameters
-        ----------
-        id : str
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[None]
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="DELETE",
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                return HttpResponse(response=_response, data=None)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def lookup_orgs(
-        self,
-        *,
-        type: str,
-        field: str,
-        value: typing.Optional[str] = OMIT,
-        from_: typing.Optional[str] = OMIT,
-        to: typing.Optional[str] = OMIT,
-        prefix: typing.Optional[str] = OMIT,
-        start_from: typing.Optional[str] = OMIT,
-        limit: typing.Optional[int] = OMIT,
-        order: typing.Optional[IdentityLookupRequestOrder] = OMIT,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[OrgPage]:
-        """
-        Looks up organizations by a schema-declared field value, with the search criteria sent in the request body instead of the URL. Use this when looking up by a sensitive field: the value travels in the body and is never exposed in the URL. This is the body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/orgs`, which rejects sensitive-field values and directs you here. Returns a `{data, nextCursor}` envelope. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        type : str
-            The identity schema type whose lookup fields you are querying (for example, `person_v1`).
-
-        field : str
-            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
-
-        value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`.
-
-        from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup (requires `to`; supported only on range-enabled, non-sensitive fields). Mutually exclusive with `value` and `prefix`.
-
-        to : typing.Optional[str]
-            Inclusive upper bound for a range lookup (requires `from`).
-
-        prefix : typing.Optional[str]
-            Prefix to match (supported only on range-enabled string fields). Mutually exclusive with `value` and `from`/`to`.
-
-        start_from : typing.Optional[str]
-            Pagination cursor — pass the `nextCursor` returned by the previous page.
-
-        limit : typing.Optional[int]
-            Maximum number of results to return per page (1–100; defaults to 20).
-
-        order : typing.Optional[IdentityLookupRequestOrder]
-            Sort direction for the returned results: `asc` (default) or `desc`.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[OrgPage]
-            A page of matching organizations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            "v1/orgs/lookup",
-            method="POST",
-            json={
-                "type": type,
-                "field": field,
-                "value": value,
-                "from": from_,
-                "to": to,
-                "prefix": prefix,
-                "startFrom": start_from,
-                "limit": limit,
-                "order": order,
-            },
-            request_options=request_options,
-            omit=OMIT,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgPage,
-                    parse_obj_as(
-                        type_=OrgPage,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return HttpResponse(response=_response, data=_data)
-            if _response.status_code == 400:
-                raise BadRequestError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    def get_org_versions(
-        self,
-        id: str,
-        *,
-        start_from: typing.Optional[str] = None,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ModelDataVersionPage]:
-        """
-        Returns the audit trail of changes made to an organization, newest first. Version history is always recorded for identity entities, and sensitive field values are redacted in the history. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        id : str
-            The Vectros-assigned ID (UUID) of the organization whose history you want.
-
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page of history.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        HttpResponse[ModelDataVersionPage]
-            A page of historical versions as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
-        """
-        _response = self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}/versions",
-            method="GET",
-            params={
-                "startFrom": start_from,
-            },
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    ModelDataVersionPage,
-                    parse_obj_as(
-                        type_=ModelDataVersionPage,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return HttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1876,81 +1682,83 @@ class AsyncRawIdentityClient:
     def __init__(self, *, client_wrapper: AsyncClientWrapper):
         self._client_wrapper = client_wrapper
 
-    async def list_clients(
+    async def list_entities(
         self,
+        namespace: str,
         *,
-        org_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
         external_id: typing.Optional[str] = None,
-        start_from: typing.Optional[str] = None,
-        limit: typing.Optional[int] = None,
+        scope: typing.Optional[str] = None,
         type: typing.Optional[str] = None,
         field: typing.Optional[str] = None,
         value: typing.Optional[str] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
-        order: typing.Optional[ListClientsRequestOrder] = None,
+        order: typing.Optional[ListEntitiesRequestOrder] = None,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ClientPage]:
+    ) -> AsyncHttpResponse[EntityPage]:
         """
-        Returns a paginated list of clients in your account. Narrow the results with `orgId` or `userId`, or use `externalId` for an exact lookup by your own identifier. For schema-bound clients, you can also query by a schema-declared lookup field using `type`, `field`, and one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `clients:r` scope.
+        Returns a paginated list of entities in a namespace. Filter by `userId` (entities owned by a user), by `externalId` (exact lookup by your own identifier), or by `scope` (`scope=<namespace>:<value>` — entities that have that value as a parent, e.g. `scope=org:6ba7...`). Naming this namespace's own name in `scope` resolves the entity itself (`scope=team:6ba7...` on `/v1/entities/team` returns that team), since an entity is always in its own scope. `userId` and `scope` can be combined to narrow on both dimensions at once; `externalId` identifies a single entity and cannot be combined with either. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
-        org_id : typing.Optional[str]
-            Return only clients belonging to this organization. Pass the Vectros-assigned UUID of an org; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        namespace : str
+            The entity namespace.
 
         user_id : typing.Optional[str]
-            Return only clients owned by this user. Pass the Vectros-assigned UUID of a user; use `GET /v1/users?externalId=` to resolve your own identifier to this UUID.
+            Return only entities owned by this user (Vectros user ID).
 
         external_id : typing.Optional[str]
-            Look up a client by your own `externalId`. Returns a single-element list, or an empty list if no client matches.
+            Look up an entity by your own identifier. Returns a list with the single match, or empty.
 
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-
-        limit : typing.Optional[int]
-            Maximum number of clients to return per page (1–100; defaults to 20).
+        scope : typing.Optional[str]
+            Filter by parent edge as `<namespace>:<value>` (e.g. `org:6ba7...`). Matches any of the entity's parents, not just its first. Naming this route's own namespace resolves the entity itself.
 
         type : typing.Optional[str]
-            Record type of the schema whose lookup fields you are querying. Must be supplied together with `field` and exactly one lookup mode.
+            Schema record type whose lookup fields you want to query. Supply with `field` and one lookup mode (`value`, `from`/`to`, or `prefix`).
 
         field : typing.Optional[str]
-            Name of the lookup field to filter by. Must be declared as a lookup field on the schema identified by `type`. Supply it together with `type` and exactly one lookup mode.
+            The schema-declared lookup field to filter on. Supply with `type` and one lookup mode.
 
         value : typing.Optional[str]
-            Exact value to match for `field` (equality mode). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/clients/lookup` instead so the value is not exposed in the URL.
+            Exact value to match for `field` (equality). Not allowed for a sensitive field — use `POST /v1/entities/{namespace}/lookup`.
 
         from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup. Requires `to`, and is only allowed on non-sensitive fields that have range queries enabled. Mutually exclusive with `value` and `prefix`.
+            Inclusive lower bound for a range lookup (requires `to`; range-enabled fields).
 
         to : typing.Optional[str]
-            Inclusive upper bound for a range lookup. Requires `from`.
+            Inclusive upper bound for a range lookup (requires `from`).
 
         prefix : typing.Optional[str]
-            Match clients whose value for `field` starts with this prefix. Only allowed on string fields that have range queries enabled. Mutually exclusive with `value` and `from`/`to`.
+            Match all values of `field` starting with this prefix (range-enabled string fields).
 
-        order : typing.Optional[ListClientsRequestOrder]
-            Sort direction for the results: `asc` (the default) or `desc`.
+        order : typing.Optional[ListEntitiesRequestOrder]
+            Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
+
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum entities per page (1-100; defaults to 20).
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[ClientPage]
-            A page of clients as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+        AsyncHttpResponse[EntityPage]
+            A page of entities as a `{data, nextCursor}` envelope.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            "v1/clients",
+            f"v1/entities/{encode_path_param(namespace)}",
             method="GET",
             params={
-                "orgId": org_id,
                 "userId": user_id,
                 "externalId": external_id,
-                "startFrom": start_from,
-                "limit": limit,
+                "scope": scope,
                 "type": type,
                 "field": field,
                 "value": value,
@@ -1958,15 +1766,17 @@ class AsyncRawIdentityClient:
                 "to": to,
                 "prefix": prefix,
                 "order": order,
+                "startFrom": start_from,
+                "limit": limit,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientPage,
+                    EntityPage,
                     parse_obj_as(
-                        type_=ClientPage,  # type: ignore
+                        type_=EntityPage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -1980,54 +1790,58 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def create_client(
+    async def create_entity(
         self,
+        namespace: str,
         *,
         external_id: str,
         upsert: typing.Optional[bool] = None,
         name: typing.Optional[str] = OMIT,
-        status: typing.Optional[ClientRequestStatus] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
+        status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ClientResponse]:
+    ) -> AsyncHttpResponse[EntityResponse]:
         """
-        Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
+        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         external_id : str
-            Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
+            When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
 
         name : typing.Optional[str]
-            Display name for this client.
+            Human-readable name for the entity.
 
-        status : typing.Optional[ClientRequestStatus]
-            Lifecycle status of the client. `ACTIVE` clients can be used normally; `SUSPENDED` clients are retained but blocked from new operations. Defaults to `ACTIVE`.
-
-        org_id : typing.Optional[str]
-            The organization this client belongs to. Must be the Vectros-assigned UUID of an org created via `POST /v1/orgs`; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        status : typing.Optional[EntityRequestStatus]
+            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with this client — handy for keeping extra data from your system without defining a schema. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
+            Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a schema (created via `POST /v1/schemas`) that validates this client's payload and drives its lookup indexing. When set, the schema must belong to your account, the payload is validated against the schema's fields on save, and the schema's declared lookup fields become queryable via `GET /v1/clients?type=...&field=...&value=...`. When omitted, the payload is free-form and no lookup rows are written. On update, omit this field to leave it unchanged; once set, it cannot be cleared.
+            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[ClientResponse]
-            A client with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+        AsyncHttpResponse[EntityResponse]
+            An entity with the same `externalId` already existed and was returned (`created: false`).
         """
         _response = await self._client_wrapper.httpx_client.request(
-            "v1/clients",
+            f"v1/entities/{encode_path_param(namespace)}",
             method="POST",
             params={
                 "upsert": upsert,
@@ -2036,9 +1850,9 @@ class AsyncRawIdentityClient:
                 "externalId": external_id,
                 "name": name,
                 "status": status,
-                "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+                "scopes": scopes,
             },
             headers={
                 "content-type": "application/json",
@@ -2049,9 +1863,9 @@ class AsyncRawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2098,36 +1912,39 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def get_client(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> AsyncHttpResponse[ClientResponse]:
+    async def get_entity(
+        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[EntityResponse]:
         """
-        Returns a single client by its Vectros-assigned UUID. Requires the `clients:r` scope.
+        Retrieves a single entity by its namespace and Vectros-assigned ID. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
-            The Vectros-assigned UUID of the client to retrieve.
+            The Vectros-assigned ID (UUID) of the entity.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[ClientResponse]
-            The requested client.
+        AsyncHttpResponse[EntityResponse]
+            The requested entity.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="GET",
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2152,61 +1969,65 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def update_client(
+    async def update_entity(
         self,
+        namespace: str,
         id: str,
         *,
         external_id: str,
         name: typing.Optional[str] = OMIT,
-        status: typing.Optional[ClientRequestStatus] = OMIT,
-        org_id: typing.Optional[str] = OMIT,
+        status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ClientResponse]:
+    ) -> AsyncHttpResponse[EntityResponse]:
         """
-        Updates mutable fields on an existing client. Omitted fields are preserved (a null does not clear a field); when `payload` is supplied it replaces the stored payload in full rather than being deep-merged. Requires the `clients:u` scope.
+        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
 
         external_id : str
-            Your own unique identifier for this client. Used for idempotent create: if a client with this `externalId` already exists, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
 
         name : typing.Optional[str]
-            Display name for this client.
+            Human-readable name for the entity.
 
-        status : typing.Optional[ClientRequestStatus]
-            Lifecycle status of the client. `ACTIVE` clients can be used normally; `SUSPENDED` clients are retained but blocked from new operations. Defaults to `ACTIVE`.
-
-        org_id : typing.Optional[str]
-            The organization this client belongs to. Must be the Vectros-assigned UUID of an org created via `POST /v1/orgs`; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
+        status : typing.Optional[EntityRequestStatus]
+            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with this client — handy for keeping extra data from your system without defining a schema. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the payload unchanged.
+            Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a schema (created via `POST /v1/schemas`) that validates this client's payload and drives its lookup indexing. When set, the schema must belong to your account, the payload is validated against the schema's fields on save, and the schema's declared lookup fields become queryable via `GET /v1/clients?type=...&field=...&value=...`. When omitted, the payload is free-form and no lookup rows are written. On update, omit this field to leave it unchanged; once set, it cannot be cleared.
+            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
+
+        scopes : typing.Optional[typing.Sequence[str]]
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[ClientResponse]
-            The updated client.
+        AsyncHttpResponse[EntityResponse]
+            The updated entity.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="PUT",
             json={
                 "externalId": external_id,
                 "name": name,
                 "status": status,
-                "orgId": org_id,
                 "payload": payload,
                 "schemaId": schema_id,
+                "scopes": scopes,
             },
             headers={
                 "content-type": "application/json",
@@ -2217,9 +2038,9 @@ class AsyncRawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientResponse,
+                    EntityResponse,
                     parse_obj_as(
-                        type_=ClientResponse,  # type: ignore
+                        type_=EntityResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2255,14 +2076,17 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def delete_client(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    async def delete_entity(
+        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes the client. This action cannot be undone. Requires the `clients:d` scope.
+        Permanently deletes an entity. This action cannot be undone. Requires the `entities:d:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
 
         request_options : typing.Optional[RequestOptions]
@@ -2273,7 +2097,7 @@ class AsyncRawIdentityClient:
         AsyncHttpResponse[None]
         """
         _response = await self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="DELETE",
             request_options=request_options,
         )
@@ -2311,8 +2135,9 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def lookup_clients(
+    async def lookup_entities(
         self,
+        namespace: str,
         *,
         type: str,
         field: str,
@@ -2324,12 +2149,15 @@ class AsyncRawIdentityClient:
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[IdentityLookupRequestOrder] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ClientPage]:
+    ) -> AsyncHttpResponse[EntityPage]:
         """
-        Body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/clients`. Use this when looking up by a sensitive (blind-indexed) field: the value travels in the request body rather than the URL. The `GET` list rejects a sensitive field's value and directs you here. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
+        Looks up entities in a namespace by a schema-declared field value, with the criteria in the request body instead of the URL. Use this for a sensitive field: the value travels in the body and never appears in the URL. Body equivalent of the `type`/`field`/`value` lookup on `GET /v1/entities/{namespace}`, which rejects sensitive-field values and directs you here. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         type : str
             The identity schema type whose lookup fields you are querying (for example, `person_v1`).
 
@@ -2362,11 +2190,11 @@ class AsyncRawIdentityClient:
 
         Returns
         -------
-        AsyncHttpResponse[ClientPage]
-            A page of matching clients as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+        AsyncHttpResponse[EntityPage]
+            A page of matching entities as a `{data, nextCursor}` envelope.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            "v1/clients/lookup",
+            f"v1/entities/{encode_path_param(namespace)}/lookup",
             method="POST",
             json={
                 "type": type,
@@ -2379,15 +2207,18 @@ class AsyncRawIdentityClient:
                 "limit": limit,
                 "order": order,
             },
+            headers={
+                "content-type": "application/json",
+            },
             request_options=request_options,
             omit=OMIT,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ClientPage,
+                    EntityPage,
                     parse_obj_as(
-                        type_=ClientPage,  # type: ignore
+                        type_=EntityPage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2423,23 +2254,27 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def get_client_versions(
+    async def get_entity_versions(
         self,
+        namespace: str,
         id: str,
         *,
         start_from: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ModelDataVersionPage]:
         """
-        Returns the audit trail of changes to a client, newest first. Identity auditing is always on, so this history is always available; sensitive field values are redacted in each version. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
+        Returns the audit trail of changes made to an entity, newest first. Sensitive field values are redacted in the history. Requires the `entities:r:<namespace>` scope.
 
         Parameters
         ----------
+        namespace : str
+            The entity namespace.
+
         id : str
-            The Vectros-assigned UUID of the client whose history you want.
+            The Vectros-assigned ID (UUID) of the entity.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor from a previous page's `nextCursor`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2447,10 +2282,10 @@ class AsyncRawIdentityClient:
         Returns
         -------
         AsyncHttpResponse[ModelDataVersionPage]
-            A page of version-history entries as a `{data, nextCursor}` envelope; `nextCursor` is null when no more pages remain.
+            A page of historical versions as a `{data, nextCursor}` envelope.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            f"v1/clients/{encode_path_param(id)}/versions",
+            f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}/versions",
             method="GET",
             params={
                 "startFrom": start_from,
@@ -2487,92 +2322,269 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def list_orgs(
-        self,
-        *,
-        user_id: typing.Optional[str] = None,
-        external_id: typing.Optional[str] = None,
-        start_from: typing.Optional[str] = None,
-        limit: typing.Optional[int] = None,
-        type: typing.Optional[str] = None,
-        field: typing.Optional[str] = None,
-        value: typing.Optional[str] = None,
-        from_: typing.Optional[str] = None,
-        to: typing.Optional[str] = None,
-        prefix: typing.Optional[str] = None,
-        order: typing.Optional[ListOrgsRequestOrder] = None,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[OrgPage]:
+    async def get_namespace(
+        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Returns a paginated list of organizations in your account. Filter by `userId` to return only the organizations owned by a specific user, or by `externalId` for an exact lookup using your own identifier. You can also query schema-declared lookup fields by supplying `type` and `field` together with one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). Requires the `orgs:r` scope.
+        Retrieves a single scope-namespace registration by name. The reserved built-ins `org` and `client` are always resolvable.
 
         Parameters
         ----------
-        user_id : typing.Optional[str]
-            Return only organizations owned by this user, given as the Vectros-assigned ID (UUID) of a user. To resolve a user ID from your own identifier, call `GET /v1/users?externalId=`.
-
-        external_id : typing.Optional[str]
-            Look up an organization by your own identifier. Returns a list with the single matching organization, or an empty list if none matches.
-
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-
-        limit : typing.Optional[int]
-            Maximum number of organizations to return per page (1–100; defaults to 20).
-
-        type : typing.Optional[str]
-            The schema record type whose lookup fields you want to query. Must be supplied together with `field` and exactly one lookup mode (`value`, `from`/`to`, or `prefix`).
-
-        field : typing.Optional[str]
-            The schema-declared lookup field to filter on. Must be one of the lookup fields defined on the schema named by `type`. Supplied together with `type` and one lookup mode.
-
-        value : typing.Optional[str]
-            Exact value to match for `field` (equality lookup). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/orgs/lookup` instead so the value is not exposed in the URL.
-
-        from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup. Requires `to`, and is only supported on non-sensitive fields that have range lookups enabled. Mutually exclusive with `value` and `prefix`.
-
-        to : typing.Optional[str]
-            Inclusive upper bound for a range lookup. Requires `from`.
-
-        prefix : typing.Optional[str]
-            Match all values for `field` that start with this prefix. Only supported on string fields that have range lookups enabled. Mutually exclusive with `value` and `from`/`to`.
-
-        order : typing.Optional[ListOrgsRequestOrder]
-            Sort direction for lookup results: `asc` (ascending, the default) or `desc` (descending).
+        namespace : str
+            The namespace name.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[OrgPage]
-            A page of organizations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
+        AsyncHttpResponse[NamespaceResponse]
+            The requested namespace.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            "v1/orgs",
+            f"v1/namespaces/{encode_path_param(namespace)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    NamespaceResponse,
+                    parse_obj_as(
+                        type_=NamespaceResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def update_namespace(
+        self,
+        namespace_: str,
+        *,
+        namespace: str,
+        entity_backed: typing.Optional[bool] = OMIT,
+        default_schema_id: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[NamespaceResponse]:
+        """
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+
+        Parameters
+        ----------
+        namespace_ : str
+            The namespace name.
+
+        namespace : str
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        entity_backed : typing.Optional[bool]
+            When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
+
+        default_schema_id : typing.Optional[str]
+            Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[NamespaceResponse]
+            The updated namespace.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/namespaces/{encode_path_param(namespace_)}",
+            method="PUT",
+            json={
+                "namespace": namespace,
+                "entityBacked": entity_backed,
+                "defaultSchemaId": default_schema_id,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    NamespaceResponse,
+                    parse_obj_as(
+                        type_=NamespaceResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def delete_namespace(
+        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[None]:
+        """
+        Deletes a registered scope namespace. Requires a root API key. The reserved built-ins cannot be deleted. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
+
+        Parameters
+        ----------
+        namespace : str
+            The namespace name.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[None]
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/namespaces/{encode_path_param(namespace)}",
+            method="DELETE",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                return AsyncHttpResponse(response=_response, data=None)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def list_namespaces(
+        self,
+        *,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[NamespacePage]:
+        """
+        Returns the scope namespaces registered in your account, with the reserved built-ins `org` and `client` listed first. Returns a `{data, nextCursor}` envelope.
+
+        Parameters
+        ----------
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum registrations per page (1-100; defaults to 20).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[NamespacePage]
+            A page of namespaces as a `{data, nextCursor}` envelope.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/namespaces",
             method="GET",
             params={
-                "userId": user_id,
-                "externalId": external_id,
                 "startFrom": start_from,
                 "limit": limit,
-                "type": type,
-                "field": field,
-                "value": value,
-                "from": from_,
-                "to": to,
-                "prefix": prefix,
-                "order": order,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    OrgPage,
+                    NamespacePage,
                     parse_obj_as(
-                        type_=OrgPage,  # type: ignore
+                        type_=NamespacePage,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2586,63 +2598,43 @@ class AsyncRawIdentityClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
-    async def create_org(
+    async def register_namespace(
         self,
         *,
-        external_id: str,
-        upsert: typing.Optional[bool] = None,
-        name: typing.Optional[str] = OMIT,
-        status: typing.Optional[OrgRequestStatus] = OMIT,
-        payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        schema_id: typing.Optional[str] = OMIT,
+        namespace: str,
+        entity_backed: typing.Optional[bool] = OMIT,
+        default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[OrgResponse]:
+    ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
 
         Parameters
         ----------
-        external_id : str
-            Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
+        namespace : str
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
-        upsert : typing.Optional[bool]
-            When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
+        entity_backed : typing.Optional[bool]
+            When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
-        name : typing.Optional[str]
-            Human-readable name for the organization.
-
-        status : typing.Optional[OrgRequestStatus]
-            Lifecycle status of the organization. `ACTIVE` organizations can be used normally; `SUSPENDED` organizations are retained but blocked from new operations.
-
-        payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with the organization — use it to attach additional data from your own system. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
-
-        schema_id : typing.Optional[str]
-            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this organization, and must belong to your account. When set, the payload is validated against the schema on save and the schema's declared lookup fields become queryable via `GET /v1/orgs?type=...&field=...&value=...`; when omitted, the payload is free-form and no lookup fields are indexed. Once set, this reference cannot currently be cleared.
+        default_schema_id : typing.Optional[str]
+            Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[OrgResponse]
-            An organization with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+        AsyncHttpResponse[NamespaceResponse]
+            The namespace was registered.
         """
         _response = await self._client_wrapper.httpx_client.request(
-            "v1/orgs",
+            "v1/namespaces",
             method="POST",
-            params={
-                "upsert": upsert,
-            },
             json={
-                "externalId": external_id,
-                "name": name,
-                "status": status,
-                "payload": payload,
-                "schemaId": schema_id,
-            },
-            headers={
-                "content-type": "application/json",
+                "namespace": namespace,
+                "entityBacked": entity_backed,
+                "defaultSchemaId": default_schema_id,
             },
             request_options=request_options,
             omit=OMIT,
@@ -2650,9 +2642,9 @@ class AsyncRawIdentityClient:
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    OrgResponse,
+                    NamespaceResponse,
                     parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
+                        type_=NamespaceResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
@@ -2681,390 +2673,6 @@ class AsyncRawIdentityClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def get_org(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> AsyncHttpResponse[OrgResponse]:
-        """
-        Retrieves a single organization by its Vectros-assigned ID, returning its current name, status, payload, and schema binding. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        id : str
-            The Vectros-assigned ID (UUID) of the organization to retrieve.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[OrgResponse]
-            The requested organization.
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="GET",
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgResponse,
-                    parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return AsyncHttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def update_org(
-        self,
-        id: str,
-        *,
-        external_id: str,
-        name: typing.Optional[str] = OMIT,
-        status: typing.Optional[OrgRequestStatus] = OMIT,
-        payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
-        schema_id: typing.Optional[str] = OMIT,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[OrgResponse]:
-        """
-        Updates the mutable fields of an organization. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied rather than deep-merged. Requires the `orgs:u` scope.
-
-        Parameters
-        ----------
-        id : str
-
-        external_id : str
-            Your own unique identifier for this organization. Used for idempotent upsert: if an organization with this `externalId` already exists, it is returned instead of creating a duplicate.
-
-        name : typing.Optional[str]
-            Human-readable name for the organization.
-
-        status : typing.Optional[OrgRequestStatus]
-            Lifecycle status of the organization. `ACTIVE` organizations can be used normally; `SUSPENDED` organizations are retained but blocked from new operations.
-
-        payload : typing.Optional[typing.Dict[str, typing.Any]]
-            Free-form key-value attributes to store with the organization — use it to attach additional data from your own system. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
-
-        schema_id : typing.Optional[str]
-            Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this organization, and must belong to your account. When set, the payload is validated against the schema on save and the schema's declared lookup fields become queryable via `GET /v1/orgs?type=...&field=...&value=...`; when omitted, the payload is free-form and no lookup fields are indexed. Once set, this reference cannot currently be cleared.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[OrgResponse]
-            The updated organization.
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="PUT",
-            json={
-                "externalId": external_id,
-                "name": name,
-                "status": status,
-                "payload": payload,
-                "schemaId": schema_id,
-            },
-            headers={
-                "content-type": "application/json",
-            },
-            request_options=request_options,
-            omit=OMIT,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgResponse,
-                    parse_obj_as(
-                        type_=OrgResponse,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return AsyncHttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def delete_org(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> AsyncHttpResponse[None]:
-        """
-        Permanently deletes an organization. This action cannot be undone. Requires the `orgs:d` scope.
-
-        Parameters
-        ----------
-        id : str
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[None]
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}",
-            method="DELETE",
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                return AsyncHttpResponse(response=_response, data=None)
-            if _response.status_code == 404:
-                raise NotFoundError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def lookup_orgs(
-        self,
-        *,
-        type: str,
-        field: str,
-        value: typing.Optional[str] = OMIT,
-        from_: typing.Optional[str] = OMIT,
-        to: typing.Optional[str] = OMIT,
-        prefix: typing.Optional[str] = OMIT,
-        start_from: typing.Optional[str] = OMIT,
-        limit: typing.Optional[int] = OMIT,
-        order: typing.Optional[IdentityLookupRequestOrder] = OMIT,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[OrgPage]:
-        """
-        Looks up organizations by a schema-declared field value, with the search criteria sent in the request body instead of the URL. Use this when looking up by a sensitive field: the value travels in the body and is never exposed in the URL. This is the body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/orgs`, which rejects sensitive-field values and directs you here. Returns a `{data, nextCursor}` envelope. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        type : str
-            The identity schema type whose lookup fields you are querying (for example, `person_v1`).
-
-        field : str
-            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
-
-        value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`.
-
-        from_ : typing.Optional[str]
-            Inclusive lower bound for a range lookup (requires `to`; supported only on range-enabled, non-sensitive fields). Mutually exclusive with `value` and `prefix`.
-
-        to : typing.Optional[str]
-            Inclusive upper bound for a range lookup (requires `from`).
-
-        prefix : typing.Optional[str]
-            Prefix to match (supported only on range-enabled string fields). Mutually exclusive with `value` and `from`/`to`.
-
-        start_from : typing.Optional[str]
-            Pagination cursor — pass the `nextCursor` returned by the previous page.
-
-        limit : typing.Optional[int]
-            Maximum number of results to return per page (1–100; defaults to 20).
-
-        order : typing.Optional[IdentityLookupRequestOrder]
-            Sort direction for the returned results: `asc` (default) or `desc`.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[OrgPage]
-            A page of matching organizations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            "v1/orgs/lookup",
-            method="POST",
-            json={
-                "type": type,
-                "field": field,
-                "value": value,
-                "from": from_,
-                "to": to,
-                "prefix": prefix,
-                "startFrom": start_from,
-                "limit": limit,
-                "order": order,
-            },
-            request_options=request_options,
-            omit=OMIT,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    OrgPage,
-                    parse_obj_as(
-                        type_=OrgPage,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return AsyncHttpResponse(response=_response, data=_data)
-            if _response.status_code == 400:
-                raise BadRequestError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 429:
-                raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            _response_json = _response.json()
-        except JSONDecodeError:
-            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
-        except ValidationError as e:
-            raise ParsingError(
-                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
-            )
-        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
-
-    async def get_org_versions(
-        self,
-        id: str,
-        *,
-        start_from: typing.Optional[str] = None,
-        request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ModelDataVersionPage]:
-        """
-        Returns the audit trail of changes made to an organization, newest first. Version history is always recorded for identity entities, and sensitive field values are redacted in the history. Requires the `orgs:r` scope.
-
-        Parameters
-        ----------
-        id : str
-            The Vectros-assigned ID (UUID) of the organization whose history you want.
-
-        start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page of history.
-
-        request_options : typing.Optional[RequestOptions]
-            Request-specific configuration.
-
-        Returns
-        -------
-        AsyncHttpResponse[ModelDataVersionPage]
-            A page of historical versions as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor for the next page, or null when no more pages remain.
-        """
-        _response = await self._client_wrapper.httpx_client.request(
-            f"v1/orgs/{encode_path_param(id)}/versions",
-            method="GET",
-            params={
-                "startFrom": start_from,
-            },
-            request_options=request_options,
-        )
-        try:
-            if 200 <= _response.status_code < 300:
-                _data = typing.cast(
-                    ModelDataVersionPage,
-                    parse_obj_as(
-                        type_=ModelDataVersionPage,  # type: ignore
-                        object_=_response.json(),
-                    ),
-                )
-                return AsyncHttpResponse(response=_response, data=_data)
-            if _response.status_code == 404:
-                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

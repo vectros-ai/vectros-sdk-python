@@ -9,7 +9,6 @@ from ..core.serialization import FieldMetadata
 from .export_manifest import ExportManifest
 from .export_request_response_scope import ExportRequestResponseScope
 from .export_request_response_status import ExportRequestResponseStatus
-from .export_request_response_subject_type import ExportRequestResponseSubjectType
 
 
 class ExportRequestResponse(UniversalBaseModel):
@@ -36,11 +35,11 @@ class ExportRequestResponse(UniversalBaseModel):
     """
 
     subject_type: typing_extensions.Annotated[
-        typing.Optional[ExportRequestResponseSubjectType],
+        typing.Optional[str],
         FieldMetadata(alias="subjectType"),
         pydantic.Field(
             alias="subjectType",
-            description="For a `subject`-scoped export, the kind of subject that was exported (echoed back). Null for a `tenant`-scoped export.",
+            description="For a `subject`-scoped export, the kind of subject that was exported — `user`, or an ownership namespace such as `org` or `client` (echoed back). Null for a `tenant`-scoped export.",
         ),
     ] = None
     subject_id: typing_extensions.Annotated[

@@ -74,7 +74,7 @@ client.auth.get_jwks()
 <dl>
 <dd>
 
-Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`, plus optional `clientId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 </dd>
 </dl>
 </dd>
@@ -100,7 +100,6 @@ client.auth.get_access_log(
     subject_type="user",
     subject_id="user_abc123",
     context_id="ctx_intake",
-    client_id="client_xyz789",
     action="read",
     caller_key_id="key_abc123",
     resource_type="intake_form",
@@ -121,7 +120,7 @@ client.auth.get_access_log(
 <dl>
 <dd>
 
-**subject_type:** `typing.Optional[str]` — Kind of subject to account for: `user`, `client`, or `org`.
+**subject_type:** `typing.Optional[str]` — Kind of subject to account for: `user`, or any ownership namespace — the built-in `org` and `client`, or one you registered such as `team`. A subject kind is your data, not a fixed list.
     
 </dd>
 </dl>
@@ -138,14 +137,6 @@ client.auth.get_access_log(
 <dd>
 
 **context_id:** `typing.Optional[str]` — Restrict results to a single app context (the data-partition axis). Required for a subject or record query.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**client_id:** `typing.Optional[str]` — Further restrict a subject query to reads about a single nested client/patient.
     
 </dd>
 </dl>
@@ -782,7 +773,7 @@ client.auth.list_access_profiles(
 <dl>
 <dd>
 
-Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 </dd>
 </dl>
 </dd>
@@ -2412,7 +2403,7 @@ client.auth.mint_token(
             "userId": "550e8400-e29b-41d4-a716-446655440000"
         },
         data_scope={
-            "orgId": [
+            "scope:org": [
                 "6ba7b810-9dad-11d1-80b4-00c04fd430c8"
             ]
         },
@@ -2618,1855 +2609,6 @@ client.auth.resend_invite(
 </dl>
 </details>
 
-## Identity
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_clients</a>(...) -> ClientPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns a paginated list of clients in your account. Narrow the results with `orgId` or `userId`, or use `externalId` for an exact lookup by your own identifier. For schema-bound clients, you can also query by a schema-declared lookup field using `type`, `field`, and one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `clients:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.list_clients(
-    org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    user_id="550e8400-e29b-41d4-a716-446655440000",
-    external_id="patient_789",
-    start_from="f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    type="client_v1",
-    field="industry",
-    value="healthcare",
-    prefix="health",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**org_id:** `typing.Optional[str]` — Return only clients belonging to this organization. Pass the Vectros-assigned UUID of an org; use `GET /v1/orgs?externalId=` to resolve your own identifier to this UUID.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**user_id:** `typing.Optional[str]` — Return only clients owned by this user. Pass the Vectros-assigned UUID of a user; use `GET /v1/users?externalId=` to resolve your own identifier to this UUID.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**external_id:** `typing.Optional[str]` — Look up a client by your own `externalId`. Returns a single-element list, or an empty list if no client matches.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**limit:** `typing.Optional[int]` — Maximum number of clients to return per page (1–100; defaults to 20).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**type:** `typing.Optional[str]` — Record type of the schema whose lookup fields you are querying. Must be supplied together with `field` and exactly one lookup mode.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**field:** `typing.Optional[str]` — Name of the lookup field to filter by. Must be declared as a lookup field on the schema identified by `type`. Supply it together with `type` and exactly one lookup mode.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**value:** `typing.Optional[str]` — Exact value to match for `field` (equality mode). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/clients/lookup` instead so the value is not exposed in the URL.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**from:** `typing.Optional[str]` — Inclusive lower bound for a range lookup. Requires `to`, and is only allowed on non-sensitive fields that have range queries enabled. Mutually exclusive with `value` and `prefix`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**to:** `typing.Optional[str]` — Inclusive upper bound for a range lookup. Requires `from`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**prefix:** `typing.Optional[str]` — Match clients whose value for `field` starts with this prefix. Only allowed on string fields that have range queries enabled. Mutually exclusive with `value` and `from`/`to`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**order:** `typing.Optional[ListClientsRequestOrder]` — Sort direction for the results: `asc` (the default) or `desc`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">create_client</a>(...) -> ClientResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Creates a new client identity in your account. This call is idempotent on `externalId`: if a client with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing client was returned) tells the two apart. To overwrite an existing client's content instead of returning it unchanged, set `?upsert=true` (this also requires the `clients:u` scope). Requires the `clients:c` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.create_client(
-    external_id="patient_789",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `ClientRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**upsert:** `typing.Optional[bool]` — When `true`, if a client with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`orgId`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `clients:u` scope in addition to `clients:c`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_client</a>(...) -> ClientResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns a single client by its Vectros-assigned UUID. Requires the `clients:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_client(
-    id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the client to retrieve.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_client</a>(...) -> ClientResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Updates mutable fields on an existing client. Omitted fields are preserved (a null does not clear a field); when `payload` is supplied it replaces the stored payload in full rather than being deep-merged. Requires the `clients:u` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.update_client(
-    id="id",
-    external_id="patient_789",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request:** `ClientRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_client</a>(...)</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Permanently deletes the client. This action cannot be undone. Requires the `clients:d` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.delete_client(
-    id="id",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">lookup_clients</a>(...) -> ClientPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/clients`. Use this when looking up by a sensitive (blind-indexed) field: the value travels in the request body rather than the URL. The `GET` list rejects a sensitive field's value and directs you here. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.lookup_clients(
-    type="person_v1",
-    field="ssn",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `IdentityLookupRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_client_versions</a>(...) -> ModelDataVersionPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns the audit trail of changes to a client, newest first. Identity auditing is always on, so this history is always available; sensitive field values are redacted in each version. The response is a `{data, nextCursor}` envelope. Requires the `clients:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_client_versions(
-    id="id",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the client whose history you want.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_orgs</a>(...) -> OrgPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns a paginated list of organizations in your account. Filter by `userId` to return only the organizations owned by a specific user, or by `externalId` for an exact lookup using your own identifier. You can also query schema-declared lookup fields by supplying `type` and `field` together with one lookup mode (`value` for equality, `from`/`to` for a range, or `prefix`). Requires the `orgs:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.list_orgs(
-    user_id="550e8400-e29b-41d4-a716-446655440000",
-    external_id="clinic_001",
-    start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    type="org_v1",
-    field="region",
-    value="us-east",
-    prefix="us-",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**user_id:** `typing.Optional[str]` — Return only organizations owned by this user, given as the Vectros-assigned ID (UUID) of a user. To resolve a user ID from your own identifier, call `GET /v1/users?externalId=`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**external_id:** `typing.Optional[str]` — Look up an organization by your own identifier. Returns a list with the single matching organization, or an empty list if none matches.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**limit:** `typing.Optional[int]` — Maximum number of organizations to return per page (1–100; defaults to 20).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**type:** `typing.Optional[str]` — The schema record type whose lookup fields you want to query. Must be supplied together with `field` and exactly one lookup mode (`value`, `from`/`to`, or `prefix`).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**field:** `typing.Optional[str]` — The schema-declared lookup field to filter on. Must be one of the lookup fields defined on the schema named by `type`. Supplied together with `type` and one lookup mode.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**value:** `typing.Optional[str]` — Exact value to match for `field` (equality lookup). Mutually exclusive with `from`/`to` and `prefix`. Not allowed for a sensitive field — use `POST /v1/orgs/lookup` instead so the value is not exposed in the URL.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**from:** `typing.Optional[str]` — Inclusive lower bound for a range lookup. Requires `to`, and is only supported on non-sensitive fields that have range lookups enabled. Mutually exclusive with `value` and `prefix`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**to:** `typing.Optional[str]` — Inclusive upper bound for a range lookup. Requires `from`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**prefix:** `typing.Optional[str]` — Match all values for `field` that start with this prefix. Only supported on string fields that have range lookups enabled. Mutually exclusive with `value` and `from`/`to`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**order:** `typing.Optional[ListOrgsRequestOrder]` — Sort direction for lookup results: `asc` (ascending, the default) or `desc` (descending).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">create_org</a>(...) -> OrgResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Creates a new organization in your account. This call is idempotent on `externalId`: if an organization with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing organization was returned) tells the two apart. To overwrite an existing organization's content instead of returning it unchanged, set `?upsert=true` (this also requires the `orgs:u` scope). Requires the `orgs:c` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.create_org(
-    external_id="clinic_001",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `OrgRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**upsert:** `typing.Optional[bool]` — When `true`, if an organization with the same `externalId` already exists its mutable fields are overwritten (the submitted `name`/`status`/`payload`/`schemaId` are applied) instead of being returned unchanged; the immutable `externalId` and ownership are never changed. A re-applied upsert whose content matches is a no-op. Defaults to `false`. Requires the `orgs:u` scope in addition to `orgs:c`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_org</a>(...) -> OrgResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Retrieves a single organization by its Vectros-assigned ID, returning its current name, status, payload, and schema binding. Requires the `orgs:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_org(
-    id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned ID (UUID) of the organization to retrieve.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_org</a>(...) -> OrgResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Updates the mutable fields of an organization. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied rather than deep-merged. Requires the `orgs:u` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.update_org(
-    id="id",
-    external_id="clinic_001",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request:** `OrgRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_org</a>(...)</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Permanently deletes an organization. This action cannot be undone. Requires the `orgs:d` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.delete_org(
-    id="id",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">lookup_orgs</a>(...) -> OrgPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Looks up organizations by a schema-declared field value, with the search criteria sent in the request body instead of the URL. Use this when looking up by a sensitive field: the value travels in the body and is never exposed in the URL. This is the body-based equivalent of the `type`/`field`/`value` lookup on `GET /v1/orgs`, which rejects sensitive-field values and directs you here. Returns a `{data, nextCursor}` envelope. Requires the `orgs:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.lookup_orgs(
-    type="person_v1",
-    field="ssn",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `IdentityLookupRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_org_versions</a>(...) -> ModelDataVersionPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns the audit trail of changes made to an organization, newest first. Version history is always recorded for identity entities, and sensitive field values are redacted in the history. Requires the `orgs:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_org_versions(
-    id="id",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned ID (UUID) of the organization whose history you want.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page of history.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_users</a>(...) -> UserPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.list_users(
-    external_id="usr_12345",
-    start_from="550e8400-e29b-41d4-a716-446655440000",
-    type="person_v1",
-    field="team",
-    value="engineering",
-    prefix="eng",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**external_id:** `typing.Optional[str]` — Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**limit:** `typing.Optional[int]` — Maximum number of users to return per page (1–100; defaults to 20).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**type:** `typing.Optional[str]` — The schema record type whose lookup fields you are querying (the schema's declared record type, not the user's `HUMAN`/`SERVICE` kind). Must be supplied together with `field` and exactly one lookup mode (`value`, `from`+`to`, or `prefix`).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**field:** `typing.Optional[str]` — The lookup field to filter on. Must be declared as a lookup field on the schema named by `type`. Supplied together with `type` and one lookup mode.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**value:** `typing.Optional[str]` — Exact value to match for `field`. Cannot be combined with `from`/`to` or `prefix`. Not allowed for a sensitive (blind-indexed) field on this endpoint; use POST /v1/users/lookup instead, which keeps the value out of the URL.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**from:** `typing.Optional[str]` — Inclusive lower bound for a range lookup. Requires `to`, and is only valid on non-sensitive fields declared with range support. Cannot be combined with `value` or `prefix`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**to:** `typing.Optional[str]` — Inclusive upper bound for a range lookup. Requires `from`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**prefix:** `typing.Optional[str]` — Prefix to match. Only valid on string fields declared with range support. Cannot be combined with `value` or `from`/`to`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**order:** `typing.Optional[ListUsersRequestOrder]` — Sort direction for the matched users: `asc` (ascending, the default) or `desc` (descending).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">create_user</a>(...) -> UserResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.create_user(
-    external_id="usr_12345",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `UserRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_user</a>(...) -> UserResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Retrieves a single user by its Vectros-assigned ID. Requires the `users:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_user(
-    id="550e8400-e29b-41d4-a716-446655440000",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the user.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_user</a>(...) -> UserResponse</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.update_user(
-    id="550e8400-e29b-41d4-a716-446655440000",
-    external_id="usr_12345",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the user.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request:** `UserRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_user</a>(...)</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.delete_user(
-    id="550e8400-e29b-41d4-a716-446655440000",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the user.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">lookup_users</a>(...) -> UserPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.lookup_users(
-    type="person_v1",
-    field="ssn",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**request:** `IdentityLookupRequest` 
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
-<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_user_versions</a>(...) -> ModelDataVersionPage</code></summary>
-<dl>
-<dd>
-
-#### 📝 Description
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-Returns the audit trail of changes to a user, most recent first. Identity history is always recorded and always available. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### 🔌 Usage
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-```python
-from vectros import VectrosApi
-
-client = VectrosApi(
-    token="<token>",
-    base_url="https://yourhost.com/path/to/api",
-)
-
-client.identity.get_user_versions(
-    id="id",
-)
-
-```
-</dd>
-</dl>
-</dd>
-</dl>
-
-#### ⚙️ Parameters
-
-<dl>
-<dd>
-
-<dl>
-<dd>
-
-**id:** `str` — The Vectros-assigned UUID of the user.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the ID of the last version from the previous page to fetch the next page.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
-    
-</dd>
-</dl>
-</dd>
-</dl>
-
-
-</dd>
-</dl>
-</details>
-
 ## Documents
 <details><summary><code>client.documents.<a href="src/vectros/documents/client.py">list_documents</a>(...) -> DocumentPage</code></summary>
 <dl>
@@ -4480,7 +2622,7 @@ client.identity.get_user_versions(
 <dl>
 <dd>
 
-Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId`, `orgId`, `clientId`, or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId` or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -4504,8 +2646,6 @@ client = VectrosApi(
 
 client.documents.list_documents(
     user_id="550e8400-e29b-41d4-a716-446655440000",
-    org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
     scope="group:eng-team",
     folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
     start_from="doc_prev123",
@@ -4533,23 +2673,7 @@ client.documents.list_documents(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Filter by owning organization — the Vectros-assigned UUID of an organization. To resolve from your own identifier, call GET /v1/orgs?externalId=.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**client_id:** `typing.Optional[str]` — Filter by associated client — the Vectros-assigned UUID of a client. To resolve from your own identifier, call GET /v1/clients?externalId=.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**scope:** `typing.Optional[str]` — Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters.
+**scope:** `typing.Optional[str]` — Filter to documents carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
     
 </dd>
 </dl>
@@ -5621,23 +3745,7 @@ client.documents.upload_document(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Owning organization ID — the Vectros-assigned UUID of an organization in your account. Optional. With an API key, sets the document's owning organization explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**client_id:** `typing.Optional[str]` — Associated client ID — the Vectros-assigned UUID of a client in your account. Optional. With an API key, sets the document's client explicitly. With a scoped token, must match the token's identity claim (if set) or fall within its data scope.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**scopes:** `typing.Optional[typing.List[str]]` — The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org:` and `client:` entries are equivalent to the `orgId` and `clientId` fields; other namespaces are custom scopes you define (lowercase, 2-32 chars). When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
+**scopes:** `typing.Optional[typing.List[str]]` — The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a document owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. Filter lists by these values with `?scope=`.
     
 </dd>
 </dl>
@@ -5646,6 +3754,1669 @@ client.documents.upload_document(
 <dd>
 
 **external_id:** `typing.Optional[str]` — Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: initiating an upload again with the same `externalId` returns the same document plus a fresh presigned URL (idempotent — no duplicate), and it is the key other records use to reference this one. Max 256 characters.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+## Identity
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_entities</a>(...) -> EntityPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a paginated list of entities in a namespace. Filter by `userId` (entities owned by a user), by `externalId` (exact lookup by your own identifier), or by `scope` (`scope=<namespace>:<value>` — entities that have that value as a parent, e.g. `scope=org:6ba7...`). Naming this namespace's own name in `scope` resolves the entity itself (`scope=team:6ba7...` on `/v1/entities/team` returns that team), since an entity is always in its own scope. `userId` and `scope` can be combined to narrow on both dimensions at once; `externalId` identifies a single entity and cannot be combined with either. Requires the `entities:r:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.list_entities(
+    namespace="team",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Return only entities owned by this user (Vectros user ID).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**external_id:** `typing.Optional[str]` — Look up an entity by your own identifier. Returns a list with the single match, or empty.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Filter by parent edge as `<namespace>:<value>` (e.g. `org:6ba7...`). Matches any of the entity's parents, not just its first. Naming this route's own namespace resolves the entity itself.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**type:** `typing.Optional[str]` — Schema record type whose lookup fields you want to query. Supply with `field` and one lookup mode (`value`, `from`/`to`, or `prefix`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**field:** `typing.Optional[str]` — The schema-declared lookup field to filter on. Supply with `type` and one lookup mode.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**value:** `typing.Optional[str]` — Exact value to match for `field` (equality). Not allowed for a sensitive field — use `POST /v1/entities/{namespace}/lookup`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**from:** `typing.Optional[str]` — Inclusive lower bound for a range lookup (requires `to`; range-enabled fields).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**to:** `typing.Optional[str]` — Inclusive upper bound for a range lookup (requires `from`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**prefix:** `typing.Optional[str]` — Match all values of `field` starting with this prefix (range-enabled string fields).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**order:** `typing.Optional[ListEntitiesRequestOrder]` — Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor from a previous page's `nextCursor`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum entities per page (1-100; defaults to 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">create_entity</a>(...) -> EntityResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.create_entity(
+    namespace="team",
+    external_id="team_eng_platform",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `EntityRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_entity</a>(...) -> EntityResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Retrieves a single entity by its namespace and Vectros-assigned ID. Requires the `entities:r:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.get_entity(
+    namespace="team",
+    id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned ID (UUID) of the entity.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_entity</a>(...) -> EntityResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.update_entity(
+    namespace="team",
+    id="id",
+    external_id="team_eng_platform",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `EntityRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_entity</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Permanently deletes an entity. This action cannot be undone. Requires the `entities:d:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.delete_entity(
+    namespace="team",
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">lookup_entities</a>(...) -> EntityPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Looks up entities in a namespace by a schema-declared field value, with the criteria in the request body instead of the URL. Use this for a sensitive field: the value travels in the body and never appears in the URL. Body equivalent of the `type`/`field`/`value` lookup on `GET /v1/entities/{namespace}`, which rejects sensitive-field values and directs you here. Requires the `entities:r:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.lookup_entities(
+    namespace="team",
+    type="person_v1",
+    field="ssn",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `IdentityLookupRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_entity_versions</a>(...) -> ModelDataVersionPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns the audit trail of changes made to an entity, newest first. Sensitive field values are redacted in the history. Requires the `entities:r:<namespace>` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.get_entity_versions(
+    namespace="team",
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The entity namespace.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned ID (UUID) of the entity.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor from a previous page's `nextCursor`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_namespace</a>(...) -> NamespaceResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Retrieves a single scope-namespace registration by name. The reserved built-ins `org` and `client` are always resolvable.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.get_namespace(
+    namespace="team",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The namespace name.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_namespace</a>(...) -> NamespaceResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.update_namespace(
+    namespace_="team",
+    namespace="team",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The namespace name.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `NamespaceRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_namespace</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Deletes a registered scope namespace. Requires a root API key. The reserved built-ins cannot be deleted. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.delete_namespace(
+    namespace="team",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**namespace:** `str` — The namespace name.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_namespaces</a>(...) -> NamespacePage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns the scope namespaces registered in your account, with the reserved built-ins `org` and `client` listed first. Returns a `{data, nextCursor}` envelope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.list_namespaces()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor from a previous page's `nextCursor`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum registrations per page (1-100; defaults to 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">register_namespace</a>(...) -> NamespaceResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.register_namespace(
+    namespace="team",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `NamespaceRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">list_users</a>(...) -> UserPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.list_users(
+    external_id="usr_12345",
+    start_from="550e8400-e29b-41d4-a716-446655440000",
+    type="person_v1",
+    field="team",
+    value="engineering",
+    prefix="eng",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**external_id:** `typing.Optional[str]` — Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum number of users to return per page (1–100; defaults to 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**type:** `typing.Optional[str]` — The schema record type whose lookup fields you are querying (the schema's declared record type, not the user's `HUMAN`/`SERVICE` kind). Must be supplied together with `field` and exactly one lookup mode (`value`, `from`+`to`, or `prefix`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**field:** `typing.Optional[str]` — The lookup field to filter on. Must be declared as a lookup field on the schema named by `type`. Supplied together with `type` and one lookup mode.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**value:** `typing.Optional[str]` — Exact value to match for `field`. Cannot be combined with `from`/`to` or `prefix`. Not allowed for a sensitive (blind-indexed) field on this endpoint; use POST /v1/users/lookup instead, which keeps the value out of the URL.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**from:** `typing.Optional[str]` — Inclusive lower bound for a range lookup. Requires `to`, and is only valid on non-sensitive fields declared with range support. Cannot be combined with `value` or `prefix`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**to:** `typing.Optional[str]` — Inclusive upper bound for a range lookup. Requires `from`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**prefix:** `typing.Optional[str]` — Prefix to match. Only valid on string fields declared with range support. Cannot be combined with `value` or `from`/`to`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**order:** `typing.Optional[ListUsersRequestOrder]` — Sort direction for the matched users: `asc` (ascending, the default) or `desc` (descending).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">create_user</a>(...) -> UserResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.create_user(
+    external_id="usr_12345",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `UserRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_user</a>(...) -> UserResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Retrieves a single user by its Vectros-assigned ID. Requires the `users:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.get_user(
+    id="550e8400-e29b-41d4-a716-446655440000",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned UUID of the user.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">update_user</a>(...) -> UserResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.update_user(
+    id="550e8400-e29b-41d4-a716-446655440000",
+    external_id="usr_12345",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned UUID of the user.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `UserRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">delete_user</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.delete_user(
+    id="550e8400-e29b-41d4-a716-446655440000",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned UUID of the user.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">lookup_users</a>(...) -> UserPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.lookup_users(
+    type="person_v1",
+    field="ssn",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `IdentityLookupRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.identity.<a href="src/vectros/identity/client.py">get_user_versions</a>(...) -> ModelDataVersionPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns the audit trail of changes to a user, most recent first. Identity history is always recorded and always available. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.identity.get_user_versions(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The Vectros-assigned UUID of the user.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the ID of the last version from the previous page to fetch the next page.
     
 </dd>
 </dl>
@@ -5718,7 +5489,7 @@ client.compliance.create_erasure_request(
 <dl>
 <dd>
 
-**subject_type:** `ErasureRequestSubjectType` — The kind of end-subject to erase: `user`, `client`, or `org`.
+**subject_type:** `str` — The kind of end-subject to erase: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined.
     
 </dd>
 </dl>
@@ -5726,7 +5497,7 @@ client.compliance.create_erasure_request(
 <dl>
 <dd>
 
-**subject_id:** `typing.Optional[str]` — The platform id of the subject to erase (the userId, clientId, or orgId returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
+**subject_id:** `typing.Optional[str]` — The platform id of the subject to erase (the Vectros-assigned id returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
     
 </dd>
 </dl>
@@ -5900,7 +5671,7 @@ client.compliance.create_export()
 <dl>
 <dd>
 
-**subject_type:** `typing.Optional[ExportRequestSubjectType]` — The kind of subject to export: `user`, `client`, or `org`. Required only when `scope` is `subject`.
+**subject_type:** `typing.Optional[str]` — The kind of subject to export: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined. Required only when `scope` is `subject`.
     
 </dd>
 </dl>
@@ -6045,7 +5816,7 @@ client.compliance.get_export(
 <dl>
 <dd>
 
-Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId`, `orgId`, or `clientId`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
+Returns a paginated list of your folders. Pass `parentFolderId` to list the direct children of a specific folder (tree navigation); omit it for a flat list across your account. You can also filter by owner using `userId` or `scope`. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `folders:r` scope.
 </dd>
 </dl>
 </dd>
@@ -6069,9 +5840,8 @@ client = VectrosApi(
 
 client.folders.list_folders(
     parent_folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
-    org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
     user_id="550e8400-e29b-41d4-a716-446655440000",
-    client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+    scope="group:eng-team",
     start_from="fld_prev123",
 )
 
@@ -6097,14 +5867,6 @@ client.folders.list_folders(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Filter to folders owned by this organization — the Vectros-assigned UUID of an organization. Use `GET /v1/orgs?externalId=` to resolve your own external ID to this UUID.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
 **user_id:** `typing.Optional[str]` — Filter to folders owned by this user — the Vectros-assigned UUID of a user. Use `GET /v1/users?externalId=` to resolve your own external ID to this UUID.
     
 </dd>
@@ -6113,7 +5875,7 @@ client.folders.list_folders(
 <dl>
 <dd>
 
-**client_id:** `typing.Optional[str]` — Filter to folders associated with this client — the Vectros-assigned UUID of a client. Use `GET /v1/clients?externalId=` to resolve your own external ID to this UUID.
+**scope:** `typing.Optional[str]` — Filter to folders carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
     
 </dd>
 </dl>
@@ -6466,7 +6228,7 @@ client.folders.delete_folder(
 <dl>
 <dd>
 
-Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `orgId`, `clientId`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 </dd>
 </dl>
 </dd>
@@ -7267,7 +7029,7 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `orgId`, `clientId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
 </dd>
 </dl>
 </dd>
@@ -7293,8 +7055,6 @@ client.records.list_records(
     type="intake_form",
     folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
     user_id="550e8400-e29b-41d4-a716-446655440000",
-    org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
-    client_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
     scope="group:eng-team",
     start_from="550e8400-e29b-41d4-a716-446655440000",
 )
@@ -7337,23 +7097,7 @@ client.records.list_records(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Filter to records owned by this organization. The value is the Vectros-assigned UUID of an organization; resolve one via `GET /v1/orgs?externalId=`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**client_id:** `typing.Optional[str]` — Filter to records owned by this client (requires `userId` or `orgId` as well). The value is the Vectros-assigned UUID of a client; resolve one via `GET /v1/clients?externalId=`.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**scope:** `typing.Optional[str]` — Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Combine with `type` or `folderId`.
+**scope:** `typing.Optional[str]` — Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
     
 </dd>
 </dl>
@@ -7743,7 +7487,7 @@ client.records.delete_record(
 <dl>
 <dd>
 
-Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `orgId`, `clientId`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 </dd>
 </dl>
 </dd>
@@ -8273,7 +8017,7 @@ client.records.get_record_versions(
 <dl>
 <dd>
 
-Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `orgId` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (user, org, or client) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
+Returns a paginated list of the record schemas defined in your account. Filter by `userId` or `scope` to scope to an owner, by `surface` to list the types bindable to one surface, or by `recordType` to resolve the single schema for a type directly. Filtering by an identity surface (`user` or `entity`) lists your account-wide identity schemas regardless of the calling context; filtering by record or document lists within the calling context. Requires the `schemas:r` scope.
 </dd>
 </dl>
 </dd>
@@ -8297,7 +8041,7 @@ client = VectrosApi(
 
 client.schemas.list_schemas(
     user_id="550e8400-e29b-41d4-a716-446655440000",
-    org_id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+    scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
     surface="document",
     record_type="intake_form",
     start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
@@ -8325,7 +8069,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Filter to schemas owned by this organization — the Vectros-assigned UUID of an organization in your account. Use `GET /v1/orgs?externalId=` to resolve a UUID from your own external id.
+**scope:** `typing.Optional[str]` — Filter to schemas carrying this scope value, as a single `namespace:value` entry — for example `org:6ba7b810-9dad-11d1-80b4-00c04fd430c8` or `group:eng-team`. `org` and `client` are built-in namespaces; others are custom scopes you define. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`.
     
 </dd>
 </dl>
@@ -8333,7 +8077,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-**surface:** `typing.Optional[str]` — Filter to schemas bindable to this surface: record, document, user, org, or client. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (user, org, client) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas record and document list within the calling context.
+**surface:** `typing.Optional[str]` — Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
     
 </dd>
 </dl>
@@ -8341,7 +8085,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user`, `org`, or `client` to resolve an account-wide identity schema. Mutually exclusive with `userId`/`orgId` — when supplied, `recordType` takes precedence.
+**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
     
 </dd>
 </dl>
@@ -8886,23 +8630,7 @@ client.search.content(
 <dl>
 <dd>
 
-**org_id:** `typing.Optional[str]` — Restrict results to content belonging to this organization — the Vectros-assigned UUID of an organization in your account. Use `GET /v1/orgs?externalId=` to look up an organization's ID from your own identifier.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**client_id:** `typing.Optional[str]` — Restrict results to content associated with this client — the Vectros-assigned UUID of a client in your account. Use `GET /v1/clients?externalId=` to look up a client's ID from your own identifier.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**scope:** `typing.Optional[str]` — Restrict results to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`. `scope=org:<id>` and `scope=client:<id>` are equivalent to the `orgId` and `clientId` filters. Scope values are attached to records and documents at creation (the `scopes` field).
+**scope:** `typing.Optional[str]` — Restrict results to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier.
     
 </dd>
 </dl>

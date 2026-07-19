@@ -8,7 +8,6 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .erasure_certificate import ErasureCertificate
 from .erasure_request_response_status import ErasureRequestResponseStatus
-from .erasure_request_response_subject_type import ErasureRequestResponseSubjectType
 
 
 class ErasureRequestResponse(UniversalBaseModel):
@@ -30,11 +29,11 @@ class ErasureRequestResponse(UniversalBaseModel):
     """
 
     subject_type: typing_extensions.Annotated[
-        typing.Optional[ErasureRequestResponseSubjectType],
+        typing.Optional[str],
         FieldMetadata(alias="subjectType"),
         pydantic.Field(
             alias="subjectType",
-            description="The kind of subject that was erased (`user`, `client`, or `org`), echoed back from your request.",
+            description="The kind of subject that was erased (`user`, or an ownership namespace such as `org` or `client`), echoed back from your request.",
         ),
     ] = None
     subject_id: typing_extensions.Annotated[

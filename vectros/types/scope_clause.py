@@ -18,7 +18,7 @@ class ScopeClause(UniversalBaseModel):
 
     data_scope: typing.Optional[typing.Dict[str, typing.Dict[str, typing.Any]]] = pydantic.Field(default=None)
     """
-    Attribute filters narrowing data this clause applies to, keyed per ownership dimension: 'userId' (the authoring principal) and namespaced scopes 'scope:<namespace>' ('scope:org', 'scope:client', 'scope:group', ...). 'orgId'/'clientId' are accepted as shorthand for 'scope:org'/'scope:client' and read back in the namespaced form. Empty object = applies to ALL data within the tenant. Multiple keys must ALL match (AND); include null in an allowed-value list (e.g. {"scope:org": ["orgX", null]}) to ALSO grant access to records that have no value in THAT dimension.
+    Attribute filters narrowing data this clause applies to, keyed per ownership dimension: 'userId' (the authoring principal) and namespaced scopes 'scope:<namespace>' ('scope:org', 'scope:client', 'scope:group', ...). Empty object = applies to ALL data within the tenant. Multiple keys must ALL match (AND); include null in an allowed-value list (e.g. {"scope:org": ["orgX", null]}) to ALSO grant access to records that have no value in THAT dimension.
     """
 
     if IS_PYDANTIC_V2:

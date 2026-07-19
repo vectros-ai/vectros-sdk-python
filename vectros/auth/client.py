@@ -78,7 +78,6 @@ class AuthClient:
         subject_type: typing.Optional[str] = None,
         subject_id: typing.Optional[str] = None,
         context_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         action: typing.Optional[str] = None,
@@ -91,21 +90,18 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ReadAccessLogPage:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`, plus optional `clientId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
         subject_type : typing.Optional[str]
-            Kind of subject to account for: `user`, `client`, or `org`.
+            Kind of subject to account for: `user`, or any ownership namespace — the built-in `org` and `client`, or one you registered such as `team`. A subject kind is your data, not a fixed list.
 
         subject_id : typing.Optional[str]
             Identifier of the data subject whose read history to return — the primary accounting-of-disclosures axis. Must be supplied together with `subjectType` (and a `contextId`).
 
         context_id : typing.Optional[str]
             Restrict results to a single app context (the data-partition axis). Required for a subject or record query.
-
-        client_id : typing.Optional[str]
-            Further restrict a subject query to reads about a single nested client/patient.
 
         from_ : typing.Optional[str]
             Start of the time window (ISO-8601 UTC, inclusive).
@@ -154,7 +150,6 @@ class AuthClient:
             subject_type="user",
             subject_id="user_abc123",
             context_id="ctx_intake",
-            client_id="client_xyz789",
             action="read",
             caller_key_id="key_abc123",
             resource_type="intake_form",
@@ -165,7 +160,6 @@ class AuthClient:
             subject_type=subject_type,
             subject_id=subject_id,
             context_id=context_id,
-            client_id=client_id,
             from_=from_,
             to=to,
             action=action,
@@ -473,7 +467,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -492,7 +486,7 @@ class AuthClient:
             Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
-            Optional per-context identity overrides. Only `orgId` and `clientId` may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
+            Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -808,7 +802,7 @@ class AuthClient:
             Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
-            Optional per-context identity overrides. Only `orgId` and `clientId` may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
+            Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -1405,7 +1399,7 @@ class AuthClient:
             scope=ScopeRequest(
                 allowed_actions=["records:crud", "schemas:r"],
                 identity={"userId": "550e8400-e29b-41d4-a716-446655440000"},
-                data_scope={"orgId": ["6ba7b810-9dad-11d1-80b4-00c04fd430c8"]},
+                data_scope={"scope:org": ["6ba7b810-9dad-11d1-80b4-00c04fd430c8"]},
             ),
             expires_in_seconds=3600,
         )
@@ -1634,7 +1628,6 @@ class AsyncAuthClient:
         subject_type: typing.Optional[str] = None,
         subject_id: typing.Optional[str] = None,
         context_id: typing.Optional[str] = None,
-        client_id: typing.Optional[str] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         action: typing.Optional[str] = None,
@@ -1647,21 +1640,18 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ReadAccessLogPage:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`, plus optional `clientId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
         subject_type : typing.Optional[str]
-            Kind of subject to account for: `user`, `client`, or `org`.
+            Kind of subject to account for: `user`, or any ownership namespace — the built-in `org` and `client`, or one you registered such as `team`. A subject kind is your data, not a fixed list.
 
         subject_id : typing.Optional[str]
             Identifier of the data subject whose read history to return — the primary accounting-of-disclosures axis. Must be supplied together with `subjectType` (and a `contextId`).
 
         context_id : typing.Optional[str]
             Restrict results to a single app context (the data-partition axis). Required for a subject or record query.
-
-        client_id : typing.Optional[str]
-            Further restrict a subject query to reads about a single nested client/patient.
 
         from_ : typing.Optional[str]
             Start of the time window (ISO-8601 UTC, inclusive).
@@ -1715,7 +1705,6 @@ class AsyncAuthClient:
                 subject_type="user",
                 subject_id="user_abc123",
                 context_id="ctx_intake",
-                client_id="client_xyz789",
                 action="read",
                 caller_key_id="key_abc123",
                 resource_type="intake_form",
@@ -1729,7 +1718,6 @@ class AsyncAuthClient:
             subject_type=subject_type,
             subject_id=subject_id,
             context_id=context_id,
-            client_id=client_id,
             from_=from_,
             to=to,
             action=action,
@@ -2085,7 +2073,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` may set only `orgId` and `clientId`; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -2104,7 +2092,7 @@ class AsyncAuthClient:
             Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
-            Optional per-context identity overrides. Only `orgId` and `clientId` may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
+            Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -2468,7 +2456,7 @@ class AsyncAuthClient:
             Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
-            Optional per-context identity overrides. Only `orgId` and `clientId` may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
+            Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -3178,7 +3166,7 @@ class AsyncAuthClient:
                 scope=ScopeRequest(
                     allowed_actions=["records:crud", "schemas:r"],
                     identity={"userId": "550e8400-e29b-41d4-a716-446655440000"},
-                    data_scope={"orgId": ["6ba7b810-9dad-11d1-80b4-00c04fd430c8"]},
+                    data_scope={"scope:org": ["6ba7b810-9dad-11d1-80b4-00c04fd430c8"]},
                 ),
                 expires_in_seconds=3600,
             )

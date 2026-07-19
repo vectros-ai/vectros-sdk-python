@@ -85,7 +85,7 @@ class SchemaResponse(UniversalBaseModel):
         FieldMetadata(alias="allowedSurfaces"),
         pydantic.Field(
             alias="allowedSurfaces",
-            description="Which typed surfaces may bind this schema (record, document, user, org, or client). Always present (it is required at write time).",
+            description="Which typed surfaces may bind this schema: `record`, `document`, `user`, or `entity` — identity entities in ANY namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Always present (it is required at write time).",
         ),
     ] = None
     active: typing.Optional[bool] = pydantic.Field(default=None)

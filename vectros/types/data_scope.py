@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class DataScope(UniversalBaseModel):
     """
-    Identity binding for a scoped key. `userId`, `orgId`, or both may be present.
+    Identity binding for a scoped key: the user it acts as, the scope values it is bound to, or both. Either field is omitted when the credential is not bound on that dimension.
     """
 
     user_id: typing_extensions.Annotated[
@@ -20,13 +20,10 @@ class DataScope(UniversalBaseModel):
             alias="userId", description="Bound user id. The credential can only access records owned by this user."
         ),
     ] = None
-    org_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="orgId"),
-        pydantic.Field(
-            alias="orgId", description="Bound org id. The credential can only access records owned by this org."
-        ),
-    ] = None
+    scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    Bound scope values, as `namespace:value` entries — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8"]`. The credential can only access records carrying these values. `org` and `client` are built-in namespaces; others are custom scopes you define.
+    """
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

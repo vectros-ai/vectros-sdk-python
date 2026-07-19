@@ -6,19 +6,11 @@ import typing
 from importlib import import_module
 
 if typing.TYPE_CHECKING:
-    from .types import (
-        ErasureRequestAuditDisposition,
-        ErasureRequestSubjectType,
-        ExportRequestFormat,
-        ExportRequestScope,
-        ExportRequestSubjectType,
-    )
+    from .types import ErasureRequestAuditDisposition, ExportRequestFormat, ExportRequestScope
 _dynamic_imports: typing.Dict[str, str] = {
     "ErasureRequestAuditDisposition": ".types",
-    "ErasureRequestSubjectType": ".types",
     "ExportRequestFormat": ".types",
     "ExportRequestScope": ".types",
-    "ExportRequestSubjectType": ".types",
 }
 
 
@@ -43,10 +35,4 @@ def __dir__():
     return sorted(lazy_attrs)
 
 
-__all__ = [
-    "ErasureRequestAuditDisposition",
-    "ErasureRequestSubjectType",
-    "ExportRequestFormat",
-    "ExportRequestScope",
-    "ExportRequestSubjectType",
-]
+__all__ = ["ErasureRequestAuditDisposition", "ExportRequestFormat", "ExportRequestScope"]

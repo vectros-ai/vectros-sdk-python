@@ -6,15 +6,15 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
-from .org_response import OrgResponse
+from .entity_response import EntityResponse
 
 
-class OrgPage(UniversalBaseModel):
+class EntityPage(UniversalBaseModel):
     """
-    A page of organizations as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
+    A page of identity entities as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
     """
 
-    data: typing.Optional[typing.List[OrgResponse]] = pydantic.Field(default=None)
+    data: typing.Optional[typing.List[EntityResponse]] = pydantic.Field(default=None)
     """
     The items on this page, in the endpoint's natural order. Empty when there are no results.
     """

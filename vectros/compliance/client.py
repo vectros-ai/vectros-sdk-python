@@ -8,10 +8,8 @@ from ..types.erasure_request_response import ErasureRequestResponse
 from ..types.export_request_response import ExportRequestResponse
 from .raw_client import AsyncRawComplianceClient, RawComplianceClient
 from .types.erasure_request_audit_disposition import ErasureRequestAuditDisposition
-from .types.erasure_request_subject_type import ErasureRequestSubjectType
 from .types.export_request_format import ExportRequestFormat
 from .types.export_request_scope import ExportRequestScope
-from .types.export_request_subject_type import ExportRequestSubjectType
 
 # this is used as the default value for optional parameters
 OMIT = typing.cast(typing.Any, ...)
@@ -35,7 +33,7 @@ class ComplianceClient:
     def create_erasure_request(
         self,
         *,
-        subject_type: ErasureRequestSubjectType,
+        subject_type: str,
         subject_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         context_scope: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -47,11 +45,11 @@ class ComplianceClient:
 
         Parameters
         ----------
-        subject_type : ErasureRequestSubjectType
-            The kind of end-subject to erase: `user`, `client`, or `org`.
+        subject_type : str
+            The kind of end-subject to erase: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined.
 
         subject_id : typing.Optional[str]
-            The platform id of the subject to erase (the userId, clientId, or orgId returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
+            The platform id of the subject to erase (the Vectros-assigned id returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
 
         external_id : typing.Optional[str]
             Your own externalId for the subject, as an alternative to `subjectId`. Provide exactly one of `subjectId` or `externalId`.
@@ -130,7 +128,7 @@ class ComplianceClient:
         self,
         *,
         scope: typing.Optional[ExportRequestScope] = OMIT,
-        subject_type: typing.Optional[ExportRequestSubjectType] = OMIT,
+        subject_type: typing.Optional[str] = OMIT,
         subject_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         context_scope: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -146,8 +144,8 @@ class ComplianceClient:
         scope : typing.Optional[ExportRequestScope]
             What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request). Additional scopes may be added in the future.
 
-        subject_type : typing.Optional[ExportRequestSubjectType]
-            The kind of subject to export: `user`, `client`, or `org`. Required only when `scope` is `subject`.
+        subject_type : typing.Optional[str]
+            The kind of subject to export: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined. Required only when `scope` is `subject`.
 
         subject_id : typing.Optional[str]
             The platform id of the subject to export. Used only when `scope` is `subject`. Provide exactly one of `subjectId` or `externalId`.
@@ -245,7 +243,7 @@ class AsyncComplianceClient:
     async def create_erasure_request(
         self,
         *,
-        subject_type: ErasureRequestSubjectType,
+        subject_type: str,
         subject_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         context_scope: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -257,11 +255,11 @@ class AsyncComplianceClient:
 
         Parameters
         ----------
-        subject_type : ErasureRequestSubjectType
-            The kind of end-subject to erase: `user`, `client`, or `org`.
+        subject_type : str
+            The kind of end-subject to erase: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined.
 
         subject_id : typing.Optional[str]
-            The platform id of the subject to erase (the userId, clientId, or orgId returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
+            The platform id of the subject to erase (the Vectros-assigned id returned when the subject was created). Provide exactly one of `subjectId` or `externalId`.
 
         external_id : typing.Optional[str]
             Your own externalId for the subject, as an alternative to `subjectId`. Provide exactly one of `subjectId` or `externalId`.
@@ -356,7 +354,7 @@ class AsyncComplianceClient:
         self,
         *,
         scope: typing.Optional[ExportRequestScope] = OMIT,
-        subject_type: typing.Optional[ExportRequestSubjectType] = OMIT,
+        subject_type: typing.Optional[str] = OMIT,
         subject_id: typing.Optional[str] = OMIT,
         external_id: typing.Optional[str] = OMIT,
         context_scope: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -372,8 +370,8 @@ class AsyncComplianceClient:
         scope : typing.Optional[ExportRequestScope]
             What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request). Additional scopes may be added in the future.
 
-        subject_type : typing.Optional[ExportRequestSubjectType]
-            The kind of subject to export: `user`, `client`, or `org`. Required only when `scope` is `subject`.
+        subject_type : typing.Optional[str]
+            The kind of subject to export: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined. Required only when `scope` is `subject`.
 
         subject_id : typing.Optional[str]
             The platform id of the subject to export. Used only when `scope` is `subject`. Provide exactly one of `subjectId` or `externalId`.
