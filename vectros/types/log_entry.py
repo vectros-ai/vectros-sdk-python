@@ -25,7 +25,7 @@ class LogEntry(UniversalBaseModel):
 
     resource: str = pydantic.Field()
     """
-    Top-level resource the call targeted (one of `documents`, `records`, `search`, `schemas`, `folders`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`), derived from the request path.
+    Top-level resource the call targeted, derived from the request path — for example `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. Rows may also carry values that are not filterable via the `resource` query parameter, and `clients`/`orgs` appear on rows written before those identity surfaces were folded into `entities`.
     """
 
     context_id: typing_extensions.Annotated[
@@ -60,6 +60,23 @@ class LogEntry(UniversalBaseModel):
     """
     Full request path.
     """
+
+    request_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="requestId"),
+        pydantic.Field(
+            alias="requestId",
+            description="Correlation id for this call. Quote it when contacting support so the call can be traced. Most useful on failures, but recorded for successful calls too. Where an error response body carries a `requestId`, it is this same id.",
+        ),
+    ] = None
+    error_code: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="errorCode"),
+        pydantic.Field(
+            alias="errorCode",
+            description="Error code explaining WHY a failed call was rejected, when the failure had a typed code — one of `RATE_LIMITED`, `SUBSCRIPTION_LIMIT_EXCEEDED`, `INSUFFICIENT_BALANCE`, `RESOURCE_IN_USE`, `VERSION_CONFLICT`, `SESSION_REFRESH_REQUIRED`. Null for successful calls, for failures that carry only a message, and for calls recorded before this release that are still within your log retention window. Request and response bodies are never logged, so no further detail is available here by design.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

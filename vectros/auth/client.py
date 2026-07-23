@@ -353,7 +353,7 @@ class AuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. (`clients` and `orgs` match log rows written before the identity surfaces were folded into `entities`.)
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -1366,7 +1366,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> MintTokenResponse:
         """
-        Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user, organization, or client. Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
+        Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user or identity entity (in any namespace). Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
 
         Parameters
         ----------
@@ -1943,7 +1943,7 @@ class AsyncAuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. (`clients` and `orgs` match log rows written before the identity surfaces were folded into `entities`.)
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -3128,7 +3128,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> MintTokenResponse:
         """
-        Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user, organization, or client. Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
+        Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user or identity entity (in any namespace). Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
 
         Parameters
         ----------

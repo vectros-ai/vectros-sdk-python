@@ -40,7 +40,7 @@ class RawComplianceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ErasureRequestResponse]:
         """
-        Submits a right-to-erasure request for a single end-subject (a user, client, or organization). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
+        Submits a right-to-erasure request for a single end-subject (a user, or an identity entity in any namespace). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
 
         Parameters
         ----------
@@ -419,7 +419,7 @@ class AsyncRawComplianceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ErasureRequestResponse]:
         """
-        Submits a right-to-erasure request for a single end-subject (a user, client, or organization). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
+        Submits a right-to-erasure request for a single end-subject (a user, or an identity entity in any namespace). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
 
         Parameters
         ----------

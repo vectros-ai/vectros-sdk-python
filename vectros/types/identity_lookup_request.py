@@ -11,7 +11,7 @@ from .identity_lookup_request_order import IdentityLookupRequestOrder
 
 class IdentityLookupRequest(UniversalBaseModel):
     """
-    Request body for an identity lookup (user, organization, or client). Carries the lookup value in the body so a sensitive field's value never travels in the URL query string. Provide exactly one lookup mode: `value` (exact match), `from` plus `to` (range), or `prefix`.
+    Request body for an identity lookup (a user, or an identity entity in any namespace). Carries the lookup value in the body so a sensitive field's value never travels in the URL query string. Provide exactly one lookup mode: `value` (exact match), `from` plus `to` (range), or `prefix`.
     """
 
     type: str = pydantic.Field()

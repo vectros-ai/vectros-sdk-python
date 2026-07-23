@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .index_failure import IndexFailure
 from .record_response_index_mode import RecordResponseIndexMode
 from .record_response_index_status import RecordResponseIndexStatus
 from .record_response_status import RecordResponseStatus
@@ -117,6 +118,9 @@ class RecordResponse(UniversalBaseModel):
             alias="indexStatus",
             description="Search-index status. PENDING_INDEX means the record is queued for indexing. INDEXED means it is searchable via `POST /v1/search`. SKIPPED means the record had no indexable text (e.g. only non-searchable fields populated) so there was nothing to index — it is stored and retrievable, just not full-text/semantic searchable until a searchable field is filled in; not an error. FAILED means indexing hit an error — the record is still readable but not searchable. Null for a store-only record (`indexMode` NONE), which has no indexing to track.",
         ),
+    ] = None
+    index_failure: typing_extensions.Annotated[
+        typing.Optional[IndexFailure], FieldMetadata(alias="indexFailure"), pydantic.Field(alias="indexFailure")
     ] = None
     index_mode: typing_extensions.Annotated[
         typing.Optional[RecordResponseIndexMode],

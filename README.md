@@ -69,8 +69,9 @@ scoped token on your backend and pass it as `token`. See the
 - **Structured records** — `client.records` — create, read, update (full and
   partial), delete, and look records up by indexed field.
 - **Schemas** — `client.schemas` — define and evolve record/document schemas.
-- **Identity & access** — `client.identity`, `client.auth` — manage clients,
-  organizations, and users; mint and revoke scoped credentials.
+- **Identity & access** — `client.identity`, `client.auth` — manage users and
+  namespaced identity entities (`org` and `client` are built in, alongside any
+  namespace you register); mint and revoke scoped credentials.
 
 ## Full API reference
 

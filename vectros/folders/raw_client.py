@@ -111,7 +111,7 @@ class RawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FolderResponse]:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope to create. Being returned the existing folder on a collision is a read of that folder's data and additionally requires the `folders:r` scope — a credential holding `folders:c` alone receives a `400` ("already exists") on collision instead of the folder.
 
         Parameters
         ----------
@@ -145,7 +145,7 @@ class RawFoldersClient:
         Returns
         -------
         HttpResponse[FolderResponse]
-            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`. The plain (non-upsert) case additionally requires the `folders:r` scope.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/folders",
@@ -728,7 +728,7 @@ class AsyncRawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FolderResponse]:
         """
-        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
+        Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope to create. Being returned the existing folder on a collision is a read of that folder's data and additionally requires the `folders:r` scope — a credential holding `folders:c` alone receives a `400` ("already exists") on collision instead of the folder.
 
         Parameters
         ----------
@@ -762,7 +762,7 @@ class AsyncRawFoldersClient:
         Returns
         -------
         AsyncHttpResponse[FolderResponse]
-            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`.
+            A folder with the same slug already existed under the same parent and was returned (`created: false`) — unchanged for an idempotent create, or with the request's mutable fields applied when `?upsert=true`. The plain (non-upsert) case additionally requires the `folders:r` scope.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/folders",

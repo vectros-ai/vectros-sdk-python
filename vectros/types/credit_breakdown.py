@@ -57,7 +57,7 @@ class CreditBreakdown(UniversalBaseModel):
     ] = None
     identity: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Credits consumed by identity (user/org/client) writes
+    Credits consumed by identity (user and entity) writes
     """
 
     identity_milli: typing_extensions.Annotated[

@@ -613,7 +613,7 @@ client.auth.get_admin_logs(
 <dl>
 <dd>
 
-**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`.
+**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. (`clients` and `orgs` match log rows written before the identity surfaces were folded into `entities`.)
     
 </dd>
 </dl>
@@ -2370,7 +2370,7 @@ client.auth.list_profiles_for_principal(
 <dl>
 <dd>
 
-Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user, organization, or client. Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
+Creates a short-lived JWT bearer token restricted to specific actions and, optionally, to a particular user or identity entity (in any namespace). Use this to hand a narrowly-scoped credential to a browser or downstream service so it never sees your root API key. Only callable with a root API key (`sk_*`).
 </dd>
 </dl>
 </dd>
@@ -2729,7 +2729,7 @@ client.documents.list_documents(
 <dl>
 <dd>
 
-Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
+Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
 </dd>
 </dl>
 </dd>
@@ -3954,7 +3954,7 @@ client.identity.list_entities(
 <dl>
 <dd>
 
-Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
+Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope to create. Being returned the existing entity on a collision is a read of that entity's data and additionally requires the `entities:r:<namespace>` scope — a credential holding `entities:c:<namespace>` alone receives a `400` ("already in use") on collision instead of the entity.
 </dd>
 </dl>
 </dd>
@@ -4990,7 +4990,7 @@ client.identity.list_users(
 <dl>
 <dd>
 
-Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
+Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
 </dd>
 </dl>
 </dd>
@@ -5449,7 +5449,7 @@ client.identity.get_user_versions(
 <dl>
 <dd>
 
-Submits a right-to-erasure request for a single end-subject (a user, client, or organization). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
+Submits a right-to-erasure request for a single end-subject (a user, or an identity entity in any namespace). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
 </dd>
 </dl>
 </dd>
@@ -5923,7 +5923,7 @@ client.folders.list_folders(
 <dl>
 <dd>
 
-Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope.
+Creates a folder to organize your documents and records. If `parentFolderId` is omitted, the folder is created under your context's default root folder. Folder creation is idempotent by (slug + parent): if a folder with the same slug already exists under the same parent, that existing folder is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing folder was returned) tells the two apart. To overwrite an existing folder's mutable fields instead of returning it unchanged, set `?upsert=true` (this also requires the `folders:u` scope). Requires the `folders:c` scope to create. Being returned the existing folder on a collision is a read of that folder's data and additionally requires the `folders:r` scope — a credential holding `folders:c` alone receives a `400` ("already exists") on collision instead of the folder.
 </dd>
 </dl>
 </dd>
@@ -7161,7 +7161,7 @@ client.records.list_records(
 <dl>
 <dd>
 
-Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing record was returned) tells the two apart. To overwrite an existing record's content instead of returning it unchanged, set `?upsert=true` (this also requires the `records:u:<type>` scope). Requires the `records:c:<type>` scope.
+Creates a new record of a given type. The `payload` is validated against that type's schema before the record is stored. Identify the type by sending `typeName`, `schemaId`, or both (they must agree); if you send only `schemaId`, the type is taken from that schema. Optionally supply an `externalId` to make the create idempotent — if a record with the same `externalId` already exists in your context, that existing record is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing record was returned) tells the two apart. To overwrite an existing record's content instead of returning it unchanged, set `?upsert=true` (this also requires the `records:u:<type>` scope). Requires the `records:c:<type>` scope to create. Being returned the existing record on a collision is a read of that record's data and additionally requires the `records:r:<type>` scope — a credential holding `records:c:<type>` alone receives a `400` ("already exists") on collision instead of the record.
 </dd>
 </dl>
 </dd>
@@ -8085,7 +8085,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
+**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
     
 </dd>
 </dl>
@@ -8133,7 +8133,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
+Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:u` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:c` scope to create. Being returned the existing schema on a collision is a read of that schema's data and additionally requires the `schemas:r` scope — a credential holding `schemas:c` alone receives a `400` ("already in use") on collision instead of the schema.
 </dd>
 </dl>
 </dd>
@@ -8208,7 +8208,7 @@ client.schemas.create_schema(
 <dl>
 <dd>
 
-**upsert:** `typing.Optional[bool]` — When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
+**upsert:** `typing.Optional[bool]` — When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
     
 </dd>
 </dl>
@@ -8312,7 +8312,7 @@ client.schemas.get_schema(
 <dl>
 <dd>
 
-Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:w` scope.
+Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:u` scope.
 </dd>
 </dl>
 </dd>
@@ -8397,7 +8397,7 @@ client.schemas.update_schema(
 <dl>
 <dd>
 
-Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:w` scope.
+Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
 </dd>
 </dl>
 </dd>

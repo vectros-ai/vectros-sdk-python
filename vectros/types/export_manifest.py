@@ -63,7 +63,7 @@ class ExportManifest(UniversalBaseModel):
         FieldMetadata(alias="totalIdentities"),
         pydantic.Field(
             alias="totalIdentities",
-            description="Total number of identity rows included (users, organizations, and clients).",
+            description="Total number of identity rows included (users and identity entities, in any namespace).",
         ),
     ] = None
 

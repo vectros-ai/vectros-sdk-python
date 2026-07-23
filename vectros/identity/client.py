@@ -152,7 +152,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> EntityResponse:
         """
-        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
+        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope to create. Being returned the existing entity on a collision is a read of that entity's data and additionally requires the `entities:r:<namespace>` scope — a credential holding `entities:c:<namespace>` alone receives a `400` ("already in use") on collision instead of the entity.
 
         Parameters
         ----------
@@ -186,7 +186,7 @@ class IdentityClient:
         Returns
         -------
         EntityResponse
-            An entity with the same `externalId` already existed and was returned (`created: false`).
+            An entity with the same `externalId` already existed and was returned (`created: false`). The plain (non-upsert) case additionally requires the `entities:r:<namespace>` scope.
 
         Examples
         --------
@@ -817,7 +817,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
 
         Parameters
         ----------
@@ -857,7 +857,7 @@ class IdentityClient:
         Returns
         -------
         UserResponse
-            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope.
 
         Examples
         --------
@@ -1295,7 +1295,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> EntityResponse:
         """
-        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope.
+        Creates a new entity in the given namespace. This call is idempotent on `externalId` within the namespace: if an entity with the same `externalId` already exists, the existing record is returned instead of creating a duplicate (`created: false`, HTTP 200). To overwrite an existing entity's content instead of returning it unchanged, set `?upsert=true` (also requires the `entities:u:<namespace>` scope). The namespace must be entity-backed (`org`/`client`, or registered via `POST /v1/namespaces`). Requires the `entities:c:<namespace>` scope to create. Being returned the existing entity on a collision is a read of that entity's data and additionally requires the `entities:r:<namespace>` scope — a credential holding `entities:c:<namespace>` alone receives a `400` ("already in use") on collision instead of the entity.
 
         Parameters
         ----------
@@ -1329,7 +1329,7 @@ class AsyncIdentityClient:
         Returns
         -------
         EntityResponse
-            An entity with the same `externalId` already existed and was returned (`created: false`).
+            An entity with the same `externalId` already existed and was returned (`created: false`). The plain (non-upsert) case additionally requires the `entities:r:<namespace>` scope.
 
         Examples
         --------
@@ -2058,7 +2058,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
 
         Parameters
         ----------
@@ -2098,7 +2098,7 @@ class AsyncIdentityClient:
         Returns
         -------
         UserResponse
-            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope.
 
         Examples
         --------

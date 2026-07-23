@@ -9,6 +9,7 @@ from ..core.serialization import FieldMetadata
 from .document_response_index_mode import DocumentResponseIndexMode
 from .document_response_index_status import DocumentResponseIndexStatus
 from .document_response_status import DocumentResponseStatus
+from .index_failure import IndexFailure
 
 
 class DocumentResponse(UniversalBaseModel):
@@ -51,6 +52,9 @@ class DocumentResponse(UniversalBaseModel):
             alias="indexStatus",
             description="Processing status of the document (system-managed, read-only). PENDING_UPLOAD, UPLOADED, EXTRACTING, and PENDING_INDEX are in-flight states; INDEXED means the document is indexed and searchable; SKIPPED means extraction produced no indexable text so there was nothing to index — the document is stored and retrievable, just not searchable (not an error); STORED means it is store-only (indexMode=NONE) — persisted and retrievable but by design not searchable; FAILED means processing failed.",
         ),
+    ] = None
+    index_failure: typing_extensions.Annotated[
+        typing.Optional[IndexFailure], FieldMetadata(alias="indexFailure"), pydantic.Field(alias="indexFailure")
     ] = None
     index_mode: typing_extensions.Annotated[
         typing.Optional[DocumentResponseIndexMode],

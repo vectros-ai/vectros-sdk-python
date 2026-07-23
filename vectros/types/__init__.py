@@ -98,6 +98,8 @@ if typing.TYPE_CHECKING:
     from .identity_lookup_request_order import IdentityLookupRequestOrder
     from .identity_section import IdentitySection
     from .identity_surface import IdentitySurface
+    from .index_failure import IndexFailure
+    from .index_failure_code import IndexFailureCode
     from .inference_call_stats import InferenceCallStats
     from .inference_endpoints import InferenceEndpoints
     from .inference_section import InferenceSection
@@ -287,6 +289,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "IdentityLookupRequestOrder": ".identity_lookup_request_order",
     "IdentitySection": ".identity_section",
     "IdentitySurface": ".identity_surface",
+    "IndexFailure": ".index_failure",
+    "IndexFailureCode": ".index_failure_code",
     "InferenceCallStats": ".inference_call_stats",
     "InferenceEndpoints": ".inference_endpoints",
     "InferenceSection": ".inference_section",
@@ -498,6 +502,8 @@ __all__ = [
     "IdentityLookupRequestOrder",
     "IdentitySection",
     "IdentitySurface",
+    "IndexFailure",
+    "IndexFailureCode",
     "InferenceCallStats",
     "InferenceEndpoints",
     "InferenceSection",

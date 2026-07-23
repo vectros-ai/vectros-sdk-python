@@ -38,7 +38,7 @@ class ErasureContextResult(UniversalBaseModel):
         FieldMetadata(alias="identityRowsDeleted"),
         pydantic.Field(
             alias="identityRowsDeleted",
-            description="Number of identity rows deleted (the subject's user, organization, or client record plus its lookup rows). Because the subject's identity is account-wide rather than per-context, it is counted only once here — against the context in which it was resolved.",
+            description="Number of identity rows deleted (the subject's user or identity-entity record plus its lookup rows). Because the subject's identity is account-wide rather than per-context, it is counted only once here — against the context in which it was resolved.",
         ),
     ] = None
 

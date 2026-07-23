@@ -119,7 +119,7 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
 
         Parameters
         ----------
@@ -168,7 +168,7 @@ class DocumentsClient:
         Returns
         -------
         DocumentResponse
-            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `documents:r` scope.
 
         Examples
         --------
@@ -925,7 +925,7 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentResponse:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
 
         Parameters
         ----------
@@ -974,7 +974,7 @@ class AsyncDocumentsClient:
         Returns
         -------
         DocumentResponse
-            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`.
+            A document with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `documents:r` scope.
 
         Examples
         --------

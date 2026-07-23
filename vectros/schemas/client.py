@@ -60,7 +60,7 @@ class SchemasClient:
             Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -123,7 +123,7 @@ class SchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
+        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:u` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:c` scope to create. Being returned the existing schema on a collision is a read of that schema's data and additionally requires the `schemas:r` scope — a credential holding `schemas:c` alone receives a `400` ("already in use") on collision instead of the schema.
 
         Parameters
         ----------
@@ -137,7 +137,7 @@ class SchemasClient:
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         upsert : typing.Optional[bool]
-            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
+            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -175,7 +175,7 @@ class SchemasClient:
         Returns
         -------
         SchemaResponse
-            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`.
+            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`. The plain (non-upsert) case additionally requires the `schemas:r` scope.
 
         Examples
         --------
@@ -283,7 +283,7 @@ class SchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:w` scope.
+        Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:u` scope.
 
         Parameters
         ----------
@@ -373,7 +373,7 @@ class SchemasClient:
 
     def delete_schema(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:w` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
 
         Parameters
         ----------
@@ -485,7 +485,7 @@ class AsyncSchemasClient:
             Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -556,7 +556,7 @@ class AsyncSchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:w` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:w` scope.
+        Defines a new record type with optional field definitions, validation rules, and lookup indexes. Idempotent by `typeName` within the same ownership scope: re-creating an existing `typeName` returns the existing schema rather than failing. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing schema was returned) tells the two apart. To reconcile an existing schema to the submitted shape instead of returning it unchanged, set `?upsert=true` (this also requires the `schemas:u` scope; only legal schema changes are applied — migration-locked changes are rejected). Requires the `schemas:c` scope to create. Being returned the existing schema on a collision is a read of that schema's data and additionally requires the `schemas:r` scope — a credential holding `schemas:c` alone receives a `400` ("already in use") on collision instead of the schema.
 
         Parameters
         ----------
@@ -570,7 +570,7 @@ class AsyncSchemasClient:
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema.
 
         upsert : typing.Optional[bool]
-            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:w` scope.
+            When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -608,7 +608,7 @@ class AsyncSchemasClient:
         Returns
         -------
         SchemaResponse
-            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`.
+            A schema with the same `typeName` already existed and was returned (`created: false`) — unchanged for an idempotent create, or reconciled when `?upsert=true`. The plain (non-upsert) case additionally requires the `schemas:r` scope.
 
         Examples
         --------
@@ -732,7 +732,7 @@ class AsyncSchemasClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
-        Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:w` scope.
+        Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:u` scope.
 
         Parameters
         ----------
@@ -830,7 +830,7 @@ class AsyncSchemasClient:
 
     async def delete_schema(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:w` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
 
         Parameters
         ----------
