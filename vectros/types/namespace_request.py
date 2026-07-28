@@ -34,6 +34,14 @@ class NamespaceRequest(UniversalBaseModel):
             description="Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.",
         ),
     ] = None
+    specificity_rank: typing_extensions.Annotated[
+        int,
+        FieldMetadata(alias="specificityRank"),
+        pydantic.Field(
+            alias="specificityRank",
+            description="This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.",
+        ),
+    ]
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

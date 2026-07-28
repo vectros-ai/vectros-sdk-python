@@ -39,6 +39,14 @@ class NamespaceResponse(UniversalBaseModel):
             description="ID of the default record schema bound to entities in this namespace, or null.",
         ),
     ] = None
+    specificity_rank: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="specificityRank"),
+        pydantic.Field(
+            alias="specificityRank",
+            description="This namespace's position in your account's specificity order (higher = more specific), used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution.",
+        ),
+    ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),

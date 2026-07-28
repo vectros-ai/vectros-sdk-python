@@ -2441,6 +2441,14 @@ client.auth.mint_token(
 <dl>
 <dd>
 
+**context_id:** `typing.Optional[str]` — The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **expires_in_seconds:** `typing.Optional[int]` — How long the token remains valid, in seconds. Maximum 86400 (24 hours); defaults to 3600 (1 hour).
     
 </dd>
@@ -3131,7 +3139,7 @@ client.documents.patch_document(
 <dl>
 <dd>
 
-Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. `type`'s schema resolves with basedOn-aware shadowing: your own `userId`- or `scope`-owned variant if you have one, otherwise the shared base — for a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -3159,6 +3167,8 @@ client.documents.lookup_documents(
     value="PO-1001",
     prefix="PO-2024",
     start_from="550e8400-e29b-41d4-a716-446655440000",
+    user_id="550e8400-e29b-41d4-a716-446655440000",
+    scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
 )
 
 ```
@@ -3240,6 +3250,22 @@ client.documents.lookup_documents(
 <dd>
 
 **order:** `typing.Optional[LookupDocumentsRequestOrder]` — Sort direction for the returned documents: `asc` (the default) or `desc`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Root API key ONLY: resolve `type`'s schema as this scope would, as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
     
 </dd>
 </dl>
@@ -3377,6 +3403,22 @@ client.documents.lookup_documents_by_body(
 <dd>
 
 **order:** `typing.Optional[DocumentLookupRequestOrder]` — Sort direction for the returned results: `asc` (default) or `desc`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential, which always resolves via its own token identity.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope:** `typing.Optional[str]` — Root API key ONLY: resolve `type`'s schema as this scope would (basedOn-aware shadowing), as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
     
 </dd>
 </dl>
@@ -4538,7 +4580,7 @@ client.identity.get_namespace(
 <dl>
 <dd>
 
-Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
 </dd>
 </dl>
 </dd>
@@ -4563,6 +4605,7 @@ client = VectrosApi(
 client.identity.update_namespace(
     namespace_="team",
     namespace="team",
+    specificity_rank=1500,
 )
 
 ```
@@ -4769,7 +4812,7 @@ client.identity.list_namespaces()
 <dl>
 <dd>
 
-Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
 </dd>
 </dl>
 </dd>
@@ -4793,6 +4836,7 @@ client = VectrosApi(
 
 client.identity.register_namespace(
     namespace="team",
+    specificity_rank=1500,
 )
 
 ```
@@ -8085,7 +8129,7 @@ client.schemas.list_schemas(
 <dl>
 <dd>
 
-**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
+**record_type:** `typing.Optional[str]` — Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
     
 </dd>
 </dl>
@@ -8397,7 +8441,7 @@ client.schemas.update_schema(
 <dl>
 <dd>
 
-Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
+Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. Requires the `schemas:d` scope.
 </dd>
 </dl>
 </dd>

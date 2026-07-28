@@ -101,6 +101,15 @@ class SchemaRequest(UniversalBaseModel):
     The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
     """
 
+    based_on: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="basedOn"),
+        pydantic.Field(
+            alias="basedOn",
+            description='The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name\'s shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.',
+        ),
+    ] = None
+
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
     else:

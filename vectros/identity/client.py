@@ -538,12 +538,13 @@ class IdentityClient:
         namespace_: str,
         *,
         namespace: str,
+        specificity_rank: int,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
 
         Parameters
         ----------
@@ -552,6 +553,9 @@ class IdentityClient:
 
         namespace : str
             The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        specificity_rank : int
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
@@ -578,11 +582,13 @@ class IdentityClient:
         client.identity.update_namespace(
             namespace_="team",
             namespace="team",
+            specificity_rank=1500,
         )
         """
         _response = self._raw_client.update_namespace(
             namespace_,
             namespace=namespace,
+            specificity_rank=specificity_rank,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
             request_options=request_options,
@@ -665,17 +671,21 @@ class IdentityClient:
         self,
         *,
         namespace: str,
+        specificity_rank: int,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
 
         Parameters
         ----------
         namespace : str
             The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        specificity_rank : int
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
@@ -701,10 +711,12 @@ class IdentityClient:
         )
         client.identity.register_namespace(
             namespace="team",
+            specificity_rank=1500,
         )
         """
         _response = self._raw_client.register_namespace(
             namespace=namespace,
+            specificity_rank=specificity_rank,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
             request_options=request_options,
@@ -1737,12 +1749,13 @@ class AsyncIdentityClient:
         namespace_: str,
         *,
         namespace: str,
+        specificity_rank: int,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Updates the mutable fields (`entityBacked`, `defaultSchemaId`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
 
         Parameters
         ----------
@@ -1751,6 +1764,9 @@ class AsyncIdentityClient:
 
         namespace : str
             The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        specificity_rank : int
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
@@ -1782,6 +1798,7 @@ class AsyncIdentityClient:
             await client.identity.update_namespace(
                 namespace_="team",
                 namespace="team",
+                specificity_rank=1500,
             )
 
 
@@ -1790,6 +1807,7 @@ class AsyncIdentityClient:
         _response = await self._raw_client.update_namespace(
             namespace_,
             namespace=namespace,
+            specificity_rank=specificity_rank,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
             request_options=request_options,
@@ -1890,17 +1908,21 @@ class AsyncIdentityClient:
         self,
         *,
         namespace: str,
+        specificity_rank: int,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
 
         Parameters
         ----------
         namespace : str
             The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+
+        specificity_rank : int
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
@@ -1931,6 +1953,7 @@ class AsyncIdentityClient:
         async def main() -> None:
             await client.identity.register_namespace(
                 namespace="team",
+                specificity_rank=1500,
             )
 
 
@@ -1938,6 +1961,7 @@ class AsyncIdentityClient:
         """
         _response = await self._raw_client.register_namespace(
             namespace=namespace,
+            specificity_rank=specificity_rank,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
             request_options=request_options,

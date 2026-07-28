@@ -21,6 +21,14 @@ class RagSearchResult(UniversalBaseModel):
             alias="documentId", description="The stable identifier of the matched result (a document or a record)."
         ),
     ]
+    external_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="externalId"),
+        pydantic.Field(
+            alias="externalId",
+            description="The externalId you supplied for the source item at ingestion, if any. Null when the item was ingested without one, or when it was indexed before this field existed and hasn't been updated or reindexed since.",
+        ),
+    ] = None
     score: float = pydantic.Field()
     """
     The combined relevance score from hybrid ranking. Higher is more relevant.
@@ -31,7 +39,7 @@ class RagSearchResult(UniversalBaseModel):
         FieldMetadata(alias="textScore"),
         pydantic.Field(
             alias="textScore",
-            description="The keyword (BM25) relevance score, from 0 to 1. Null when this match came from semantic search only.",
+            description="The keyword relevance component of the score. Non-zero in HYBRID mode when the keyword engine contributes to the match, and in TEXT mode. In TEXT mode this is a rank-derived value reflecting the result's relative position, not a normalized BM25 magnitude — meaningful for ordering within this response, not comparable across requests or against HYBRID/SEMANTIC scores. 0 (not null) when this match came from semantic search only.",
         ),
     ] = None
     semantic_score: typing_extensions.Annotated[
@@ -39,7 +47,7 @@ class RagSearchResult(UniversalBaseModel):
         FieldMetadata(alias="semanticScore"),
         pydantic.Field(
             alias="semanticScore",
-            description="The cosine-similarity score from semantic (vector) search, from 0 to 1. Null when this match came from keyword search only.",
+            description="The cosine-similarity score from semantic (vector) search, from 0 to 1. 0 (not null) when this match came from keyword search only.",
         ),
     ] = None
     chunk_text: typing_extensions.Annotated[

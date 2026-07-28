@@ -61,7 +61,7 @@ class RawSchemasClient:
             Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -137,6 +137,7 @@ class RawSchemasClient:
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
+        based_on: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -186,6 +187,9 @@ class RawSchemasClient:
         scopes : typing.Optional[typing.Sequence[str]]
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
+        based_on : typing.Optional[str]
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -220,6 +224,7 @@ class RawSchemasClient:
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
+                "basedOn": based_on,
             },
             headers={
                 "content-type": "application/json",
@@ -350,6 +355,7 @@ class RawSchemasClient:
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
+        based_on: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -399,6 +405,9 @@ class RawSchemasClient:
         scopes : typing.Optional[typing.Sequence[str]]
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
+        based_on : typing.Optional[str]
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -430,6 +439,7 @@ class RawSchemasClient:
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
+                "basedOn": based_on,
             },
             headers={
                 "content-type": "application/json",
@@ -491,7 +501,7 @@ class RawSchemasClient:
 
     def delete_schema(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. Requires the `schemas:d` scope.
 
         Parameters
         ----------
@@ -650,7 +660,7 @@ class AsyncRawSchemasClient:
             Filter to schemas bindable to this surface: `record`, `document`, `user`, or `entity` — identity entities in any namespace (`org`, `client`, or one you registered) bind under the single `entity` surface. Returns only schemas whose allowed surfaces include the given one — useful for listing, say, document types separately from record types. The identity surfaces (`user`, `entity`) are account-wide: filtering by one lists your account's identity schemas regardless of the calling context, whereas `record` and `document` list within the calling context.
 
         record_type : typing.Optional[str]
-            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. Takes precedence over `userId`; a `scope` filter still applies, so a resolved schema outside that scope returns an empty page. A type name is unique per owner, not per context — if more than one owner in this context has defined a schema with this name, the request fails with `400 AMBIGUOUS_RECORD_TYPE` instead of guessing; resolve by `id` instead, or add `userId`/`scope` to narrow to one owner first.
+            Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -726,6 +736,7 @@ class AsyncRawSchemasClient:
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
+        based_on: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -775,6 +786,9 @@ class AsyncRawSchemasClient:
         scopes : typing.Optional[typing.Sequence[str]]
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
+        based_on : typing.Optional[str]
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -809,6 +823,7 @@ class AsyncRawSchemasClient:
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
+                "basedOn": based_on,
             },
             headers={
                 "content-type": "application/json",
@@ -939,6 +954,7 @@ class AsyncRawSchemasClient:
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
+        based_on: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -988,6 +1004,9 @@ class AsyncRawSchemasClient:
         scopes : typing.Optional[typing.Sequence[str]]
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
+        based_on : typing.Optional[str]
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1019,6 +1038,7 @@ class AsyncRawSchemasClient:
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
+                "basedOn": based_on,
             },
             headers={
                 "content-type": "application/json",
@@ -1082,7 +1102,7 @@ class AsyncRawSchemasClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. Requires the `schemas:d` scope.
 
         Parameters
         ----------

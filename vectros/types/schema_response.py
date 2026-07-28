@@ -93,6 +93,14 @@ class SchemaResponse(UniversalBaseModel):
     Whether this schema is active.
     """
 
+    based_on: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="basedOn"),
+        pydantic.Field(
+            alias="basedOn",
+            description="The id of the schema this one is a customization of, or null if this schema IS the shared base for `typeName` in this context.",
+        ),
+    ] = None
     schema_version: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="schemaVersion"),

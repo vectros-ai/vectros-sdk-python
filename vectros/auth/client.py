@@ -1362,6 +1362,7 @@ class AuthClient:
         *,
         scope: ScopeRequest,
         user_id: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
         expires_in_seconds: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> MintTokenResponse:
@@ -1374,6 +1375,9 @@ class AuthClient:
 
         user_id : typing.Optional[str]
             The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID.
+
+        context_id : typing.Optional[str]
+            The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
 
         expires_in_seconds : typing.Optional[int]
             How long the token remains valid, in seconds. Maximum 86400 (24 hours); defaults to 3600 (1 hour).
@@ -1405,7 +1409,11 @@ class AuthClient:
         )
         """
         _response = self._raw_client.mint_token(
-            scope=scope, user_id=user_id, expires_in_seconds=expires_in_seconds, request_options=request_options
+            scope=scope,
+            user_id=user_id,
+            context_id=context_id,
+            expires_in_seconds=expires_in_seconds,
+            request_options=request_options,
         )
         return _response.data
 
@@ -3124,6 +3132,7 @@ class AsyncAuthClient:
         *,
         scope: ScopeRequest,
         user_id: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
         expires_in_seconds: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> MintTokenResponse:
@@ -3136,6 +3145,9 @@ class AsyncAuthClient:
 
         user_id : typing.Optional[str]
             The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID.
+
+        context_id : typing.Optional[str]
+            The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
 
         expires_in_seconds : typing.Optional[int]
             How long the token remains valid, in seconds. Maximum 86400 (24 hours); defaults to 3600 (1 hour).
@@ -3175,7 +3187,11 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.mint_token(
-            scope=scope, user_id=user_id, expires_in_seconds=expires_in_seconds, request_options=request_options
+            scope=scope,
+            user_id=user_id,
+            context_id=context_id,
+            expires_in_seconds=expires_in_seconds,
+            request_options=request_options,
         )
         return _response.data
 

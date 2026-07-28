@@ -468,10 +468,12 @@ class DocumentsClient:
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         order: typing.Optional[LookupDocumentsRequestOrder] = None,
+        user_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
-        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. `type`'s schema resolves with basedOn-aware shadowing: your own `userId`- or `scope`-owned variant if you have one, otherwise the shared base — for a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -502,6 +504,12 @@ class DocumentsClient:
         order : typing.Optional[LookupDocumentsRequestOrder]
             Sort direction for the returned documents: `asc` (the default) or `desc`.
 
+        user_id : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential.
+
+        scope : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this scope would, as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -524,6 +532,8 @@ class DocumentsClient:
             value="PO-1001",
             prefix="PO-2024",
             start_from="550e8400-e29b-41d4-a716-446655440000",
+            user_id="550e8400-e29b-41d4-a716-446655440000",
+            scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
         )
         """
         _response = self._raw_client.lookup_documents(
@@ -536,6 +546,8 @@ class DocumentsClient:
             start_from=start_from,
             limit=limit,
             order=order,
+            user_id=user_id,
+            scope=scope,
             request_options=request_options,
         )
         return _response.data
@@ -552,6 +564,8 @@ class DocumentsClient:
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[DocumentLookupRequestOrder] = OMIT,
+        user_id: typing.Optional[str] = OMIT,
+        scope: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
@@ -586,6 +600,12 @@ class DocumentsClient:
         order : typing.Optional[DocumentLookupRequestOrder]
             Sort direction for the returned results: `asc` (default) or `desc`.
 
+        user_id : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential, which always resolves via its own token identity.
+
+        scope : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this scope would (basedOn-aware shadowing), as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -617,6 +637,8 @@ class DocumentsClient:
             start_from=start_from,
             limit=limit,
             order=order,
+            user_id=user_id,
+            scope=scope,
             request_options=request_options,
         )
         return _response.data
@@ -1316,10 +1338,12 @@ class AsyncDocumentsClient:
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         order: typing.Optional[LookupDocumentsRequestOrder] = None,
+        user_id: typing.Optional[str] = None,
+        scope: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
-        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
+        Finds documents of a given type by field value. Supported fields: `externalId` (the document's first-class external identifier — no schema declaration required) and any field declared as a lookup field on the bound schema. A lookup on a sensitive field is rejected here because the value would appear in the URL query string; use POST /v1/documents/lookup (the request-body variant) for a sensitive field instead. `type`'s schema resolves with basedOn-aware shadowing: your own `userId`- or `scope`-owned variant if you have one, otherwise the shared base — for a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key. Results are paginated: set `limit` for the page size and feed the returned `nextCursor` back as `startFrom` to fetch the next page. The response is a `{data, nextCursor}` envelope. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -1350,6 +1374,12 @@ class AsyncDocumentsClient:
         order : typing.Optional[LookupDocumentsRequestOrder]
             Sort direction for the returned documents: `asc` (the default) or `desc`.
 
+        user_id : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential.
+
+        scope : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this scope would, as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1377,6 +1407,8 @@ class AsyncDocumentsClient:
                 value="PO-1001",
                 prefix="PO-2024",
                 start_from="550e8400-e29b-41d4-a716-446655440000",
+                user_id="550e8400-e29b-41d4-a716-446655440000",
+                scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             )
 
 
@@ -1392,6 +1424,8 @@ class AsyncDocumentsClient:
             start_from=start_from,
             limit=limit,
             order=order,
+            user_id=user_id,
+            scope=scope,
             request_options=request_options,
         )
         return _response.data
@@ -1408,6 +1442,8 @@ class AsyncDocumentsClient:
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[DocumentLookupRequestOrder] = OMIT,
+        user_id: typing.Optional[str] = OMIT,
+        scope: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentLookupPage:
         """
@@ -1441,6 +1477,12 @@ class AsyncDocumentsClient:
 
         order : typing.Optional[DocumentLookupRequestOrder]
             Sort direction for the returned results: `asc` (default) or `desc`.
+
+        user_id : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this user would (basedOn-aware shadowing) instead of the shared base — mirrors `GET /v1/schemas?recordType=`'s `userId` selector. Ignored for a scoped credential, which always resolves via its own token identity.
+
+        scope : typing.Optional[str]
+            Root API key ONLY: resolve `type`'s schema as this scope would (basedOn-aware shadowing), as a single `namespace:value` entry — mirrors `GET /v1/schemas?recordType=`'s `scope` selector. Ignored for a scoped credential.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1481,6 +1523,8 @@ class AsyncDocumentsClient:
             start_from=start_from,
             limit=limit,
             order=order,
+            user_id=user_id,
+            scope=scope,
             request_options=request_options,
         )
         return _response.data
