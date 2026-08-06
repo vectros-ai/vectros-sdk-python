@@ -95,7 +95,7 @@ class IdentityClient:
             Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
 
         start_from : typing.Optional[str]
-            Pagination cursor from a previous page's `nextCursor`.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum entities per page (1-100; defaults to 20).
@@ -118,6 +118,7 @@ class IdentityClient:
         )
         client.identity.list_entities(
             namespace="team",
+            start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
         )
         """
         _response = self._raw_client.list_entities(
@@ -178,7 +179,7 @@ class IdentityClient:
             Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. A `<value>` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -291,7 +292,7 @@ class IdentityClient:
             Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. A `<value>` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -747,7 +748,7 @@ class IdentityClient:
             Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of users to return per page (1–100; defaults to 20).
@@ -791,7 +792,7 @@ class IdentityClient:
         )
         client.identity.list_users(
             external_id="usr_12345",
-            start_from="550e8400-e29b-41d4-a716-446655440000",
+            start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             type="person_v1",
             field="team",
             value="engineering",
@@ -837,7 +838,7 @@ class IdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -946,7 +947,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
 
         Parameters
         ----------
@@ -1242,7 +1243,7 @@ class AsyncIdentityClient:
             Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
 
         start_from : typing.Optional[str]
-            Pagination cursor from a previous page's `nextCursor`.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum entities per page (1-100; defaults to 20).
@@ -1270,6 +1271,7 @@ class AsyncIdentityClient:
         async def main() -> None:
             await client.identity.list_entities(
                 namespace="team",
+                start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             )
 
 
@@ -1333,7 +1335,7 @@ class AsyncIdentityClient:
             Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. A `<value>` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1462,7 +1464,7 @@ class AsyncIdentityClient:
             Optional ID of a record schema (created via `POST /v1/schemas`) that governs payload validation and lookup indexing for this entity, and must belong to your account.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
+            The entity's parent ownership edges, each as `<namespace>:<value>` (for example `org:6ba7b810-...`). At most two parents, each in a DIFFERENT namespace from the entity's own. A `<value>` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. On update, providing `scopes` REPLACES the full set of parents; omit it to leave ownership unchanged. The entity's own reference (`<its namespace>:<its id>`) is accepted and ignored, so you can send back the `scopes` you read from a GET unchanged; any OTHER value in its own namespace is rejected, because a parent edge always crosses namespaces — a value in this entity's own namespace names a peer, not a parent.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1992,7 +1994,7 @@ class AsyncIdentityClient:
             Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of users to return per page (1–100; defaults to 20).
@@ -2041,7 +2043,7 @@ class AsyncIdentityClient:
         async def main() -> None:
             await client.identity.list_users(
                 external_id="usr_12345",
-                start_from="550e8400-e29b-41d4-a716-446655440000",
+                start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
                 type="person_v1",
                 field="team",
                 value="engineering",
@@ -2090,7 +2092,7 @@ class AsyncIdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -2215,7 +2217,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
 
         Parameters
         ----------

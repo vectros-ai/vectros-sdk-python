@@ -63,7 +63,7 @@ class SchemasClient:
             Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of schemas to return per page (1–100; defaults to 20).
@@ -89,7 +89,7 @@ class SchemasClient:
             scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             surface="document",
             record_type="intake_form",
-            start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+            start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
         )
         """
         _response = self._raw_client.list_schemas(
@@ -165,10 +165,10 @@ class SchemasClient:
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
 
         user_id : typing.Optional[str]
-            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
+            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
@@ -330,10 +330,10 @@ class SchemasClient:
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
 
         user_id : typing.Optional[str]
-            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
+            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
@@ -498,7 +498,7 @@ class AsyncSchemasClient:
             Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` or `surface=entity` to resolve an account-wide identity schema. A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of schemas to return per page (1–100; defaults to 20).
@@ -529,7 +529,7 @@ class AsyncSchemasClient:
                 scope="org:6ba7b810-9dad-11d1-80b4-00c04fd430c8",
                 surface="document",
                 record_type="intake_form",
-                start_from="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+                start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             )
 
 
@@ -608,10 +608,10 @@ class AsyncSchemasClient:
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
 
         user_id : typing.Optional[str]
-            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
+            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
@@ -789,10 +789,10 @@ class AsyncSchemasClient:
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
 
         user_id : typing.Optional[str]
-            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token, the user must match the token's identity claim (if set) or fall within the token's data scope.
+            Owning user — the Vectros-assigned UUID of a user in your account. Optional; omit to create an account-wide shared schema. With an API key, this sets the schema's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.

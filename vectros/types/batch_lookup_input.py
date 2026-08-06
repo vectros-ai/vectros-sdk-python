@@ -23,12 +23,17 @@ class BatchLookupInput(UniversalBaseModel):
 
     field: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The name of the lookup field to match on, as declared on the record schema.
+    The name of the lookup field to match on, as declared on the record schema. For a lookup declared over several fields, this is those field names joined with commas (`status,area`), and the values go in `values`.
     """
 
     value: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The exact value to match against the lookup field.
+    The exact value to match against the lookup field. Mutually exclusive with `values`.
+    """
+
+    values: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    The exact values to match, for a lookup declared over several fields — one value per field, in the order the lookup declares them. Mutually exclusive with `value`; a single-element list is identical to `value`. You may supply fewer values than the lookup declares as long as they are a leading run of its fields.
     """
 
     if IS_PYDANTIC_V2:

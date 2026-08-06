@@ -74,7 +74,7 @@ class LogEntry(UniversalBaseModel):
         FieldMetadata(alias="errorCode"),
         pydantic.Field(
             alias="errorCode",
-            description="Error code explaining WHY a failed call was rejected, when the failure had a typed code — one of `RATE_LIMITED`, `SUBSCRIPTION_LIMIT_EXCEEDED`, `INSUFFICIENT_BALANCE`, `RESOURCE_IN_USE`, `VERSION_CONFLICT`, `SESSION_REFRESH_REQUIRED`. Null for successful calls, for failures that carry only a message, and for calls recorded before this release that are still within your log retention window. Request and response bodies are never logged, so no further detail is available here by design.",
+            description="Error code explaining WHY a failed call was rejected, when the failure had a typed code — one of `RATE_LIMITED`, `SUBSCRIPTION_LIMIT_EXCEEDED`, `INSUFFICIENT_BALANCE`, `RESOURCE_IN_USE`, `VERSION_CONFLICT`, `SESSION_REFRESH_REQUIRED`, `WRITE_FROZEN`, `UNSUPPORTED_WIRE_VERSION`. Null for successful calls, for failures that carry only a message, and for calls recorded before this release that are still within your log retention window. Request and response bodies are never logged, so no further detail is available here by design.",
         ),
     ] = None
 

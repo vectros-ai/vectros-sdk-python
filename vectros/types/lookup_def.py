@@ -10,17 +10,28 @@ from ..core.serialization import FieldMetadata
 
 class LookupDef(UniversalBaseModel):
     """
-    Declares a payload field that is indexed for direct lookup queries.
+    Declares a payload field — or several fields together — that is indexed for direct lookup queries.
     """
 
     field_name: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="fieldName"),
-        pydantic.Field(alias="fieldName", description="Name of the payload field to index."),
-    ]
+        pydantic.Field(
+            alias="fieldName",
+            description="Name of the payload field to index. Supply either this or `fieldNames`, never both.",
+        ),
+    ] = None
+    field_names: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="fieldNames"),
+        pydantic.Field(
+            alias="fieldNames",
+            description="Names of the payload fields to index together as a single lookup, so you can match on all of them at once (`status` AND `area`). Supply this instead of `fieldName`; between 2 and 3 fields.\n\n**The order is significant, and re-declaring the same fields in a different order creates a SEPARATE lookup rather than reordering this one** — it is indexed independently, costs its own index, and matches only records written after you declare it. Choose the order deliberately: you can match on the first field alone, the first two together, and so on — any leading run of the list — but never on a later field by itself. Declare a separate lookup for that.\n\nQuery it by passing the field names joined with commas as `field` (`field=status,area`), plus one value per field you are matching. Supplying fewer values than the lookup declares returns the records grouped by the fields you left unspecified; `sortBy` then orders records within each group, not across them.\n\nA lookup over several fields cannot set `unique`.",
+        ),
+    ] = None
     unique: typing.Optional[bool] = pydantic.Field(default=None)
     """
-    If true, enforces that this field's value is unique within your account.
+    If true, enforces that this field's value is unique within your account. Not available on a lookup over several fields.
     """
 
     range_enabled: typing_extensions.Annotated[
@@ -28,7 +39,7 @@ class LookupDef(UniversalBaseModel):
         FieldMetadata(alias="rangeEnabled"),
         pydantic.Field(
             alias="rangeEnabled",
-            description="If true, this field also supports ordered range and prefix lookups (`from`/`to`/`prefix`) in addition to exact-match lookups. Range-enabled fields are billed at the range-index rate. Cannot be set on a sensitive field, because a blind index is not orderable. This setting is locked once the field is created.",
+            description="If true, this field also supports ordered range and prefix lookups (`from`/`to`/`prefix`) in addition to exact-match lookups. Range-enabled fields are billed at the range-index rate. Cannot be set on a sensitive field, because a blind index is not orderable. Not available on a lookup over several fields, which is an exact-match index over its fields — declare the range lookup separately. This setting is locked once the field is created.",
         ),
     ] = None
     sort_by: typing_extensions.Annotated[

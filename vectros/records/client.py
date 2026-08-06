@@ -9,7 +9,7 @@ from ..types.batch_lookup_input import BatchLookupInput
 from ..types.batch_lookup_response import BatchLookupResponse
 from ..types.batch_write_response import BatchWriteResponse
 from ..types.model_data_version_page import ModelDataVersionPage
-from ..types.record_lookup_response import RecordLookupResponse
+from ..types.record_lookup_page import RecordLookupPage
 from ..types.record_page import RecordPage
 from ..types.record_request import RecordRequest
 from ..types.record_request_index_mode import RecordRequestIndexMode
@@ -178,10 +178,10 @@ class RecordsClient:
             Filter to records owned by this user. The value is the Vectros-assigned UUID of a user; resolve one from your own ID via `GET /v1/users?externalId=`.
 
         scope : typing.Optional[str]
-            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
+            Filter to records carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of records to return per page. Allowed range 1–100; defaults to 20.
@@ -213,7 +213,7 @@ class RecordsClient:
             folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
             user_id="550e8400-e29b-41d4-a716-446655440000",
             scope="group:eng-team",
-            start_from="550e8400-e29b-41d4-a716-446655440000",
+            start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
         )
         """
         _response = self._raw_client.list_records(
@@ -277,7 +277,7 @@ class RecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -412,7 +412,7 @@ class RecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -539,7 +539,7 @@ class RecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -598,17 +598,28 @@ class RecordsClient:
         type: str,
         field: str,
         value: typing.Optional[str] = None,
+        values: typing.Optional[typing.Union[str, typing.Sequence[str]]] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
+        sort_from: typing.Optional[str] = None,
+        sort_to: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         include_payload: typing.Optional[str] = None,
         order: typing.Optional[LookupRecordsRequestOrder] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> RecordLookupResponse:
+    ) -> RecordLookupPage:
         """
-        Finds records by the value of a lookup field declared on the type's schema. Provide exactly one lookup mode: `value` (exact match), `from`+`to` (inclusive range, ascending by value), or `prefix` (string fields only, ascending). Range and prefix lookups are not supported on a sensitive field, because its value is stored as a blind index and has no sortable order. An exact-`value` lookup on a sensitive field is also rejected on this GET endpoint — the value must not appear in the URL — so use the `POST /v1/records/lookup` body variant for sensitive fields. Results are paginated: set `limit` for the page size and pass the returned `nextCursor` back as `startFrom` for the next page. Requires the `records:r:<type>` scope.
+        Finds records by the value of a lookup field declared on the type's schema. Provide exactly one lookup mode: `value` (exact match), `from`+`to` (inclusive range, ascending by value), or `prefix` (string fields only, ascending). Range and prefix lookups are not supported on a sensitive field, because its value is stored as a blind index and has no sortable order. An exact-`value` lookup on a sensitive field is also rejected on this GET endpoint — the value must not appear in the URL — so use the `POST /v1/records/lookup` body variant for sensitive fields.
+
+        A `value` lookup can additionally be narrowed to a window of the lookup field's **sort key** using `sortFrom` and/or `sortTo` (inclusive) — for example, one session's records created since a timestamp. The sort key is whatever the schema declares as that lookup's `sortBy` (`createdAt` by default, `lastUpdated`, or another field), and bounds are given in that field's own units — epoch milliseconds for the two timestamp options. **Records that have no value for the sorted field are never included in a bounded window** — they are ordered ahead of every record that does have one, and a `sortFrom`/`sortTo` window only ever selects from records carrying a value. The sorted field does not have to be `required`.
+
+        Narrowing is available on any lookup field your schema declares for fast equality lookup, and on `externalId` — which is always ordered by creation time, so its bounds are epoch milliseconds whatever the schema says. It is rejected (`400`) for a field declared with `rangeEnabled`, for a field declared beyond the schema's fast-lookup budget, for a lookup whose `sortBy` names a sensitive field (a sensitive value is stored as a blind index and has no order), and for a window whose start is after its end. Ownership fields are not lookup fields on this endpoint at all — see the `field` parameter.
+
+        While paging a narrowed lookup, keep every other parameter identical. The cursor is valid only for the exact query that returned it — changing `order`, `sortFrom`, `sortTo`, or dropping them altogether, is rejected rather than silently resumed at a position that means something different in the new query.
+
+        Results are paginated: set `limit` for the page size and pass the returned `nextCursor` back as `startFrom` for the next page. **Keep paging until `nextCursor` is null** — a page can come back empty or shorter than `limit` while more results remain, so an empty page is not the end of the results. Requires the `records:r:<type>` scope.
 
         Parameters
         ----------
@@ -619,7 +630,12 @@ class RecordsClient:
             The name of the lookup field to match on, as declared on the type's schema.
 
         value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Rejected for a sensitive field — use `POST /v1/records/lookup` instead so the value is not exposed in the URL.
+            Exact value to match. Mutually exclusive with `from`/`to`, `prefix` and `values`. Rejected for a sensitive field — use `POST /v1/records/lookup` instead so the value is not exposed in the URL.
+
+        values : typing.Optional[typing.Union[str, typing.Sequence[str]]]
+            Exact values to match, for a lookup declared over several fields — one value per field, in the order the lookup declares them, given as a repeated parameter (`?field=status,area&values=open&values=billing`). Mutually exclusive with `value`; a single `values` is identical to `value`.
+
+            You may supply fewer values than the lookup declares, as long as they are a leading run of its fields; doing so returns the records grouped by the fields you left unspecified. Narrowing with `sortFrom`/`sortTo` then requires a value for every field, because the ordering is only continuous within one fully specified combination.
 
         from_ : typing.Optional[str]
             Inclusive lower bound of a range lookup (requires `to`; non-sensitive fields only). Mutually exclusive with `value` and `prefix`.
@@ -630,8 +646,14 @@ class RecordsClient:
         prefix : typing.Optional[str]
             Prefix to match (string, non-sensitive fields only). Mutually exclusive with `value` and `from`/`to`.
 
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to records at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Records with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to records at or before this point. Use with `value`; combine with `sortFrom`.
+
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of records to return per page. Allowed range 1–100; defaults to 20.
@@ -647,7 +669,7 @@ class RecordsClient:
 
         Returns
         -------
-        RecordLookupResponse
+        RecordLookupPage
             A page of matching records (a `{data, nextCursor}` envelope).
 
         Examples
@@ -662,17 +684,21 @@ class RecordsClient:
             type="intake_form",
             field="email",
             value="jane@example.com",
+            values=["open"],
             prefix="jane",
-            start_from="550e8400-e29b-41d4-a716-446655440000",
+            start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
         )
         """
         _response = self._raw_client.lookup_records(
             type=type,
             field=field,
             value=value,
+            values=values,
             from_=from_,
             to=to,
             prefix=prefix,
+            sort_from=sort_from,
+            sort_to=sort_to,
             start_from=start_from,
             limit=limit,
             include_payload=include_payload,
@@ -687,17 +713,20 @@ class RecordsClient:
         type: str,
         field: str,
         value: typing.Optional[str] = OMIT,
+        values: typing.Optional[typing.Sequence[str]] = OMIT,
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
         prefix: typing.Optional[str] = OMIT,
+        sort_from: typing.Optional[str] = OMIT,
+        sort_to: typing.Optional[str] = OMIT,
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[RecordLookupRequestOrder] = OMIT,
         include_payload: typing.Optional[bool] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> RecordLookupResponse:
+    ) -> RecordLookupPage:
         """
-        Body-based equivalent of `GET /v1/records/lookup`. Use this when looking up by a sensitive field: the value travels in the request body (and is blind-indexed server-side) instead of in the URL query string, so it never lands in access, CDN, or proxy logs. The GET variant rejects an exact-value lookup on a sensitive field and directs you here. Non-sensitive exact-value, range (`from`+`to`), and prefix lookups also work here. Returns the same `{data, nextCursor}` envelope and uses the same pagination as the GET variant. Requires the `records:r:<type>` scope.
+        Body-based equivalent of `GET /v1/records/lookup`. Use this when looking up by a sensitive field: the value travels in the request body (and is blind-indexed server-side) instead of in the URL query string, so it never lands in access, CDN, or proxy logs. The GET variant rejects an exact-value lookup on a sensitive field and directs you here. Non-sensitive exact-value, range (`from`+`to`), and prefix lookups also work here, as does narrowing a `value` lookup by the field's sort key with `sortFrom`/`sortTo` — see the GET variant for what the sort key is and when narrowing by it is available. Returns the same `{data, nextCursor}` envelope and uses the same pagination as the GET variant; keep paging until `nextCursor` is null rather than stopping on an empty page. Requires the `records:r:<type>` scope.
 
         Parameters
         ----------
@@ -705,10 +734,15 @@ class RecordsClient:
             The record type to look up (for example, `intake_form`).
 
         field : str
-            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
+            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value). For a lookup declared over several fields, give those field names joined with commas (`status,area`) and put the values in `values`.
 
         value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Sensitive fields can only be looked up by exact value, and only through this body variant.
+            Exact value to match. Mutually exclusive with `from`/`to`, `prefix` and `values`. Sensitive fields can only be looked up by exact value, and only through this body variant. For a lookup over several fields, use `values` instead.
+
+        values : typing.Optional[typing.Sequence[str]]
+            Exact values to match, for a lookup declared over several fields — one value per field, in the order the lookup declares them. Mutually exclusive with `value`; a single-element list is exactly `value` written uniformly.
+
+            You may supply fewer values than the lookup declares, as long as they are a leading run of its fields: on a lookup over `[status, area, owner]` you can match `status`, or `status` and `area`, but never `area` alone. Supplying fewer values returns the records grouped by the fields you left unspecified; `sortFrom`/`sortTo` then need every value, because sorting is only continuous within one fully specified combination.
 
         from_ : typing.Optional[str]
             Inclusive lower bound for a range lookup (requires `to`; non-sensitive fields only). Mutually exclusive with `value` and `prefix`.
@@ -718,6 +752,12 @@ class RecordsClient:
 
         prefix : typing.Optional[str]
             Prefix to match (string, non-sensitive fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to records whose sort key is at or after this point. Use with `value`; may be combined with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Records with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to records whose sort key is at or before this point. Use with `value`; may be combined with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor — pass the `nextCursor` returned by the previous page.
@@ -736,7 +776,7 @@ class RecordsClient:
 
         Returns
         -------
-        RecordLookupResponse
+        RecordLookupPage
             A page of matching records (a `{data, nextCursor}` envelope).
 
         Examples
@@ -756,9 +796,12 @@ class RecordsClient:
             type=type,
             field=field,
             value=value,
+            values=values,
             from_=from_,
             to=to,
             prefix=prefix,
+            sort_from=sort_from,
+            sort_to=sort_to,
             start_from=start_from,
             limit=limit,
             order=order,
@@ -1020,10 +1063,10 @@ class AsyncRecordsClient:
             Filter to records owned by this user. The value is the Vectros-assigned UUID of a user; resolve one from your own ID via `GET /v1/users?externalId=`.
 
         scope : typing.Optional[str]
-            Filter to records carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
+            Filter to records carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Combine with `type` or `folderId`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of records to return per page. Allowed range 1–100; defaults to 20.
@@ -1060,7 +1103,7 @@ class AsyncRecordsClient:
                 folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
                 user_id="550e8400-e29b-41d4-a716-446655440000",
                 scope="group:eng-team",
-                start_from="550e8400-e29b-41d4-a716-446655440000",
+                start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             )
 
 
@@ -1127,7 +1170,7 @@ class AsyncRecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -1278,7 +1321,7 @@ class AsyncRecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -1421,7 +1464,7 @@ class AsyncRecordsClient:
             Identifier of the owning user — the Vectros-assigned UUID of a user in your account. Optional, and may be set automatically from the calling token's identity. Use `GET /v1/users?externalId=` to resolve the UUID from your own identifier.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a record owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
+            The record's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the record's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a row owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         external_id : typing.Optional[str]
             Your own stable identifier for this record. Optional, and immutable after create. Unique within your account, context, and record type: posting again with the same `externalId` returns the existing record (idempotent create), and it is the key other records reference. Maximum 256 characters.
@@ -1488,17 +1531,28 @@ class AsyncRecordsClient:
         type: str,
         field: str,
         value: typing.Optional[str] = None,
+        values: typing.Optional[typing.Union[str, typing.Sequence[str]]] = None,
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
+        sort_from: typing.Optional[str] = None,
+        sort_to: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         include_payload: typing.Optional[str] = None,
         order: typing.Optional[LookupRecordsRequestOrder] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> RecordLookupResponse:
+    ) -> RecordLookupPage:
         """
-        Finds records by the value of a lookup field declared on the type's schema. Provide exactly one lookup mode: `value` (exact match), `from`+`to` (inclusive range, ascending by value), or `prefix` (string fields only, ascending). Range and prefix lookups are not supported on a sensitive field, because its value is stored as a blind index and has no sortable order. An exact-`value` lookup on a sensitive field is also rejected on this GET endpoint — the value must not appear in the URL — so use the `POST /v1/records/lookup` body variant for sensitive fields. Results are paginated: set `limit` for the page size and pass the returned `nextCursor` back as `startFrom` for the next page. Requires the `records:r:<type>` scope.
+        Finds records by the value of a lookup field declared on the type's schema. Provide exactly one lookup mode: `value` (exact match), `from`+`to` (inclusive range, ascending by value), or `prefix` (string fields only, ascending). Range and prefix lookups are not supported on a sensitive field, because its value is stored as a blind index and has no sortable order. An exact-`value` lookup on a sensitive field is also rejected on this GET endpoint — the value must not appear in the URL — so use the `POST /v1/records/lookup` body variant for sensitive fields.
+
+        A `value` lookup can additionally be narrowed to a window of the lookup field's **sort key** using `sortFrom` and/or `sortTo` (inclusive) — for example, one session's records created since a timestamp. The sort key is whatever the schema declares as that lookup's `sortBy` (`createdAt` by default, `lastUpdated`, or another field), and bounds are given in that field's own units — epoch milliseconds for the two timestamp options. **Records that have no value for the sorted field are never included in a bounded window** — they are ordered ahead of every record that does have one, and a `sortFrom`/`sortTo` window only ever selects from records carrying a value. The sorted field does not have to be `required`.
+
+        Narrowing is available on any lookup field your schema declares for fast equality lookup, and on `externalId` — which is always ordered by creation time, so its bounds are epoch milliseconds whatever the schema says. It is rejected (`400`) for a field declared with `rangeEnabled`, for a field declared beyond the schema's fast-lookup budget, for a lookup whose `sortBy` names a sensitive field (a sensitive value is stored as a blind index and has no order), and for a window whose start is after its end. Ownership fields are not lookup fields on this endpoint at all — see the `field` parameter.
+
+        While paging a narrowed lookup, keep every other parameter identical. The cursor is valid only for the exact query that returned it — changing `order`, `sortFrom`, `sortTo`, or dropping them altogether, is rejected rather than silently resumed at a position that means something different in the new query.
+
+        Results are paginated: set `limit` for the page size and pass the returned `nextCursor` back as `startFrom` for the next page. **Keep paging until `nextCursor` is null** — a page can come back empty or shorter than `limit` while more results remain, so an empty page is not the end of the results. Requires the `records:r:<type>` scope.
 
         Parameters
         ----------
@@ -1509,7 +1563,12 @@ class AsyncRecordsClient:
             The name of the lookup field to match on, as declared on the type's schema.
 
         value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Rejected for a sensitive field — use `POST /v1/records/lookup` instead so the value is not exposed in the URL.
+            Exact value to match. Mutually exclusive with `from`/`to`, `prefix` and `values`. Rejected for a sensitive field — use `POST /v1/records/lookup` instead so the value is not exposed in the URL.
+
+        values : typing.Optional[typing.Union[str, typing.Sequence[str]]]
+            Exact values to match, for a lookup declared over several fields — one value per field, in the order the lookup declares them, given as a repeated parameter (`?field=status,area&values=open&values=billing`). Mutually exclusive with `value`; a single `values` is identical to `value`.
+
+            You may supply fewer values than the lookup declares, as long as they are a leading run of its fields; doing so returns the records grouped by the fields you left unspecified. Narrowing with `sortFrom`/`sortTo` then requires a value for every field, because the ordering is only continuous within one fully specified combination.
 
         from_ : typing.Optional[str]
             Inclusive lower bound of a range lookup (requires `to`; non-sensitive fields only). Mutually exclusive with `value` and `prefix`.
@@ -1520,8 +1579,14 @@ class AsyncRecordsClient:
         prefix : typing.Optional[str]
             Prefix to match (string, non-sensitive fields only). Mutually exclusive with `value` and `from`/`to`.
 
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to records at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Records with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to records at or before this point. Use with `value`; combine with `sortFrom`.
+
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` from the previous page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of records to return per page. Allowed range 1–100; defaults to 20.
@@ -1537,7 +1602,7 @@ class AsyncRecordsClient:
 
         Returns
         -------
-        RecordLookupResponse
+        RecordLookupPage
             A page of matching records (a `{data, nextCursor}` envelope).
 
         Examples
@@ -1557,8 +1622,9 @@ class AsyncRecordsClient:
                 type="intake_form",
                 field="email",
                 value="jane@example.com",
+                values=["open"],
                 prefix="jane",
-                start_from="550e8400-e29b-41d4-a716-446655440000",
+                start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             )
 
 
@@ -1568,9 +1634,12 @@ class AsyncRecordsClient:
             type=type,
             field=field,
             value=value,
+            values=values,
             from_=from_,
             to=to,
             prefix=prefix,
+            sort_from=sort_from,
+            sort_to=sort_to,
             start_from=start_from,
             limit=limit,
             include_payload=include_payload,
@@ -1585,17 +1654,20 @@ class AsyncRecordsClient:
         type: str,
         field: str,
         value: typing.Optional[str] = OMIT,
+        values: typing.Optional[typing.Sequence[str]] = OMIT,
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
         prefix: typing.Optional[str] = OMIT,
+        sort_from: typing.Optional[str] = OMIT,
+        sort_to: typing.Optional[str] = OMIT,
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[RecordLookupRequestOrder] = OMIT,
         include_payload: typing.Optional[bool] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> RecordLookupResponse:
+    ) -> RecordLookupPage:
         """
-        Body-based equivalent of `GET /v1/records/lookup`. Use this when looking up by a sensitive field: the value travels in the request body (and is blind-indexed server-side) instead of in the URL query string, so it never lands in access, CDN, or proxy logs. The GET variant rejects an exact-value lookup on a sensitive field and directs you here. Non-sensitive exact-value, range (`from`+`to`), and prefix lookups also work here. Returns the same `{data, nextCursor}` envelope and uses the same pagination as the GET variant. Requires the `records:r:<type>` scope.
+        Body-based equivalent of `GET /v1/records/lookup`. Use this when looking up by a sensitive field: the value travels in the request body (and is blind-indexed server-side) instead of in the URL query string, so it never lands in access, CDN, or proxy logs. The GET variant rejects an exact-value lookup on a sensitive field and directs you here. Non-sensitive exact-value, range (`from`+`to`), and prefix lookups also work here, as does narrowing a `value` lookup by the field's sort key with `sortFrom`/`sortTo` — see the GET variant for what the sort key is and when narrowing by it is available. Returns the same `{data, nextCursor}` envelope and uses the same pagination as the GET variant; keep paging until `nextCursor` is null rather than stopping on an empty page. Requires the `records:r:<type>` scope.
 
         Parameters
         ----------
@@ -1603,10 +1675,15 @@ class AsyncRecordsClient:
             The record type to look up (for example, `intake_form`).
 
         field : str
-            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
+            Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value). For a lookup declared over several fields, give those field names joined with commas (`status,area`) and put the values in `values`.
 
         value : typing.Optional[str]
-            Exact value to match. Mutually exclusive with `from`/`to` and `prefix`. Sensitive fields can only be looked up by exact value, and only through this body variant.
+            Exact value to match. Mutually exclusive with `from`/`to`, `prefix` and `values`. Sensitive fields can only be looked up by exact value, and only through this body variant. For a lookup over several fields, use `values` instead.
+
+        values : typing.Optional[typing.Sequence[str]]
+            Exact values to match, for a lookup declared over several fields — one value per field, in the order the lookup declares them. Mutually exclusive with `value`; a single-element list is exactly `value` written uniformly.
+
+            You may supply fewer values than the lookup declares, as long as they are a leading run of its fields: on a lookup over `[status, area, owner]` you can match `status`, or `status` and `area`, but never `area` alone. Supplying fewer values returns the records grouped by the fields you left unspecified; `sortFrom`/`sortTo` then need every value, because sorting is only continuous within one fully specified combination.
 
         from_ : typing.Optional[str]
             Inclusive lower bound for a range lookup (requires `to`; non-sensitive fields only). Mutually exclusive with `value` and `prefix`.
@@ -1616,6 +1693,12 @@ class AsyncRecordsClient:
 
         prefix : typing.Optional[str]
             Prefix to match (string, non-sensitive fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to records whose sort key is at or after this point. Use with `value`; may be combined with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Records with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to records whose sort key is at or before this point. Use with `value`; may be combined with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor — pass the `nextCursor` returned by the previous page.
@@ -1634,7 +1717,7 @@ class AsyncRecordsClient:
 
         Returns
         -------
-        RecordLookupResponse
+        RecordLookupPage
             A page of matching records (a `{data, nextCursor}` envelope).
 
         Examples
@@ -1662,9 +1745,12 @@ class AsyncRecordsClient:
             type=type,
             field=field,
             value=value,
+            values=values,
             from_=from_,
             to=to,
             prefix=prefix,
+            sort_from=sort_from,
+            sort_to=sort_to,
             start_from=start_from,
             limit=limit,
             order=order,

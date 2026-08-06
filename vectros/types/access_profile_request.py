@@ -41,7 +41,7 @@ class AccessProfileRequest(UniversalBaseModel):
         FieldMetadata(alias="identityOverrides"),
         pydantic.Field(
             alias="identityOverrides",
-            description="Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. An empty or omitted map applies no overrides — the base identity from the user or key record is used as-is.",
+            description="Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.",
         ),
     ] = None
     status: typing.Optional[AccessProfileRequestStatus] = pydantic.Field(default=None)

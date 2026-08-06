@@ -141,7 +141,7 @@ if typing.TYPE_CHECKING:
     from .read_access_section import ReadAccessSection
     from .read_calls import ReadCalls
     from .reads_section import ReadsSection
-    from .record_lookup_response import RecordLookupResponse
+    from .record_lookup_page import RecordLookupPage
     from .record_page import RecordPage
     from .record_request import RecordRequest
     from .record_request_index_mode import RecordRequestIndexMode
@@ -330,7 +330,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ReadAccessSection": ".read_access_section",
     "ReadCalls": ".read_calls",
     "ReadsSection": ".reads_section",
-    "RecordLookupResponse": ".record_lookup_response",
+    "RecordLookupPage": ".record_lookup_page",
     "RecordPage": ".record_page",
     "RecordRequest": ".record_request",
     "RecordRequestIndexMode": ".record_request_index_mode",
@@ -543,7 +543,7 @@ __all__ = [
     "ReadAccessSection",
     "ReadCalls",
     "ReadsSection",
-    "RecordLookupResponse",
+    "RecordLookupPage",
     "RecordPage",
     "RecordRequest",
     "RecordRequestIndexMode",

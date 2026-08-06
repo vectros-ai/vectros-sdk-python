@@ -34,7 +34,7 @@ class RoleRequest(UniversalBaseModel):
 
     scopes: typing.List[ScopeClause] = pydantic.Field()
     """
-    The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field.
+    The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
     """
 
     if IS_PYDANTIC_V2:

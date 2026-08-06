@@ -50,10 +50,10 @@ class RawFoldersClient:
             Filter to folders owned by this user — the Vectros-assigned UUID of a user. Use `GET /v1/users?externalId=` to resolve your own external ID to this UUID.
 
         scope : typing.Optional[str]
-            Filter to folders carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
+            Filter to folders carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of folders to return per page. Must be between 1 and 100; defaults to 20.
@@ -131,10 +131,10 @@ class RawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -306,10 +306,10 @@ class RawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -350,6 +350,17 @@ class RawFoldersClient:
                     ),
                 )
                 return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 404:
                 raise NotFoundError(
                     headers=dict(_response.headers),
@@ -479,10 +490,10 @@ class RawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -525,6 +536,17 @@ class RawFoldersClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -667,10 +689,10 @@ class AsyncRawFoldersClient:
             Filter to folders owned by this user — the Vectros-assigned UUID of a user. Use `GET /v1/users?externalId=` to resolve your own external ID to this UUID.
 
         scope : typing.Optional[str]
-            Filter to folders carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
+            Filter to folders carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` value from the previous page to fetch the next page; omit it for the first page.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
 
         limit : typing.Optional[int]
             Maximum number of folders to return per page. Must be between 1 and 100; defaults to 20.
@@ -748,10 +770,10 @@ class AsyncRawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -923,10 +945,10 @@ class AsyncRawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -967,6 +989,17 @@ class AsyncRawFoldersClient:
                     ),
                 )
                 return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 404:
                 raise NotFoundError(
                     headers=dict(_response.headers),
@@ -1098,10 +1131,10 @@ class AsyncRawFoldersClient:
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
 
         user_id : typing.Optional[str]
-            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token, it must match the token's identity claim (if one is set) or fall within the token's data scope.
+            Optional ID of the user that should own this folder — the Vectros-assigned UUID of a user in your account. With an API key, this sets the folder's owner directly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: for a token that stamps identity, entries must match the token's identity values, and an empty array creates a folder owned by the calling user alone (the private tier). Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
+            The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are built-in namespaces; others are custom scopes you define (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
             Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
@@ -1144,6 +1177,17 @@ class AsyncRawFoldersClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

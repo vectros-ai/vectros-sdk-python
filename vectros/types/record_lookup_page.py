@@ -6,15 +6,15 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
-from .role_response import RoleResponse
+from .record_response import RecordResponse
 
 
-class RolePage(UniversalBaseModel):
+class RecordLookupPage(UniversalBaseModel):
     """
-    A page of roles as a `{data, nextCursor}` envelope. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
+    A page of records matched by a structured-field lookup, as a `{data, nextCursor}` envelope. Records are returned in lookup order: ascending by field value for range and prefix lookups, and lookup-key order for exact-match lookups. `nextCursor` is an opaque cursor — pass it back as `startFrom` to fetch the next page, or null when no more pages remain.
     """
 
-    data: typing.Optional[typing.List[RoleResponse]] = pydantic.Field(default=None)
+    data: typing.Optional[typing.List[RecordResponse]] = pydantic.Field(default=None)
     """
     The items on this page, in the endpoint's natural order. Empty when there are no results.
     """

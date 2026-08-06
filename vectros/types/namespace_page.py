@@ -24,7 +24,7 @@ class NamespacePage(UniversalBaseModel):
         FieldMetadata(alias="nextCursor"),
         pydantic.Field(
             alias="nextCursor",
-            description="An opaque cursor for the next page. Pass it back as the `startFrom` query parameter to continue paging; null when there are no more results. Treat it as opaque — do not parse or construct it.",
+            description="An opaque cursor for the next page. Pass it back as the `startFrom` query parameter to continue paging; null when there are no more results. **Treat it as opaque** — echo it back unmodified, and never parse, construct, store long-term or compare it. Its format is unspecified, differs between endpoints, and changes between releases. A cursor is valid only for the exact query that returned it: keep every other parameter identical while paging.",
         ),
     ] = None
 
