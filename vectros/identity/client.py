@@ -11,6 +11,7 @@ from ..types.identity_lookup_request_order import IdentityLookupRequestOrder
 from ..types.model_data_version_page import ModelDataVersionPage
 from ..types.namespace_page import NamespacePage
 from ..types.namespace_response import NamespaceResponse
+from ..types.user_exists_response import UserExistsResponse
 from ..types.user_page import UserPage
 from ..types.user_request_status import UserRequestStatus
 from ..types.user_request_type import UserRequestType
@@ -1126,6 +1127,50 @@ class IdentityClient:
             limit=limit,
             order=order,
             request_options=request_options,
+        )
+        return _response.data
+
+    def user_exists_by_email(
+        self,
+        *,
+        email: typing.Optional[str] = None,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> UserExistsResponse:
+        """
+        Answers "does a user with this email hold an ACTIVE access profile in this app context" — a narrow existence check, not a general lookup. `exists` is false for a member whose access to this context has been suspended, not only for a member who was never granted it. The answer is scoped to the `contextId` you supply: it does not reveal whether the email exists elsewhere in your tenant or account, only whether it belongs to an active member of the named context. Returns `{exists, userId, status}` — never the full user record — so a caller asking "does X exist" cannot receive that user's payload/schema binding/etc. as a side effect. Useful for resolving an email you were handed (for example, by an org-admin adding an existing member to another org) to a `userId`, without paging through the full context membership. Requires the `users:r` scope.
+
+        Parameters
+        ----------
+        email : typing.Optional[str]
+            The email address to check. Matched case-insensitively.
+
+        context_id : typing.Optional[str]
+            The app context to check membership in. A context-confined credential (a scoped token or key bound to one context) may only name its own bound context — naming any other context is rejected with a uniform 403, before the existence check runs.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        UserExistsResponse
+            The check completed. `exists` is `false` (with no other fields) when no active member of the named context has that email.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.identity.user_exists_by_email(
+            email="user@example.com",
+            context_id="myapp",
+        )
+        """
+        _response = self._raw_client.user_exists_by_email(
+            email=email, context_id=context_id, request_options=request_options
         )
         return _response.data
 
@@ -2420,6 +2465,58 @@ class AsyncIdentityClient:
             limit=limit,
             order=order,
             request_options=request_options,
+        )
+        return _response.data
+
+    async def user_exists_by_email(
+        self,
+        *,
+        email: typing.Optional[str] = None,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> UserExistsResponse:
+        """
+        Answers "does a user with this email hold an ACTIVE access profile in this app context" — a narrow existence check, not a general lookup. `exists` is false for a member whose access to this context has been suspended, not only for a member who was never granted it. The answer is scoped to the `contextId` you supply: it does not reveal whether the email exists elsewhere in your tenant or account, only whether it belongs to an active member of the named context. Returns `{exists, userId, status}` — never the full user record — so a caller asking "does X exist" cannot receive that user's payload/schema binding/etc. as a side effect. Useful for resolving an email you were handed (for example, by an org-admin adding an existing member to another org) to a `userId`, without paging through the full context membership. Requires the `users:r` scope.
+
+        Parameters
+        ----------
+        email : typing.Optional[str]
+            The email address to check. Matched case-insensitively.
+
+        context_id : typing.Optional[str]
+            The app context to check membership in. A context-confined credential (a scoped token or key bound to one context) may only name its own bound context — naming any other context is rejected with a uniform 403, before the existence check runs.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        UserExistsResponse
+            The check completed. `exists` is `false` (with no other fields) when no active member of the named context has that email.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.identity.user_exists_by_email(
+                email="user@example.com",
+                context_id="myapp",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.user_exists_by_email(
+            email=email, context_id=context_id, request_options=request_options
         )
         return _response.data
 

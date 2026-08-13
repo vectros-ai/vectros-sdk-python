@@ -73,6 +73,10 @@ class AccessProfileResponse(UniversalBaseModel):
         FieldMetadata(alias="lastModified"),
         pydantic.Field(alias="lastModified", description="When the profile was last modified (ISO-8601 UTC)."),
     ] = None
+    email: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    The principal's email, when resolvable. Set only for a `usr_` principal with a matching user record in your tenant; null for a `key_` principal (a scoped API key has no email), a `usr_` principal that could not be resolved (for example, the user was deleted), or when your token lacks the `users:r` scope in addition to this endpoint's own scope (email is user data, gated the same as GET /v1/users).
+    """
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

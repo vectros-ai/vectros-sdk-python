@@ -21,6 +21,7 @@ from ..types.identity_lookup_request_order import IdentityLookupRequestOrder
 from ..types.model_data_version_page import ModelDataVersionPage
 from ..types.namespace_page import NamespacePage
 from ..types.namespace_response import NamespaceResponse
+from ..types.user_exists_response import UserExistsResponse
 from ..types.user_page import UserPage
 from ..types.user_request_status import UserRequestStatus
 from ..types.user_request_type import UserRequestType
@@ -1616,6 +1617,82 @@ class RawIdentityClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def user_exists_by_email(
+        self,
+        *,
+        email: typing.Optional[str] = None,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[UserExistsResponse]:
+        """
+        Answers "does a user with this email hold an ACTIVE access profile in this app context" — a narrow existence check, not a general lookup. `exists` is false for a member whose access to this context has been suspended, not only for a member who was never granted it. The answer is scoped to the `contextId` you supply: it does not reveal whether the email exists elsewhere in your tenant or account, only whether it belongs to an active member of the named context. Returns `{exists, userId, status}` — never the full user record — so a caller asking "does X exist" cannot receive that user's payload/schema binding/etc. as a side effect. Useful for resolving an email you were handed (for example, by an org-admin adding an existing member to another org) to a `userId`, without paging through the full context membership. Requires the `users:r` scope.
+
+        Parameters
+        ----------
+        email : typing.Optional[str]
+            The email address to check. Matched case-insensitively.
+
+        context_id : typing.Optional[str]
+            The app context to check membership in. A context-confined credential (a scoped token or key bound to one context) may only name its own bound context — naming any other context is rejected with a uniform 403, before the existence check runs.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[UserExistsResponse]
+            The check completed. `exists` is `false` (with no other fields) when no active member of the named context has that email.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/users/exists-by-email",
+            method="GET",
+            params={
+                "email": email,
+                "contextId": context_id,
+            },
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    UserExistsResponse,
+                    parse_obj_as(
+                        type_=UserExistsResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3284,6 +3361,82 @@ class AsyncRawIdentityClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def user_exists_by_email(
+        self,
+        *,
+        email: typing.Optional[str] = None,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[UserExistsResponse]:
+        """
+        Answers "does a user with this email hold an ACTIVE access profile in this app context" — a narrow existence check, not a general lookup. `exists` is false for a member whose access to this context has been suspended, not only for a member who was never granted it. The answer is scoped to the `contextId` you supply: it does not reveal whether the email exists elsewhere in your tenant or account, only whether it belongs to an active member of the named context. Returns `{exists, userId, status}` — never the full user record — so a caller asking "does X exist" cannot receive that user's payload/schema binding/etc. as a side effect. Useful for resolving an email you were handed (for example, by an org-admin adding an existing member to another org) to a `userId`, without paging through the full context membership. Requires the `users:r` scope.
+
+        Parameters
+        ----------
+        email : typing.Optional[str]
+            The email address to check. Matched case-insensitively.
+
+        context_id : typing.Optional[str]
+            The app context to check membership in. A context-confined credential (a scoped token or key bound to one context) may only name its own bound context — naming any other context is rejected with a uniform 403, before the existence check runs.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[UserExistsResponse]
+            The check completed. `exists` is `false` (with no other fields) when no active member of the named context has that email.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/users/exists-by-email",
+            method="GET",
+            params={
+                "email": email,
+                "contextId": context_id,
+            },
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    UserExistsResponse,
+                    parse_obj_as(
+                        type_=UserExistsResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

@@ -44,7 +44,7 @@ class PingResponse(UniversalBaseModel):
         FieldMetadata(alias="principalKeyId"),
         pydantic.Field(
             alias="principalKeyId",
-            description="Stable identifier for your credential. For `sk_*` and `ssk_*` keys this is the key id; for `st_*` tokens it is the token's JWT id (jti).",
+            description="Stable identifier for your credential. For `sk_*` and `ssk_*` keys this is the key id; for `st_*` tokens it is the token's JWT id (`jti`), which is unique per mint — two tokens minted for the same user report different values.",
         ),
     ]
     principal_label: typing_extensions.Annotated[

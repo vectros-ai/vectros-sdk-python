@@ -105,6 +105,8 @@ if typing.TYPE_CHECKING:
     from .inference_section import InferenceSection
     from .ingest_counts import IngestCounts
     from .ingest_entry import IngestEntry
+    from .issuer_page import IssuerPage
+    from .issuer_response import IssuerResponse
     from .jwk import Jwk
     from .jwks_response import JwksResponse
     from .log_entry import LogEntry
@@ -182,16 +184,20 @@ if typing.TYPE_CHECKING:
     from .search_results_event import SearchResultsEvent
     from .search_results_event_event import SearchResultsEventEvent
     from .search_section import SearchSection
+    from .self_signup_policy import SelfSignupPolicy
     from .storage_bytes_search import StorageBytesSearch
     from .storage_entry import StorageEntry
     from .tenant_credits import TenantCredits
     from .tenant_detail import TenantDetail
     from .tenant_inference_section import TenantInferenceSection
     from .tenants import Tenants
+    from .token_exchange_response import TokenExchangeResponse
     from .truncation_warning_event import TruncationWarningEvent
     from .truncation_warning_event_event import TruncationWarningEventEvent
     from .truncation_warning_event_reason import TruncationWarningEventReason
     from .usage_report_response import UsageReportResponse
+    from .user_exists_response import UserExistsResponse
+    from .user_exists_response_status import UserExistsResponseStatus
     from .user_page import UserPage
     from .user_request import UserRequest
     from .user_request_status import UserRequestStatus
@@ -296,6 +302,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "InferenceSection": ".inference_section",
     "IngestCounts": ".ingest_counts",
     "IngestEntry": ".ingest_entry",
+    "IssuerPage": ".issuer_page",
+    "IssuerResponse": ".issuer_response",
     "Jwk": ".jwk",
     "JwksResponse": ".jwks_response",
     "LogEntry": ".log_entry",
@@ -371,16 +379,20 @@ _dynamic_imports: typing.Dict[str, str] = {
     "SearchResultsEvent": ".search_results_event",
     "SearchResultsEventEvent": ".search_results_event_event",
     "SearchSection": ".search_section",
+    "SelfSignupPolicy": ".self_signup_policy",
     "StorageBytesSearch": ".storage_bytes_search",
     "StorageEntry": ".storage_entry",
     "TenantCredits": ".tenant_credits",
     "TenantDetail": ".tenant_detail",
     "TenantInferenceSection": ".tenant_inference_section",
     "Tenants": ".tenants",
+    "TokenExchangeResponse": ".token_exchange_response",
     "TruncationWarningEvent": ".truncation_warning_event",
     "TruncationWarningEventEvent": ".truncation_warning_event_event",
     "TruncationWarningEventReason": ".truncation_warning_event_reason",
     "UsageReportResponse": ".usage_report_response",
+    "UserExistsResponse": ".user_exists_response",
+    "UserExistsResponseStatus": ".user_exists_response_status",
     "UserPage": ".user_page",
     "UserRequest": ".user_request",
     "UserRequestStatus": ".user_request_status",
@@ -509,6 +521,8 @@ __all__ = [
     "InferenceSection",
     "IngestCounts",
     "IngestEntry",
+    "IssuerPage",
+    "IssuerResponse",
     "Jwk",
     "JwksResponse",
     "LogEntry",
@@ -584,16 +598,20 @@ __all__ = [
     "SearchResultsEvent",
     "SearchResultsEventEvent",
     "SearchSection",
+    "SelfSignupPolicy",
     "StorageBytesSearch",
     "StorageEntry",
     "TenantCredits",
     "TenantDetail",
     "TenantInferenceSection",
     "Tenants",
+    "TokenExchangeResponse",
     "TruncationWarningEvent",
     "TruncationWarningEventEvent",
     "TruncationWarningEventReason",
     "UsageReportResponse",
+    "UserExistsResponse",
+    "UserExistsResponseStatus",
     "UserPage",
     "UserRequest",
     "UserRequestStatus",

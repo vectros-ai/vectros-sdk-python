@@ -17,6 +17,7 @@ from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
+from ..errors.unauthorized_error import UnauthorizedError
 from ..types.access_profile_page import AccessProfilePage
 from ..types.access_profile_request_status import AccessProfileRequestStatus
 from ..types.access_profile_response import AccessProfileResponse
@@ -25,6 +26,8 @@ from ..types.admin_logs_response import AdminLogsResponse
 from ..types.app_context_page import AppContextPage
 from ..types.app_context_response import AppContextResponse
 from ..types.create_invite_response import CreateInviteResponse
+from ..types.issuer_page import IssuerPage
+from ..types.issuer_response import IssuerResponse
 from ..types.jwks_response import JwksResponse
 from ..types.mint_token_response import MintTokenResponse
 from ..types.model_data_version_page import ModelDataVersionPage
@@ -36,6 +39,8 @@ from ..types.scope_clause import ScopeClause
 from ..types.scope_request import ScopeRequest
 from ..types.scoped_key_page import ScopedKeyPage
 from ..types.scoped_key_response import ScopedKeyResponse
+from ..types.self_signup_policy import SelfSignupPolicy
+from ..types.token_exchange_response import TokenExchangeResponse
 from ..types.usage_report_response import UsageReportResponse
 from pydantic import ValidationError
 
@@ -284,7 +289,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. A root API key (`sk_`) is exempt from both bounds.
 
         Parameters
         ----------
@@ -1289,7 +1294,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AccessProfileResponse]:
         """
-        Updates an access profile. This is a partial update: any field you omit (or send as null) keeps its existing value. A profile must reference either inline `scopes` or a `roleId`, never both — so setting `scopes` clears any `roleId`, and setting `roleId` clears any inline `scopes`. The `contextId` and `principalId` are immutable. Status changes (for example active to suspended) take effect within about five minutes. If you use a scoped credential, the profile's effective scopes may not exceed your own, and its `identityOverrides` are bounded twice: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well. Repointing or clearing another principal's established identity therefore returns 403. A root API key (`sk_`) is exempt. Requires the `profiles:u` scope.
+        Updates an access profile. This is a partial update: any field you omit (or send as null) keeps its existing value. A profile must reference either inline `scopes` or a `roleId`, never both — so setting `scopes` clears any `roleId`, and setting `roleId` clears any inline `scopes`. The `contextId` and `principalId` are immutable. Status changes (for example active to suspended) take effect within about five minutes. If you use a scoped credential, the profile's effective scopes may not exceed your own, and its `identityOverrides` are bounded twice: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well. Repointing or clearing another principal's established identity therefore returns 403. A root API key (`sk_`) is exempt. If you set `roleId`, it must reference a role that already exists in this context. Requires the `profiles:u` scope.
 
         Parameters
         ----------
@@ -1348,6 +1353,17 @@ class RawAuthClient:
                     ),
                 )
                 return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 403:
                 raise ForbiddenError(
                     headers=dict(_response.headers),
@@ -2191,6 +2207,327 @@ class RawAuthClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
+    def get_issuer(
+        self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[IssuerResponse]:
+        """
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[IssuerResponse]
+            The requested issuer.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def delete_issuer(
+        self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[None]:
+        """
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. Unconditional — unlike some other registry deletes on this API, this does not check for or block on any downstream reference. Any user account already created via this issuer (by a prior self-signup or accepted invite) is NOT deleted or modified, but that user can no longer obtain a NEW token this way once you deregister the issuer — every `POST /v1/auth/token/exchange` call against it will 404, with no distinction between an unknown issuer and one you just deregistered. Register a replacement issuer, or restore this one, before your users' current tokens expire if you want their access to continue uninterrupted.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[None]
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}",
+            method="DELETE",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                return HttpResponse(response=_response, data=None)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def list_issuers(
+        self,
+        *,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[IssuerPage]:
+        """
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. Returns a `{data, nextCursor}` envelope.
+
+        Parameters
+        ----------
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum registrations per page (1-100; defaults to 20).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[IssuerPage]
+            A page of issuers as a `{data, nextCursor}` envelope.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/auth/issuers",
+            method="GET",
+            params={
+                "startFrom": start_from,
+                "limit": limit,
+            },
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerPage,
+                    parse_obj_as(
+                        type_=IssuerPage,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def register_issuer(
+        self,
+        *,
+        issuer_id: str,
+        issuer: str,
+        jwks_uri: str,
+        audience: str,
+        context_id: str,
+        sub_claim: typing.Optional[str] = OMIT,
+        email_claim: typing.Optional[str] = OMIT,
+        self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[IssuerResponse]:
+        """
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant.
+
+        Parameters
+        ----------
+        issuer_id : str
+            Short slug identifying this issuer within your tenant: 3-31 characters, a lowercase letter first, then lowercase letters, digits, or hyphens. Immutable once registered.
+
+        issuer : str
+            The IdP's `iss` claim value, exactly as it appears in tokens it issues.
+
+        jwks_uri : str
+            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures.
+
+        audience : str
+            The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
+
+        context_id : str
+            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`).
+
+        sub_claim : typing.Optional[str]
+            The claim in the IdP's token that carries the subject identifier. Defaults to `sub` if omitted.
+
+        email_claim : typing.Optional[str]
+            The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
+
+        self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
+            Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[IssuerResponse]
+            An issuer with this issuerId already exists in your tenant; the existing registration is returned unchanged.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/auth/issuers",
+            method="POST",
+            json={
+                "issuerId": issuer_id,
+                "issuer": issuer,
+                "jwksUri": jwks_uri,
+                "audience": audience,
+                "contextId": context_id,
+                "subClaim": sub_claim,
+                "emailClaim": email_claim,
+                "selfSignupPolicies": convert_and_respect_annotation_metadata(
+                    object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
+                ),
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
     def ping(self, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[PingResponse]:
         """
         Returns the identity bound to your credential — your account, principal type, key id, and scope details — so you can confirm who you are authenticated as and that the credential is valid. MCP clients use this to render "signed in as ..." in a chat UI without a separate identity endpoint.
@@ -2332,7 +2669,7 @@ class RawAuthClient:
             The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
 
         expires_in_seconds : typing.Optional[int]
-            How long the token remains valid, in seconds. Maximum 86400 (24 hours); defaults to 3600 (1 hour).
+            How long the token remains valid, in seconds. Maximum 3600 (1 hour), which is also the default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2692,6 +3029,141 @@ class RawAuthClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
+    def exchange_token(
+        self,
+        *,
+        grant_type: str,
+        subject_token: str,
+        subject_token_type: str,
+        requested_token_type: typing.Optional[str] = OMIT,
+        invite_token: typing.Optional[str] = OMIT,
+        signup_type: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> HttpResponse[TokenExchangeResponse]:
+        """
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+
+        Parameters
+        ----------
+        grant_type : str
+            Must be exactly `urn:ietf:params:oauth:grant-type:token-exchange`.
+
+        subject_token : str
+            The IdP-issued JWT to exchange for a Vectros-scoped token.
+
+        subject_token_type : str
+            The type of `subject_token`. Accepted: `urn:ietf:params:oauth:token-type:jwt` and `urn:ietf:params:oauth:token-type:id_token`.
+
+        requested_token_type : typing.Optional[str]
+            Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
+
+        invite_token : typing.Optional[str]
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet (TOKEN-EXCHANGE-CONTRACT.md §6). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+
+        signup_type : typing.Optional[str]
+            Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
+
+            This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[TokenExchangeResponse]
+            The token was exchanged.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/auth/token/exchange",
+            method="POST",
+            json={
+                "grant_type": grant_type,
+                "subject_token": subject_token,
+                "subject_token_type": subject_token_type,
+                "requested_token_type": requested_token_type,
+                "invite_token": invite_token,
+                "signup_type": signup_type,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    TokenExchangeResponse,
+                    parse_obj_as(
+                        type_=TokenExchangeResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 401:
+                raise UnauthorizedError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
 
 class AsyncRawAuthClient:
     def __init__(self, *, client_wrapper: AsyncClientWrapper):
@@ -2936,7 +3408,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. A root API key (`sk_`) is exempt from both bounds.
 
         Parameters
         ----------
@@ -3941,7 +4413,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AccessProfileResponse]:
         """
-        Updates an access profile. This is a partial update: any field you omit (or send as null) keeps its existing value. A profile must reference either inline `scopes` or a `roleId`, never both — so setting `scopes` clears any `roleId`, and setting `roleId` clears any inline `scopes`. The `contextId` and `principalId` are immutable. Status changes (for example active to suspended) take effect within about five minutes. If you use a scoped credential, the profile's effective scopes may not exceed your own, and its `identityOverrides` are bounded twice: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well. Repointing or clearing another principal's established identity therefore returns 403. A root API key (`sk_`) is exempt. Requires the `profiles:u` scope.
+        Updates an access profile. This is a partial update: any field you omit (or send as null) keeps its existing value. A profile must reference either inline `scopes` or a `roleId`, never both — so setting `scopes` clears any `roleId`, and setting `roleId` clears any inline `scopes`. The `contextId` and `principalId` are immutable. Status changes (for example active to suspended) take effect within about five minutes. If you use a scoped credential, the profile's effective scopes may not exceed your own, and its `identityOverrides` are bounded twice: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well. Repointing or clearing another principal's established identity therefore returns 403. A root API key (`sk_`) is exempt. If you set `roleId`, it must reference a role that already exists in this context. Requires the `profiles:u` scope.
 
         Parameters
         ----------
@@ -4000,6 +4472,17 @@ class AsyncRawAuthClient:
                     ),
                 )
                 return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 403:
                 raise ForbiddenError(
                     headers=dict(_response.headers),
@@ -4843,6 +5326,327 @@ class AsyncRawAuthClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
+    async def get_issuer(
+        self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[IssuerResponse]:
+        """
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[IssuerResponse]
+            The requested issuer.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def delete_issuer(
+        self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[None]:
+        """
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. Unconditional — unlike some other registry deletes on this API, this does not check for or block on any downstream reference. Any user account already created via this issuer (by a prior self-signup or accepted invite) is NOT deleted or modified, but that user can no longer obtain a NEW token this way once you deregister the issuer — every `POST /v1/auth/token/exchange` call against it will 404, with no distinction between an unknown issuer and one you just deregistered. Register a replacement issuer, or restore this one, before your users' current tokens expire if you want their access to continue uninterrupted.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[None]
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}",
+            method="DELETE",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                return AsyncHttpResponse(response=_response, data=None)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def list_issuers(
+        self,
+        *,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[IssuerPage]:
+        """
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. Returns a `{data, nextCursor}` envelope.
+
+        Parameters
+        ----------
+        start_from : typing.Optional[str]
+            Pagination cursor from a previous page's `nextCursor`.
+
+        limit : typing.Optional[int]
+            Maximum registrations per page (1-100; defaults to 20).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[IssuerPage]
+            A page of issuers as a `{data, nextCursor}` envelope.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/auth/issuers",
+            method="GET",
+            params={
+                "startFrom": start_from,
+                "limit": limit,
+            },
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerPage,
+                    parse_obj_as(
+                        type_=IssuerPage,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def register_issuer(
+        self,
+        *,
+        issuer_id: str,
+        issuer: str,
+        jwks_uri: str,
+        audience: str,
+        context_id: str,
+        sub_claim: typing.Optional[str] = OMIT,
+        email_claim: typing.Optional[str] = OMIT,
+        self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[IssuerResponse]:
+        """
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant.
+
+        Parameters
+        ----------
+        issuer_id : str
+            Short slug identifying this issuer within your tenant: 3-31 characters, a lowercase letter first, then lowercase letters, digits, or hyphens. Immutable once registered.
+
+        issuer : str
+            The IdP's `iss` claim value, exactly as it appears in tokens it issues.
+
+        jwks_uri : str
+            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures.
+
+        audience : str
+            The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
+
+        context_id : str
+            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`).
+
+        sub_claim : typing.Optional[str]
+            The claim in the IdP's token that carries the subject identifier. Defaults to `sub` if omitted.
+
+        email_claim : typing.Optional[str]
+            The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
+
+        self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
+            Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[IssuerResponse]
+            An issuer with this issuerId already exists in your tenant; the existing registration is returned unchanged.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/auth/issuers",
+            method="POST",
+            json={
+                "issuerId": issuer_id,
+                "issuer": issuer,
+                "jwksUri": jwks_uri,
+                "audience": audience,
+                "contextId": context_id,
+                "subClaim": sub_claim,
+                "emailClaim": email_claim,
+                "selfSignupPolicies": convert_and_respect_annotation_metadata(
+                    object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
+                ),
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
     async def ping(self, *, request_options: typing.Optional[RequestOptions] = None) -> AsyncHttpResponse[PingResponse]:
         """
         Returns the identity bound to your credential — your account, principal type, key id, and scope details — so you can confirm who you are authenticated as and that the credential is valid. MCP clients use this to render "signed in as ..." in a chat UI without a separate identity endpoint.
@@ -4984,7 +5788,7 @@ class AsyncRawAuthClient:
             The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
 
         expires_in_seconds : typing.Optional[int]
-            How long the token remains valid, in seconds. Maximum 86400 (24 hours); defaults to 3600 (1 hour).
+            How long the token remains valid, in seconds. Maximum 3600 (1 hour), which is also the default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -5293,6 +6097,141 @@ class AsyncRawAuthClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def exchange_token(
+        self,
+        *,
+        grant_type: str,
+        subject_token: str,
+        subject_token_type: str,
+        requested_token_type: typing.Optional[str] = OMIT,
+        invite_token: typing.Optional[str] = OMIT,
+        signup_type: typing.Optional[str] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> AsyncHttpResponse[TokenExchangeResponse]:
+        """
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+
+        Parameters
+        ----------
+        grant_type : str
+            Must be exactly `urn:ietf:params:oauth:grant-type:token-exchange`.
+
+        subject_token : str
+            The IdP-issued JWT to exchange for a Vectros-scoped token.
+
+        subject_token_type : str
+            The type of `subject_token`. Accepted: `urn:ietf:params:oauth:token-type:jwt` and `urn:ietf:params:oauth:token-type:id_token`.
+
+        requested_token_type : typing.Optional[str]
+            Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
+
+        invite_token : typing.Optional[str]
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet (TOKEN-EXCHANGE-CONTRACT.md §6). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+
+        signup_type : typing.Optional[str]
+            Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
+
+            This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[TokenExchangeResponse]
+            The token was exchanged.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/auth/token/exchange",
+            method="POST",
+            json={
+                "grant_type": grant_type,
+                "subject_token": subject_token,
+                "subject_token_type": subject_token_type,
+                "requested_token_type": requested_token_type,
+                "invite_token": invite_token,
+                "signup_type": signup_type,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    TokenExchangeResponse,
+                    parse_obj_as(
+                        type_=TokenExchangeResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 401:
+                raise UnauthorizedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

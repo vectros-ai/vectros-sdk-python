@@ -29,7 +29,7 @@ class VectrosApi:
     base_url : str
         The base url to use for requests from the client.
 
-    token : typing.Union[str, typing.Callable[[], str]]
+    token : typing.Optional[typing.Union[str, typing.Callable[[], str]]]
     headers : typing.Optional[typing.Dict[str, str]]
         Additional headers to send with every request.
 
@@ -62,7 +62,7 @@ class VectrosApi:
         self,
         *,
         base_url: str,
-        token: typing.Union[str, typing.Callable[[], str]],
+        token: typing.Optional[typing.Union[str, typing.Callable[[], str]]] = None,
         headers: typing.Optional[typing.Dict[str, str]] = None,
         timeout: typing.Optional[float] = None,
         max_retries: typing.Optional[int] = None,
@@ -197,7 +197,7 @@ class AsyncVectrosApi:
     base_url : str
         The base url to use for requests from the client.
 
-    token : typing.Union[str, typing.Callable[[], str]]
+    token : typing.Optional[typing.Union[str, typing.Callable[[], str]]]
     headers : typing.Optional[typing.Dict[str, str]]
         Additional headers to send with every request.
 
@@ -233,7 +233,7 @@ class AsyncVectrosApi:
         self,
         *,
         base_url: str,
-        token: typing.Union[str, typing.Callable[[], str]],
+        token: typing.Optional[typing.Union[str, typing.Callable[[], str]]] = None,
         headers: typing.Optional[typing.Dict[str, str]] = None,
         async_token: typing.Optional[typing.Callable[[], typing.Awaitable[str]]] = None,
         timeout: typing.Optional[float] = None,
