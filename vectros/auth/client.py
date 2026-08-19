@@ -215,7 +215,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ScopedKeyResponse:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. A root API key (`sk_`) is exempt from both bounds.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds.
 
         Parameters
         ----------
@@ -229,7 +229,7 @@ class AuthClient:
             The app context within the tenant. Must reference an app context that already exists (create one via `POST /v1/app-contexts`).
 
         user_id : str
-            The user the key binds to. May be a `HUMAN` or a `SERVICE` user (a service user is the typical agent or bot case). An access profile must already exist for this context and user — the key references that profile; it does not create one.
+            The user the key binds to. May be a `HUMAN` or a `SERVICE` user (a service user is the typical agent or bot case). An access profile must already exist for this context and user — the key references that profile; it does not create one. Naming your own principal needs nothing further; naming any OTHER principal additionally requires the `delegate-mint` capability on your credential, or a root API key.
 
         label : typing.Optional[str]
             Optional display label surfaced through `/v1/ping` as `principalLabel`. The MCP `current_identity` tool uses it to show "signed in as ..." hints to end users (e.g. "Claude Desktop — clinical-notes RO"). Distinct from `keyName`, which is your own identifier for the key. Maximum 80 characters; if present, it must not have leading or trailing whitespace.
@@ -357,7 +357,7 @@ class AuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. (`clients` and `orgs` match log rows written before the identity surfaces were folded into `entities`.)
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -471,7 +471,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope, and applies the same `identityOverrides` bounds the update endpoint documents — a scoped credential may not repoint or clear an identity value it does not itself hold). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope, and applies the same `identityOverrides` bounds the update endpoint documents — a scoped credential may not repoint or clear an identity value it does not itself hold). The `principalId` must name a principal that already exists: a `usr_` principal must be a live user in your tenant, so create the user before granting it a profile. A `usr_` id that names no such user is rejected, and no profile is created. `key_` principals are not checked this way. You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -693,7 +693,7 @@ class AuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
@@ -1068,7 +1068,7 @@ class AuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -1249,7 +1249,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UsageReportResponse:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room.
 
         Parameters
         ----------
@@ -1260,7 +1260,7 @@ class AuthClient:
             Calendar month, 1-12 (for example, 5 for May). Defaults to the current month.
 
         context_id : typing.Optional[str]
-            App context id. When supplied, the `contexts` breakdown is restricted to that single app context; your account-wide totals are unaffected.
+            App context id. For a token with cross-context reach, this only restricts the `contexts` breakdown to that single app context — your account-wide totals are unaffected. For a token confined to one app context, your totals are *already* narrowed to it (see the operation description) regardless of this parameter; supplying it must name your own context or the request is refused.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1289,7 +1289,7 @@ class AuthClient:
 
     def get_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> IssuerResponse:
         """
-        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability.
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context.
 
         Parameters
         ----------
@@ -1321,7 +1321,7 @@ class AuthClient:
 
     def delete_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. Unconditional — unlike some other registry deletes on this API, this does not check for or block on any downstream reference. Any user account already created via this issuer (by a prior self-signup or accepted invite) is NOT deleted or modified, but that user can no longer obtain a NEW token this way once you deregister the issuer — every `POST /v1/auth/token/exchange` call against it will 404, with no distinction between an unknown issuer and one you just deregistered. Register a replacement issuer, or restore this one, before your users' current tokens expire if you want their access to continue uninterrupted.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. Deactivate the affected users first if you intend to cut off their access, or register a replacement issuer before removing this one. An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -1358,7 +1358,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerPage:
         """
-        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. Returns a `{data, nextCursor}` envelope.
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -1403,7 +1403,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`.
 
         Parameters
         ----------
@@ -1420,7 +1420,7 @@ class AuthClient:
             The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
 
         context_id : str
-            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`).
+            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`). A credential authorized via the CLI bootstrap's provisioning capability may only name the app context it is itself bound to; naming another one is refused. A root API key may name any of its contexts.
 
         sub_claim : typing.Optional[str]
             The claim in the IdP's token that carries the subject identifier. Defaults to `sub` if omitted.
@@ -1437,7 +1437,7 @@ class AuthClient:
         Returns
         -------
         IssuerResponse
-            An issuer with this issuerId already exists in your tenant; the existing registration is returned unchanged.
+            An issuer with this issuerId already exists in your tenant and belongs to your own app context; the existing registration is returned unchanged.
 
         Examples
         --------
@@ -1504,7 +1504,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfilePage:
         """
-        Returns the access profiles for the given principal across all of your contexts. Use this to answer questions like "which apps does this user have access to?" — for example, to build a member-access summary. Results are confined to your account. Requires the `profiles:r` scope.
+        Returns the access profiles for the given principal. Looking up your OWN principal — or holding the `context-directory-read` capability — returns the profiles across ALL of your contexts, letting you answer questions like "which apps does this user have access to?". A context-bound credential looking up a DIFFERENT principal instead sees only that principal's profile in your credential's own context (at most one result), never across contexts it has no authority over. Results are always confined to your account. Requires the `profiles:r` scope.
 
         Parameters
         ----------
@@ -1523,7 +1523,7 @@ class AuthClient:
         Returns
         -------
         AccessProfilePage
-            A page of the principal's access profiles across your contexts.
+            A page of the principal's access profiles — across every context you administer for a self-lookup or a `context-directory-read` holder; at most one result, scoped to your own context, otherwise.
 
         Examples
         --------
@@ -1773,10 +1773,11 @@ class AuthClient:
         requested_token_type: typing.Optional[str] = OMIT,
         invite_token: typing.Optional[str] = OMIT,
         signup_type: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> TokenExchangeResponse:
         """
-        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
 
         Parameters
         ----------
@@ -1799,6 +1800,9 @@ class AuthClient:
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
 
             This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+
+        context_id : typing.Optional[str]
+            Selects which app context to target, for an issuer registered against more than one (each via its own `POST /v1/auth/issuers` row and a distinct `audience`). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit when your `subject_token`'s `aud` claim matches only one registered context (the common case, and unaffected by this field's addition — behavior is unchanged from before this field existed). When your token's `aud` claims could match MORE than one of your registered contexts, name the one you want; a mismatch (naming a context this issuer is not registered against) is refused identically to an unrecognized issuer — the response does not distinguish the two.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1829,6 +1833,7 @@ class AuthClient:
             requested_token_type=requested_token_type,
             invite_token=invite_token,
             signup_type=signup_type,
+            context_id=context_id,
             request_options=request_options,
         )
         return _response.data
@@ -2039,7 +2044,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ScopedKeyResponse:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. A root API key (`sk_`) is exempt from both bounds.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds.
 
         Parameters
         ----------
@@ -2053,7 +2058,7 @@ class AsyncAuthClient:
             The app context within the tenant. Must reference an app context that already exists (create one via `POST /v1/app-contexts`).
 
         user_id : str
-            The user the key binds to. May be a `HUMAN` or a `SERVICE` user (a service user is the typical agent or bot case). An access profile must already exist for this context and user — the key references that profile; it does not create one.
+            The user the key binds to. May be a `HUMAN` or a `SERVICE` user (a service user is the typical agent or bot case). An access profile must already exist for this context and user — the key references that profile; it does not create one. Naming your own principal needs nothing further; naming any OTHER principal additionally requires the `delegate-mint` capability on your credential, or a root API key.
 
         label : typing.Optional[str]
             Optional display label surfaced through `/v1/ping` as `principalLabel`. The MCP `current_identity` tool uses it to show "signed in as ..." hints to end users (e.g. "Claude Desktop — clinical-notes RO"). Distinct from `keyName`, which is your own identifier for the key. Maximum 80 characters; if present, it must not have leading or trailing whitespace.
@@ -2205,7 +2210,7 @@ class AsyncAuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `clients`, `orgs`, `users`, `usage`, `auth`, `models`, `ping`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. (`clients` and `orgs` match log rows written before the identity surfaces were folded into `entities`.)
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -2335,7 +2340,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
         """
-        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope, and applies the same `identityOverrides` bounds the update endpoint documents — a scoped credential may not repoint or clear an identity value it does not itself hold). You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
+        Creates a new access profile under the given app context. This call is idempotent by `principalId`: if a profile with the same `principalId` already exists, the existing profile is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing profile was returned) tells the two apart. To overwrite an existing profile's `scopes`/`roleId`, `identityOverrides`, and `status` instead of returning it unchanged, set `?upsert=true` (this also requires the `profiles:u` scope, and applies the same `identityOverrides` bounds the update endpoint documents — a scoped credential may not repoint or clear an identity value it does not itself hold). The `principalId` must name a principal that already exists: a `usr_` principal must be a live user in your tenant, so create the user before granting it a profile. A `usr_` id that names no such user is rejected, and no profile is created. `key_` principals are not checked this way. You must provide exactly one of `scopes` (an inline list of scopes) or `roleId` (a reference to a role); supplying both, or neither, is rejected. `identityOverrides` is keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered — and may name at most two; any other key (including the account identifier or `userId`) is rejected. If you use a scoped credential, the profile's effective scopes may not exceed your own; a root API key (`sk_`) is exempt. Requires the `profiles:c` scope.
 
         Parameters
         ----------
@@ -2589,7 +2594,7 @@ class AsyncAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
@@ -3032,7 +3037,7 @@ class AsyncAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs) and `data_scope` (an attribute filter that restricts which records the actions apply to). An action is permitted if any clause allows that action and that clause's data scope matches the target record. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -3245,7 +3250,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UsageReportResponse:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room.
 
         Parameters
         ----------
@@ -3256,7 +3261,7 @@ class AsyncAuthClient:
             Calendar month, 1-12 (for example, 5 for May). Defaults to the current month.
 
         context_id : typing.Optional[str]
-            App context id. When supplied, the `contexts` breakdown is restricted to that single app context; your account-wide totals are unaffected.
+            App context id. For a token with cross-context reach, this only restricts the `contexts` breakdown to that single app context — your account-wide totals are unaffected. For a token confined to one app context, your totals are *already* narrowed to it (see the operation description) regardless of this parameter; supplying it must name your own context or the request is refused.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3295,7 +3300,7 @@ class AsyncAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> IssuerResponse:
         """
-        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability.
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context.
 
         Parameters
         ----------
@@ -3335,7 +3340,7 @@ class AsyncAuthClient:
 
     async def delete_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. Unconditional — unlike some other registry deletes on this API, this does not check for or block on any downstream reference. Any user account already created via this issuer (by a prior self-signup or accepted invite) is NOT deleted or modified, but that user can no longer obtain a NEW token this way once you deregister the issuer — every `POST /v1/auth/token/exchange` call against it will 404, with no distinction between an unknown issuer and one you just deregistered. Register a replacement issuer, or restore this one, before your users' current tokens expire if you want their access to continue uninterrupted.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. Deactivate the affected users first if you intend to cut off their access, or register a replacement issuer before removing this one. An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -3380,7 +3385,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerPage:
         """
-        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. Returns a `{data, nextCursor}` envelope.
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -3435,7 +3440,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`.
 
         Parameters
         ----------
@@ -3452,7 +3457,7 @@ class AsyncAuthClient:
             The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
 
         context_id : str
-            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`).
+            Which of your app contexts an exchanged token targets. Must be an existing app context (create it first via `POST /v1/app-contexts`). A credential authorized via the CLI bootstrap's provisioning capability may only name the app context it is itself bound to; naming another one is refused. A root API key may name any of its contexts.
 
         sub_claim : typing.Optional[str]
             The claim in the IdP's token that carries the subject identifier. Defaults to `sub` if omitted.
@@ -3469,7 +3474,7 @@ class AsyncAuthClient:
         Returns
         -------
         IssuerResponse
-            An issuer with this issuerId already exists in your tenant; the existing registration is returned unchanged.
+            An issuer with this issuerId already exists in your tenant and belongs to your own app context; the existing registration is returned unchanged.
 
         Examples
         --------
@@ -3552,7 +3557,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfilePage:
         """
-        Returns the access profiles for the given principal across all of your contexts. Use this to answer questions like "which apps does this user have access to?" — for example, to build a member-access summary. Results are confined to your account. Requires the `profiles:r` scope.
+        Returns the access profiles for the given principal. Looking up your OWN principal — or holding the `context-directory-read` capability — returns the profiles across ALL of your contexts, letting you answer questions like "which apps does this user have access to?". A context-bound credential looking up a DIFFERENT principal instead sees only that principal's profile in your credential's own context (at most one result), never across contexts it has no authority over. Results are always confined to your account. Requires the `profiles:r` scope.
 
         Parameters
         ----------
@@ -3571,7 +3576,7 @@ class AsyncAuthClient:
         Returns
         -------
         AccessProfilePage
-            A page of the principal's access profiles across your contexts.
+            A page of the principal's access profiles — across every context you administer for a self-lookup or a `context-directory-read` holder; at most one result, scoped to your own context, otherwise.
 
         Examples
         --------
@@ -3853,10 +3858,11 @@ class AsyncAuthClient:
         requested_token_type: typing.Optional[str] = OMIT,
         invite_token: typing.Optional[str] = OMIT,
         signup_type: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> TokenExchangeResponse:
         """
-        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
 
         Parameters
         ----------
@@ -3879,6 +3885,9 @@ class AsyncAuthClient:
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
 
             This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+
+        context_id : typing.Optional[str]
+            Selects which app context to target, for an issuer registered against more than one (each via its own `POST /v1/auth/issuers` row and a distinct `audience`). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit when your `subject_token`'s `aud` claim matches only one registered context (the common case, and unaffected by this field's addition — behavior is unchanged from before this field existed). When your token's `aud` claims could match MORE than one of your registered contexts, name the one you want; a mismatch (naming a context this issuer is not registered against) is refused identically to an unrecognized issuer — the response does not distinguish the two.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3917,6 +3926,7 @@ class AsyncAuthClient:
             requested_token_type=requested_token_type,
             invite_token=invite_token,
             signup_type=signup_type,
+            context_id=context_id,
             request_options=request_options,
         )
         return _response.data

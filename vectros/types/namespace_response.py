@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class NamespaceResponse(UniversalBaseModel):
     """
-    A scope-namespace registration — declares whether values in the namespace resolve to identity entities. The reserved namespaces `org` and `client` are always present as built-ins.
+    A scope-namespace registration — declares whether values in the namespace resolve to identity entities. `org` and `client` are reserved namespace names, registered the same way as any other.
     """
 
     namespace: typing.Optional[str] = pydantic.Field(default=None)
@@ -28,9 +28,17 @@ class NamespaceResponse(UniversalBaseModel):
     ] = None
     reserved: typing.Optional[bool] = pydantic.Field(default=None)
     """
-    Whether this is a reserved built-in namespace (`org`/`client`). Built-ins cannot be changed or deleted.
+    Whether this namespace was provisioned by the platform rather than registered by you. Provisioned namespaces are ordinary registrations: you can change them, and you can delete one that no entity references.
     """
 
+    context_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="contextId"),
+        pydantic.Field(
+            alias="contextId",
+            description="The app context that owns this registration, or null for a TENANT-WIDE registration visible to every app context (`org`/`client`, and any namespace registered without `?contextId=`). A context-owned registration's identity entities belong entirely to that context; a tenant-wide one's are account-wide, shared by every app context.",
+        ),
+    ] = None
     default_schema_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="defaultSchemaId"),
@@ -47,12 +55,50 @@ class NamespaceResponse(UniversalBaseModel):
             description="This namespace's position in your account's specificity order (higher = more specific), used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution.",
         ),
     ] = None
+    membership_record_type: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="membershipRecordType"),
+        pydantic.Field(
+            alias="membershipRecordType",
+            description="The record type holding this namespace's membership grants, or null when this namespace declares no membership.",
+        ),
+    ] = None
+    membership_target_field: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="membershipTargetField"),
+        pydantic.Field(
+            alias="membershipTargetField",
+            description="The field on the membership record type naming the user each grant is for, or null.",
+        ),
+    ] = None
+    membership_context_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="membershipContextId"),
+        pydantic.Field(
+            alias="membershipContextId", description="Which app context holds the membership records, or null."
+        ),
+    ] = None
+    membership_level_field: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="membershipLevelField"),
+        pydantic.Field(
+            alias="membershipLevelField",
+            description="The field on the membership record type naming a grant's level, or null when membership in this namespace is plain in-or-out.",
+        ),
+    ] = None
+    membership_levels: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="membershipLevels"),
+        pydantic.Field(
+            alias="membershipLevels",
+            description="The complete set of level labels this namespace allows, or null. A role may name only these levels.",
+        ),
+    ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),
         pydantic.Field(
-            alias="createdAt",
-            description="Timestamp when the namespace was registered, as an ISO-8601 UTC timestamp. Absent for the reserved built-ins.",
+            alias="createdAt", description="Timestamp when the namespace was registered, as an ISO-8601 UTC timestamp."
         ),
     ] = None
 

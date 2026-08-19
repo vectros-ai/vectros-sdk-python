@@ -11,6 +11,7 @@ from ..core.parse_error import ParsingError
 from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
 from ..errors.bad_request_error import BadRequestError
+from ..errors.conflict_error import ConflictError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
@@ -42,6 +43,7 @@ class RawIdentityClient:
         self,
         namespace: str,
         *,
+        context_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
         external_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
@@ -63,6 +65,9 @@ class RawIdentityClient:
         ----------
         namespace : str
             The entity namespace.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         user_id : typing.Optional[str]
             Return only entities owned by this user (Vectros user ID).
@@ -112,6 +117,7 @@ class RawIdentityClient:
             f"v1/entities/{encode_path_param(namespace)}",
             method="GET",
             params={
+                "contextId": context_id,
                 "userId": user_id,
                 "externalId": external_id,
                 "scope": scope,
@@ -152,6 +158,7 @@ class RawIdentityClient:
         *,
         external_id: str,
         upsert: typing.Optional[bool] = None,
+        context_id: typing.Optional[str] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -172,6 +179,9 @@ class RawIdentityClient:
 
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
+
+        context_id : typing.Optional[str]
+            Which app context owns the new entity. **Required when the namespace is context-placed** and omitted otherwise: a tenant-placed namespace's entities are shared by every context, so supplying one is rejected. A context-confined credential may only name its own context. An entity's context is fixed at creation and cannot be changed afterwards.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -201,6 +211,7 @@ class RawIdentityClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "contextId": context_id,
             },
             json={
                 "externalId": external_id,
@@ -269,7 +280,12 @@ class RawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     def get_entity(
-        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        id: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[EntityResponse]:
         """
         Retrieves a single entity by its namespace and Vectros-assigned ID. Requires the `entities:r:<namespace>` scope.
@@ -282,6 +298,9 @@ class RawIdentityClient:
         id : str
             The Vectros-assigned ID (UUID) of the entity.
 
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -293,6 +312,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="GET",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -331,6 +353,7 @@ class RawIdentityClient:
         id: str,
         *,
         external_id: str,
+        context_id: typing.Optional[str] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -350,6 +373,9 @@ class RawIdentityClient:
 
         external_id : str
             Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -377,6 +403,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="PUT",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
@@ -433,7 +462,12 @@ class RawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     def delete_entity(
-        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        id: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[None]:
         """
         Permanently deletes an entity. This action cannot be undone. Requires the `entities:d:<namespace>` scope.
@@ -445,6 +479,9 @@ class RawIdentityClient:
 
         id : str
 
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -455,6 +492,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="DELETE",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -497,6 +537,7 @@ class RawIdentityClient:
         *,
         type: str,
         field: str,
+        context_id: typing.Optional[str] = None,
         value: typing.Optional[str] = OMIT,
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
@@ -519,6 +560,9 @@ class RawIdentityClient:
 
         field : str
             Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         value : typing.Optional[str]
             Exact value to match. Mutually exclusive with `from`/`to` and `prefix`.
@@ -552,6 +596,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/lookup",
             method="POST",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "type": type,
                 "field": field,
@@ -615,6 +662,7 @@ class RawIdentityClient:
         namespace: str,
         id: str,
         *,
+        context_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ModelDataVersionPage]:
@@ -628,6 +676,9 @@ class RawIdentityClient:
 
         id : str
             The Vectros-assigned ID (UUID) of the entity.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         start_from : typing.Optional[str]
             Pagination cursor from a previous page's `nextCursor`.
@@ -644,6 +695,7 @@ class RawIdentityClient:
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}/versions",
             method="GET",
             params={
+                "contextId": context_id,
                 "startFrom": start_from,
             },
             request_options=request_options,
@@ -679,15 +731,22 @@ class RawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     def get_namespace(
-        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[NamespaceResponse]:
         """
-        Retrieves a single scope-namespace registration by name. The reserved built-ins `org` and `client` are always resolvable.
+        Retrieves a single scope-namespace registration by name.
 
         Parameters
         ----------
         namespace : str
             The namespace name.
+
+        context_id : typing.Optional[str]
+            An app context to resolve this namespace for — its own registration if it has one, else the tenant-wide one. Omit for the tenant-wide registration only.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -700,6 +759,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace)}",
             method="GET",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -738,12 +800,18 @@ class RawIdentityClient:
         *,
         namespace: str,
         specificity_rank: int,
+        context_id: typing.Optional[str] = None,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        membership_record_type: typing.Optional[str] = OMIT,
+        membership_target_field: typing.Optional[str] = OMIT,
+        membership_context_id: typing.Optional[str] = OMIT,
+        membership_level_field: typing.Optional[str] = OMIT,
+        membership_levels: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[NamespaceResponse]:
         """
-        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name and its `contextId` (which row is selected) are both immutable. Requires a root API key. `org` and `client` are updatable like any other namespace — there is no reserved-built-in exception.
 
         Parameters
         ----------
@@ -751,16 +819,34 @@ class RawIdentityClient:
             The namespace name.
 
         namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+
+        context_id : typing.Optional[str]
+            The app context that owns this registration. Omit for the tenant-wide registration.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        membership_record_type : typing.Optional[str]
+            Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
+
+        membership_target_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming the user a grant is FOR. It is an ordinary reference field, not an ownership field — the grant is owned by whoever created it, and the namespace value it applies to is the grant's own scope stamp, which is what your placement authority is checked against when you write it.
+
+        membership_context_id : typing.Optional[str]
+            Optional. Which app context holds the membership records. Required alongside the other membership fields on a TENANT-WIDE registration (records always belong to one app context, while a tenant-wide registration is account-wide). Meaningless — and rejected if it disagrees — on a registration owned by one context via `?contextId=`: that context's grants live in its own context by construction, so this field need not repeat it.
+
+        membership_level_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming a grant's LEVEL, so the same user can hold different levels in different values of this namespace — an admin of one team and a viewer of another. Supply it together with `membershipLevels`, or omit both for plain in-or-out membership. A role selects a level by naming `${{ member.scope.<namespace>:<level> }}`. Because the level is an ordinary field on an ordinary record, it is only as trustworthy as who may write that record type: grant create/update/delete on `membershipRecordType` to the people who ISSUE grants, never to the members those grants govern — a member who can update their own grant row can raise their own level, and it takes effect on their next request.
+
+        membership_levels : typing.Optional[typing.Sequence[str]]
+            Optional. The complete set of level labels this namespace allows, each following the namespace grammar. A role naming a level that is not in this list is rejected when it is authored, rather than silently matching nothing — so a typo is reported to whoever can fix it. Required alongside `membershipLevelField`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -773,11 +859,19 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace_)}",
             method="PUT",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "namespace": namespace,
                 "entityBacked": entity_backed,
                 "defaultSchemaId": default_schema_id,
                 "specificityRank": specificity_rank,
+                "membershipRecordType": membership_record_type,
+                "membershipTargetField": membership_target_field,
+                "membershipContextId": membership_context_id,
+                "membershipLevelField": membership_level_field,
+                "membershipLevels": membership_levels,
             },
             headers={
                 "content-type": "application/json",
@@ -838,15 +932,22 @@ class RawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     def delete_namespace(
-        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[None]:
         """
-        Deletes a registered scope namespace. Requires a root API key. The reserved built-ins cannot be deleted. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
+        Deletes a registered scope namespace. Requires a root API key. `org` and `client` are deletable like any other namespace — there is no reserved-built-in exception. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
 
         Parameters
         ----------
         namespace : str
             The namespace name.
+
+        context_id : typing.Optional[str]
+            The app context that owns this registration. Omit for the tenant-wide registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -858,6 +959,9 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace)}",
             method="DELETE",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -910,10 +1014,11 @@ class RawIdentityClient:
         *,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        context_id: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[NamespacePage]:
         """
-        Returns the scope namespaces registered in your account, with the reserved built-ins `org` and `client` listed first. Returns a `{data, nextCursor}` envelope.
+        Returns the scope namespaces registered in your account. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -922,6 +1027,9 @@ class RawIdentityClient:
 
         limit : typing.Optional[int]
             Maximum registrations per page (1-100; defaults to 20).
+
+        context_id : typing.Optional[str]
+            List one app context's OWN registrations instead of the tenant-wide ones. Omit for the tenant-wide registrations only — a context's own registrations are never mixed into the unfiltered listing.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -937,6 +1045,7 @@ class RawIdentityClient:
             params={
                 "startFrom": start_from,
                 "limit": limit,
+                "contextId": context_id,
             },
             request_options=request_options,
         )
@@ -964,26 +1073,50 @@ class RawIdentityClient:
         *,
         namespace: str,
         specificity_rank: int,
+        context_id: typing.Optional[str] = None,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        membership_record_type: typing.Optional[str] = OMIT,
+        membership_target_field: typing.Optional[str] = OMIT,
+        membership_context_id: typing.Optional[str] = OMIT,
+        membership_level_field: typing.Optional[str] = OMIT,
+        membership_levels: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[NamespaceResponse]:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
         namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+
+        context_id : typing.Optional[str]
+            The app context to own this registration. Omit for a TENANT-WIDE registration visible to every context.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        membership_record_type : typing.Optional[str]
+            Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
+
+        membership_target_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming the user a grant is FOR. It is an ordinary reference field, not an ownership field — the grant is owned by whoever created it, and the namespace value it applies to is the grant's own scope stamp, which is what your placement authority is checked against when you write it.
+
+        membership_context_id : typing.Optional[str]
+            Optional. Which app context holds the membership records. Required alongside the other membership fields on a TENANT-WIDE registration (records always belong to one app context, while a tenant-wide registration is account-wide). Meaningless — and rejected if it disagrees — on a registration owned by one context via `?contextId=`: that context's grants live in its own context by construction, so this field need not repeat it.
+
+        membership_level_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming a grant's LEVEL, so the same user can hold different levels in different values of this namespace — an admin of one team and a viewer of another. Supply it together with `membershipLevels`, or omit both for plain in-or-out membership. A role selects a level by naming `${{ member.scope.<namespace>:<level> }}`. Because the level is an ordinary field on an ordinary record, it is only as trustworthy as who may write that record type: grant create/update/delete on `membershipRecordType` to the people who ISSUE grants, never to the members those grants govern — a member who can update their own grant row can raise their own level, and it takes effect on their next request.
+
+        membership_levels : typing.Optional[typing.Sequence[str]]
+            Optional. The complete set of level labels this namespace allows, each following the namespace grammar. A role naming a level that is not in this list is rejected when it is authored, rather than silently matching nothing — so a typo is reported to whoever can fix it. Required alongside `membershipLevelField`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -996,11 +1129,22 @@ class RawIdentityClient:
         _response = self._client_wrapper.httpx_client.request(
             "v1/namespaces",
             method="POST",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "namespace": namespace,
                 "entityBacked": entity_backed,
                 "defaultSchemaId": default_schema_id,
                 "specificityRank": specificity_rank,
+                "membershipRecordType": membership_record_type,
+                "membershipTargetField": membership_target_field,
+                "membershipContextId": membership_context_id,
+                "membershipLevelField": membership_level_field,
+                "membershipLevels": membership_levels,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -1073,7 +1217,7 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[UserPage]:
         """
-        Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope.
+        Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope. A context-confined credential only sees users who hold an access profile in the credential's own app context — others are silently absent from the page, not an error.
 
         Parameters
         ----------
@@ -1470,7 +1614,7 @@ class RawIdentityClient:
 
     def delete_user(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
         """
-        Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope.
+        Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope. Deleting your account's last OWNER is refused (409) — an account must always retain at least one owner. Called by a context-confined credential, deletion is also refused (409) when the user holds access in an app context other than the caller's own — remove the user from the caller's own context first, or use a credential with cross-context reach.
 
         Parameters
         ----------
@@ -1494,6 +1638,17 @@ class RawIdentityClient:
                 return HttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1538,7 +1693,7 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[UserPage]:
         """
-        Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+        Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope. A context-confined credential only sees users who hold an access profile in the credential's own app context — others are silently absent from the page, not an error.
 
         Parameters
         ----------
@@ -1784,6 +1939,7 @@ class AsyncRawIdentityClient:
         self,
         namespace: str,
         *,
+        context_id: typing.Optional[str] = None,
         user_id: typing.Optional[str] = None,
         external_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
@@ -1805,6 +1961,9 @@ class AsyncRawIdentityClient:
         ----------
         namespace : str
             The entity namespace.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         user_id : typing.Optional[str]
             Return only entities owned by this user (Vectros user ID).
@@ -1854,6 +2013,7 @@ class AsyncRawIdentityClient:
             f"v1/entities/{encode_path_param(namespace)}",
             method="GET",
             params={
+                "contextId": context_id,
                 "userId": user_id,
                 "externalId": external_id,
                 "scope": scope,
@@ -1894,6 +2054,7 @@ class AsyncRawIdentityClient:
         *,
         external_id: str,
         upsert: typing.Optional[bool] = None,
+        context_id: typing.Optional[str] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -1914,6 +2075,9 @@ class AsyncRawIdentityClient:
 
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
+
+        context_id : typing.Optional[str]
+            Which app context owns the new entity. **Required when the namespace is context-placed** and omitted otherwise: a tenant-placed namespace's entities are shared by every context, so supplying one is rejected. A context-confined credential may only name its own context. An entity's context is fixed at creation and cannot be changed afterwards.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -1943,6 +2107,7 @@ class AsyncRawIdentityClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "contextId": context_id,
             },
             json={
                 "externalId": external_id,
@@ -2011,7 +2176,12 @@ class AsyncRawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     async def get_entity(
-        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        id: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[EntityResponse]:
         """
         Retrieves a single entity by its namespace and Vectros-assigned ID. Requires the `entities:r:<namespace>` scope.
@@ -2024,6 +2194,9 @@ class AsyncRawIdentityClient:
         id : str
             The Vectros-assigned ID (UUID) of the entity.
 
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -2035,6 +2208,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="GET",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -2073,6 +2249,7 @@ class AsyncRawIdentityClient:
         id: str,
         *,
         external_id: str,
+        context_id: typing.Optional[str] = None,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -2092,6 +2269,9 @@ class AsyncRawIdentityClient:
 
         external_id : str
             Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -2119,6 +2299,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="PUT",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "externalId": external_id,
                 "name": name,
@@ -2175,7 +2358,12 @@ class AsyncRawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     async def delete_entity(
-        self, namespace: str, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        id: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[None]:
         """
         Permanently deletes an entity. This action cannot be undone. Requires the `entities:d:<namespace>` scope.
@@ -2187,6 +2375,9 @@ class AsyncRawIdentityClient:
 
         id : str
 
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -2197,6 +2388,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}",
             method="DELETE",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -2239,6 +2433,7 @@ class AsyncRawIdentityClient:
         *,
         type: str,
         field: str,
+        context_id: typing.Optional[str] = None,
         value: typing.Optional[str] = OMIT,
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
@@ -2261,6 +2456,9 @@ class AsyncRawIdentityClient:
 
         field : str
             Name of the lookup field declared on the schema. For a field marked sensitive, this body variant is required (the GET variant rejects looking up by a sensitive value).
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         value : typing.Optional[str]
             Exact value to match. Mutually exclusive with `from`/`to` and `prefix`.
@@ -2294,6 +2492,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/entities/{encode_path_param(namespace)}/lookup",
             method="POST",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "type": type,
                 "field": field,
@@ -2357,6 +2558,7 @@ class AsyncRawIdentityClient:
         namespace: str,
         id: str,
         *,
+        context_id: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ModelDataVersionPage]:
@@ -2370,6 +2572,9 @@ class AsyncRawIdentityClient:
 
         id : str
             The Vectros-assigned ID (UUID) of the entity.
+
+        context_id : typing.Optional[str]
+            Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
 
         start_from : typing.Optional[str]
             Pagination cursor from a previous page's `nextCursor`.
@@ -2386,6 +2591,7 @@ class AsyncRawIdentityClient:
             f"v1/entities/{encode_path_param(namespace)}/{encode_path_param(id)}/versions",
             method="GET",
             params={
+                "contextId": context_id,
                 "startFrom": start_from,
             },
             request_options=request_options,
@@ -2421,15 +2627,22 @@ class AsyncRawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     async def get_namespace(
-        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Retrieves a single scope-namespace registration by name. The reserved built-ins `org` and `client` are always resolvable.
+        Retrieves a single scope-namespace registration by name.
 
         Parameters
         ----------
         namespace : str
             The namespace name.
+
+        context_id : typing.Optional[str]
+            An app context to resolve this namespace for — its own registration if it has one, else the tenant-wide one. Omit for the tenant-wide registration only.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2442,6 +2655,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace)}",
             method="GET",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -2480,12 +2696,18 @@ class AsyncRawIdentityClient:
         *,
         namespace: str,
         specificity_rank: int,
+        context_id: typing.Optional[str] = None,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        membership_record_type: typing.Optional[str] = OMIT,
+        membership_target_field: typing.Optional[str] = OMIT,
+        membership_context_id: typing.Optional[str] = OMIT,
+        membership_level_field: typing.Optional[str] = OMIT,
+        membership_levels: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name itself is immutable. Requires a root API key. The reserved built-ins cannot be updated.
+        Updates the mutable fields (`entityBacked`, `defaultSchemaId`, `specificityRank`) of a registered namespace. The namespace name and its `contextId` (which row is selected) are both immutable. Requires a root API key. `org` and `client` are updatable like any other namespace — there is no reserved-built-in exception.
 
         Parameters
         ----------
@@ -2493,16 +2715,34 @@ class AsyncRawIdentityClient:
             The namespace name.
 
         namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+
+        context_id : typing.Optional[str]
+            The app context that owns this registration. Omit for the tenant-wide registration.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        membership_record_type : typing.Optional[str]
+            Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
+
+        membership_target_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming the user a grant is FOR. It is an ordinary reference field, not an ownership field — the grant is owned by whoever created it, and the namespace value it applies to is the grant's own scope stamp, which is what your placement authority is checked against when you write it.
+
+        membership_context_id : typing.Optional[str]
+            Optional. Which app context holds the membership records. Required alongside the other membership fields on a TENANT-WIDE registration (records always belong to one app context, while a tenant-wide registration is account-wide). Meaningless — and rejected if it disagrees — on a registration owned by one context via `?contextId=`: that context's grants live in its own context by construction, so this field need not repeat it.
+
+        membership_level_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming a grant's LEVEL, so the same user can hold different levels in different values of this namespace — an admin of one team and a viewer of another. Supply it together with `membershipLevels`, or omit both for plain in-or-out membership. A role selects a level by naming `${{ member.scope.<namespace>:<level> }}`. Because the level is an ordinary field on an ordinary record, it is only as trustworthy as who may write that record type: grant create/update/delete on `membershipRecordType` to the people who ISSUE grants, never to the members those grants govern — a member who can update their own grant row can raise their own level, and it takes effect on their next request.
+
+        membership_levels : typing.Optional[typing.Sequence[str]]
+            Optional. The complete set of level labels this namespace allows, each following the namespace grammar. A role naming a level that is not in this list is rejected when it is authored, rather than silently matching nothing — so a typo is reported to whoever can fix it. Required alongside `membershipLevelField`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2515,11 +2755,19 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace_)}",
             method="PUT",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "namespace": namespace,
                 "entityBacked": entity_backed,
                 "defaultSchemaId": default_schema_id,
                 "specificityRank": specificity_rank,
+                "membershipRecordType": membership_record_type,
+                "membershipTargetField": membership_target_field,
+                "membershipContextId": membership_context_id,
+                "membershipLevelField": membership_level_field,
+                "membershipLevels": membership_levels,
             },
             headers={
                 "content-type": "application/json",
@@ -2580,15 +2828,22 @@ class AsyncRawIdentityClient:
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
     async def delete_namespace(
-        self, namespace: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        namespace: str,
+        *,
+        context_id: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[None]:
         """
-        Deletes a registered scope namespace. Requires a root API key. The reserved built-ins cannot be deleted. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
+        Deletes a registered scope namespace. Requires a root API key. `org` and `client` are deletable like any other namespace — there is no reserved-built-in exception. A namespace that still has entities cannot be deleted (409) — delete its entities first; this keeps them reachable by the account-teardown and erasure sweeps.
 
         Parameters
         ----------
         namespace : str
             The namespace name.
+
+        context_id : typing.Optional[str]
+            The app context that owns this registration. Omit for the tenant-wide registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2600,6 +2855,9 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             f"v1/namespaces/{encode_path_param(namespace)}",
             method="DELETE",
+            params={
+                "contextId": context_id,
+            },
             request_options=request_options,
         )
         try:
@@ -2652,10 +2910,11 @@ class AsyncRawIdentityClient:
         *,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        context_id: typing.Optional[str] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[NamespacePage]:
         """
-        Returns the scope namespaces registered in your account, with the reserved built-ins `org` and `client` listed first. Returns a `{data, nextCursor}` envelope.
+        Returns the scope namespaces registered in your account. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -2664,6 +2923,9 @@ class AsyncRawIdentityClient:
 
         limit : typing.Optional[int]
             Maximum registrations per page (1-100; defaults to 20).
+
+        context_id : typing.Optional[str]
+            List one app context's OWN registrations instead of the tenant-wide ones. Omit for the tenant-wide registrations only — a context's own registrations are never mixed into the unfiltered listing.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2679,6 +2941,7 @@ class AsyncRawIdentityClient:
             params={
                 "startFrom": start_from,
                 "limit": limit,
+                "contextId": context_id,
             },
             request_options=request_options,
         )
@@ -2706,26 +2969,50 @@ class AsyncRawIdentityClient:
         *,
         namespace: str,
         specificity_rank: int,
+        context_id: typing.Optional[str] = None,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        membership_record_type: typing.Optional[str] = OMIT,
+        membership_target_field: typing.Optional[str] = OMIT,
+        membership_context_id: typing.Optional[str] = OMIT,
+        membership_level_field: typing.Optional[str] = OMIT,
+        membership_levels: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key. The reserved names `org` and `client` are built in and cannot be registered.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
         namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. The reserved names `org` and `client` are built in and cannot be registered, changed, or deleted. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, unique across every namespace in your account, and not one of the two values reserved for the built-in namespaces (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
+
+        context_id : typing.Optional[str]
+            The app context to own this registration. Omit for a TENANT-WIDE registration visible to every context.
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        membership_record_type : typing.Optional[str]
+            Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
+
+        membership_target_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming the user a grant is FOR. It is an ordinary reference field, not an ownership field — the grant is owned by whoever created it, and the namespace value it applies to is the grant's own scope stamp, which is what your placement authority is checked against when you write it.
+
+        membership_context_id : typing.Optional[str]
+            Optional. Which app context holds the membership records. Required alongside the other membership fields on a TENANT-WIDE registration (records always belong to one app context, while a tenant-wide registration is account-wide). Meaningless — and rejected if it disagrees — on a registration owned by one context via `?contextId=`: that context's grants live in its own context by construction, so this field need not repeat it.
+
+        membership_level_field : typing.Optional[str]
+            Optional. The field on `membershipRecordType` naming a grant's LEVEL, so the same user can hold different levels in different values of this namespace — an admin of one team and a viewer of another. Supply it together with `membershipLevels`, or omit both for plain in-or-out membership. A role selects a level by naming `${{ member.scope.<namespace>:<level> }}`. Because the level is an ordinary field on an ordinary record, it is only as trustworthy as who may write that record type: grant create/update/delete on `membershipRecordType` to the people who ISSUE grants, never to the members those grants govern — a member who can update their own grant row can raise their own level, and it takes effect on their next request.
+
+        membership_levels : typing.Optional[typing.Sequence[str]]
+            Optional. The complete set of level labels this namespace allows, each following the namespace grammar. A role naming a level that is not in this list is rejected when it is authored, rather than silently matching nothing — so a typo is reported to whoever can fix it. Required alongside `membershipLevelField`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2738,11 +3025,22 @@ class AsyncRawIdentityClient:
         _response = await self._client_wrapper.httpx_client.request(
             "v1/namespaces",
             method="POST",
+            params={
+                "contextId": context_id,
+            },
             json={
                 "namespace": namespace,
                 "entityBacked": entity_backed,
                 "defaultSchemaId": default_schema_id,
                 "specificityRank": specificity_rank,
+                "membershipRecordType": membership_record_type,
+                "membershipTargetField": membership_target_field,
+                "membershipContextId": membership_context_id,
+                "membershipLevelField": membership_level_field,
+                "membershipLevels": membership_levels,
+            },
+            headers={
+                "content-type": "application/json",
             },
             request_options=request_options,
             omit=OMIT,
@@ -2815,7 +3113,7 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[UserPage]:
         """
-        Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope.
+        Returns a paginated list of the users in your account. Pass `externalId` to look up a single user by your own identifier. To filter on schema-declared lookup fields, supply `type` and `field` together with one lookup mode: `value` (exact match), `from`+`to` (range), or `prefix`. Requires the `users:r` scope. A context-confined credential only sees users who hold an access profile in the credential's own app context — others are silently absent from the page, not an error.
 
         Parameters
         ----------
@@ -3214,7 +3512,7 @@ class AsyncRawIdentityClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope.
+        Permanently deletes a user identity. This cannot be undone. If the user is a pending invitation, the associated access profile created for that invitation is also removed. Requires the `users:d` scope. Deleting your account's last OWNER is refused (409) — an account must always retain at least one owner. Called by a context-confined credential, deletion is also refused (409) when the user holds access in an app context other than the caller's own — remove the user from the caller's own context first, or use a credential with cross-context reach.
 
         Parameters
         ----------
@@ -3238,6 +3536,17 @@ class AsyncRawIdentityClient:
                 return AsyncHttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3282,7 +3591,7 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[UserPage]:
         """
-        Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+        Looks up users by a schema lookup field, with the query criteria carried in the request body rather than the URL. Use this when looking up by a sensitive (blind-indexed) field: the value is blind-indexed server-side and never appears in the URL, request logs, or proxies. The query semantics are identical to the GET /v1/users lookup, which rejects sensitive-field values and directs you here. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope. A context-confined credential only sees users who hold an access profile in the credential's own app context — others are silently absent from the page, not an error.
 
         Parameters
         ----------

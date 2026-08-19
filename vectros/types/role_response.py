@@ -46,7 +46,7 @@ class RoleResponse(UniversalBaseModel):
 
     scopes: typing.Optional[typing.List[ScopeClause]] = pydantic.Field(default=None)
     """
-    The role's permissions, expressed as one or more scope clauses. An action is permitted if any clause allows it and that clause's data scope matches the target — with one exception, an identity entity's own-namespace dimension when creating it, which is server-assigned and therefore exempt from the match at creation time only.
+    The role's permissions, expressed as one or more scope clauses. An action is permitted if any clause allows it and that clause's data scope matches the target — with two exceptions. An identity entity's own-namespace dimension when creating it is server-assigned and therefore exempt from the match at creation time only; and a clause naming a `granted_capabilities` entry this release does not recognize is denied entirely, so none of its actions apply.
     """
 
     created_at: typing_extensions.Annotated[

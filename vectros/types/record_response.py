@@ -108,7 +108,7 @@ class RecordResponse(UniversalBaseModel):
     ] = None
     scopes: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
     """
-    The record's scope ownership as canonical `namespace:value` entries (at most 2). `org` and `client` are built-in namespaces; any other is a custom scope you define. Set at creation, either explicitly or automatically from the calling token's identity. Empty for a record owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
+    The record's scope ownership as canonical `namespace:value` entries (at most 2). `org` and `client` are reserved namespace names; any other is one you registered yourself. Set at creation, either explicitly or automatically from the calling token's identity. Empty for a record owned by a user alone (or unowned). Filter lists by these values with `?scope=`.
     """
 
     index_status: typing_extensions.Annotated[
