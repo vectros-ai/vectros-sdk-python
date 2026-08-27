@@ -58,6 +58,31 @@ class AppContextResponse(UniversalBaseModel):
     Lifecycle status of the app context: `active` under normal operation; `purging` while an asynchronous delete is draining the context's data; `deleted` once that teardown completes. After you call DELETE on an app context (which returns 202 and drains asynchronously), poll this field to observe when the teardown has finished.
     """
 
+    metering_axis: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="meteringAxis"),
+        pydantic.Field(
+            alias="meteringAxis",
+            description="The declared per-principal metering axis for this app context, or absent if unset (context-only accounting).",
+        ),
+    ] = None
+    principal_burst_limit: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="principalBurstLimit"),
+        pydantic.Field(
+            alias="principalBurstLimit",
+            description="Per-principal, per-minute request cap for the opt-in per-principal burst-protection feature, or absent if unset.",
+        ),
+    ] = None
+    principal_usage_cap: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="principalUsageCap"),
+        pydantic.Field(
+            alias="principalUsageCap",
+            description="Per-principal, per-billing-period operation cap for the opt-in per-principal usage/quota feature, or absent if unset (usage is still tracked for visibility/billing without a cap when `meteringAxis` is set but this is absent).",
+        ),
+    ] = None
+
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
     else:

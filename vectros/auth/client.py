@@ -26,6 +26,7 @@ from ..types.scope_request import ScopeRequest
 from ..types.scoped_key_page import ScopedKeyPage
 from ..types.scoped_key_response import ScopedKeyResponse
 from ..types.self_signup_policy import SelfSignupPolicy
+from ..types.token_assume_response import TokenAssumeResponse
 from ..types.token_exchange_response import TokenExchangeResponse
 from ..types.usage_report_response import UsageReportResponse
 from .raw_client import AsyncRawAuthClient, RawAuthClient
@@ -465,8 +466,10 @@ class AuthClient:
         principal_id: str,
         upsert: typing.Optional[bool] = None,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
+        role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         status: typing.Optional[AccessProfileRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
@@ -484,13 +487,21 @@ class AuthClient:
             When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
-            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
+            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
+
+        role_ids : typing.Optional[typing.Sequence[str]]
+            References to one or more roles within the same context that together supply this principal's scopes. The effective grant is each named role's own clauses, concatenated in the order you list them — roles are composed additively, never merged, so each clause keeps meaning exactly what its own author wrote. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400. Every id must name a role that exists in this same app context, and no id may repeat. Changes to a role's scopes take effect for all referencing profiles.
+
+            Composition also decides what `POST /v1/auth/token/assume` will let this principal become: that check is made against ONE role's own `assumable` grant at a time, never against the combination, so listing two roles never creates an entitlement neither role granted on its own.
 
         role_id : typing.Optional[str]
-            Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
+            Deprecated single-role form of `roleIds`, accepted for backward compatibility and equivalent to `roleIds: ["<value>"]`. Setting both is a 400 — send `roleIds` alone. Reads always return `roleIds`; `roleId` is also returned, but only when exactly one role composes.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
             Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -521,8 +532,10 @@ class AuthClient:
             principal_id=principal_id,
             upsert=upsert,
             scopes=scopes,
+            role_ids=role_ids,
             role_id=role_id,
             identity_overrides=identity_overrides,
+            assumable=assumable,
             status=status,
             request_options=request_options,
         )
@@ -576,6 +589,9 @@ class AuthClient:
         name: str,
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        metering_axis: typing.Optional[str] = OMIT,
+        principal_burst_limit: typing.Optional[int] = OMIT,
+        principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
@@ -594,6 +610,15 @@ class AuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        metering_axis : typing.Optional[str]
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+
+        principal_burst_limit : typing.Optional[int]
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+
+        principal_usage_cap : typing.Optional[int]
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -617,7 +642,14 @@ class AuthClient:
         )
         """
         _response = self._raw_client.create_app_context(
-            context_id=context_id, name=name, upsert=upsert, description=description, request_options=request_options
+            context_id=context_id,
+            name=name,
+            upsert=upsert,
+            description=description,
+            metering_axis=metering_axis,
+            principal_burst_limit=principal_burst_limit,
+            principal_usage_cap=principal_usage_cap,
+            request_options=request_options,
         )
         return _response.data
 
@@ -677,6 +709,7 @@ class AuthClient:
         scopes: typing.Sequence[ScopeClause],
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
@@ -700,6 +733,9 @@ class AuthClient:
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -735,6 +771,7 @@ class AuthClient:
             scopes=scopes,
             upsert=upsert,
             description=description,
+            assumable=assumable,
             request_options=request_options,
         )
         return _response.data
@@ -782,8 +819,10 @@ class AuthClient:
         *,
         principal_id: str,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
+        role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         status: typing.Optional[AccessProfileRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
@@ -800,13 +839,21 @@ class AuthClient:
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
-            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
+            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
+
+        role_ids : typing.Optional[typing.Sequence[str]]
+            References to one or more roles within the same context that together supply this principal's scopes. The effective grant is each named role's own clauses, concatenated in the order you list them — roles are composed additively, never merged, so each clause keeps meaning exactly what its own author wrote. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400. Every id must name a role that exists in this same app context, and no id may repeat. Changes to a role's scopes take effect for all referencing profiles.
+
+            Composition also decides what `POST /v1/auth/token/assume` will let this principal become: that check is made against ONE role's own `assumable` grant at a time, never against the combination, so listing two roles never creates an entitlement neither role granted on its own.
 
         role_id : typing.Optional[str]
-            Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
+            Deprecated single-role form of `roleIds`, accepted for backward compatibility and equivalent to `roleIds: ["<value>"]`. Setting both is a 400 — send `roleIds` alone. Reads always return `roleIds`; `roleId` is also returned, but only when exactly one role composes.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
             Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -838,8 +885,10 @@ class AuthClient:
             principal_id_,
             principal_id=principal_id,
             scopes=scopes,
+            role_ids=role_ids,
             role_id=role_id,
             identity_overrides=identity_overrides,
+            assumable=assumable,
             status=status,
             request_options=request_options,
         )
@@ -921,6 +970,9 @@ class AuthClient:
         context_id: str,
         name: str,
         description: typing.Optional[str] = OMIT,
+        metering_axis: typing.Optional[str] = OMIT,
+        principal_burst_limit: typing.Optional[int] = OMIT,
+        principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
@@ -938,6 +990,15 @@ class AuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        metering_axis : typing.Optional[str]
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+
+        principal_burst_limit : typing.Optional[int]
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+
+        principal_usage_cap : typing.Optional[int]
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -962,7 +1023,14 @@ class AuthClient:
         )
         """
         _response = self._raw_client.update_app_context(
-            context_id_, context_id=context_id, name=name, description=description, request_options=request_options
+            context_id_,
+            context_id=context_id,
+            name=name,
+            description=description,
+            metering_axis=metering_axis,
+            principal_burst_limit=principal_burst_limit,
+            principal_usage_cap=principal_usage_cap,
+            request_options=request_options,
         )
         return _response.data
 
@@ -1050,6 +1118,7 @@ class AuthClient:
         name: str,
         scopes: typing.Sequence[ScopeClause],
         description: typing.Optional[str] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
@@ -1072,6 +1141,9 @@ class AuthClient:
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1108,6 +1180,7 @@ class AuthClient:
             name=name,
             scopes=scopes,
             description=description,
+            assumable=assumable,
             request_options=request_options,
         )
         return _response.data
@@ -1289,7 +1362,7 @@ class AuthClient:
 
     def get_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> IssuerResponse:
         """
-        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context.
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns 404 for an issuer registered under any other context unless you re-minted the bootstrap token pinned to that context.
 
         Parameters
         ----------
@@ -1317,6 +1390,91 @@ class AuthClient:
         )
         """
         _response = self._raw_client.get_issuer(issuer_id, request_options=request_options)
+        return _response.data
+
+    def update_issuer(
+        self,
+        issuer_id: str,
+        *,
+        issuer: typing.Optional[str] = OMIT,
+        jwks_uri: typing.Optional[str] = OMIT,
+        audience: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
+        sub_claim: typing.Optional[str] = OMIT,
+        email_claim: typing.Optional[str] = OMIT,
+        userinfo_uri: typing.Optional[str] = OMIT,
+        status: typing.Optional[str] = OMIT,
+        self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> IssuerResponse:
+        """
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        issuer : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        jwks_uri : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        audience : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        context_id : typing.Optional[str]
+            Routing-pin field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        sub_claim : typing.Optional[str]
+            Safe field — updatable. Omit to leave unchanged.
+
+        email_claim : typing.Optional[str]
+            Safe field — updatable. Omit to leave unchanged.
+
+        userinfo_uri : typing.Optional[str]
+            Safe field — updatable. The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source when `emailClaim` misses on the presented access token. Omit to leave unchanged. See `IssuerRequest.userinfoUri` for the full semantics.
+
+        status : typing.Optional[str]
+            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. Omit to leave unchanged.
+
+        self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        IssuerResponse
+            The updated issuer.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.update_issuer(
+            issuer_id="auth0-prod",
+        )
+        """
+        _response = self._raw_client.update_issuer(
+            issuer_id,
+            issuer=issuer,
+            jwks_uri=jwks_uri,
+            audience=audience,
+            context_id=context_id,
+            sub_claim=sub_claim,
+            email_claim=email_claim,
+            userinfo_uri=userinfo_uri,
+            status=status,
+            self_signup_policies=self_signup_policies,
+            request_options=request_options,
+        )
         return _response.data
 
     def delete_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
@@ -1358,7 +1516,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerPage:
         """
-        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. Returns a `{data, nextCursor}` envelope.
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns an empty page for a tenant whose issuers are all registered under a different context unless you re-minted the bootstrap token pinned to that context. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -1399,6 +1557,7 @@ class AuthClient:
         context_id: str,
         sub_claim: typing.Optional[str] = OMIT,
         email_claim: typing.Optional[str] = OMIT,
+        userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
@@ -1427,6 +1586,9 @@ class AuthClient:
 
         email_claim : typing.Optional[str]
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
+
+        userinfo_uri : typing.Optional[str]
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
@@ -1463,6 +1625,7 @@ class AuthClient:
             context_id=context_id,
             sub_claim=sub_claim,
             email_claim=email_claim,
+            userinfo_uri=userinfo_uri,
             self_signup_policies=self_signup_policies,
             request_options=request_options,
         )
@@ -1617,7 +1780,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Invite a new member to one of your app contexts by email. Creates a pending user with a pre-resolved access profile (their permissions on accept) and signs an invitation token. This call is idempotent on the combination of context and email: re-inviting the same email in the same context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Returns HTTP 201 on a new invite or a successful resend. Returns 409 if that email already belongs to an active or suspended member of the app context, or already has an identity elsewhere in your account (an email can currently belong to only one tenant per account, i.e. your test and live environments cannot share an email). When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
 
         Parameters
         ----------
@@ -1653,7 +1816,7 @@ class AuthClient:
         Returns
         -------
         CreateInviteResponse
-            Invitation created, or an existing pending invitation resent with a fresh token.
+            Invitation created; an existing pending invitation resent with a fresh token (same context); an existing pending invitation's scope extended to a new context (fresh token, same as a resend); an existing ACTIVE member granted immediate access to a new context (no token, no email — `emailSent` is false, `inviteExpiresAt`/`inviteToken`/`acceptLink` are absent); or, when an existing ACTIVE member's only credential doesn't work for the new context's identity provider, a normal independent invitation (its own new `userId`, a real token/accept link when `sendEmail` is false).
 
         Examples
         --------
@@ -1762,6 +1925,47 @@ class AuthClient:
             send_email=send_email,
             request_options=request_options,
         )
+        return _response.data
+
+    def assume_token(
+        self, *, request: typing.Dict[str, typing.Any], request_options: typing.Optional[RequestOptions] = None
+    ) -> TokenAssumeResponse:
+        """
+        Re-mints the presented `st_*` scoped token with one or more `identity.<namespace>` values changed — for a caller whose ROLE explicitly grants assuming those values (an invited hr-admin, a multi-org case-handler) and needs to change which value new writes place records under. The request body names one or more namespaces in canonical `scope:<namespace>` form, e.g. `{"scope:org": "orgB"}` — each value must be a plain literal, never a `${{ ... }}` placeholder. When you name MORE THAN ONE namespace, a single one of your roles must grant all of them together: the combination is never assembled from two different roles, because no role author would have vouched for it. `st_*`-only — a root API key or `ssk_*` scoped API key gets 403; neither needs this (root already has full authority, and an `ssk_*`'s identity shape is not what this resolves against).
+
+        **Only an original token may assume.** A token produced BY this endpoint cannot assume again (403) — every assume starts from the token you exchanged for, so the identity you end up with is always one a single role explicitly granted rather than a combination reached by chaining calls. Keep your original token if you need to switch more than once, or exchange for a new one.
+
+        **Entitlement is checked LIVE, against your roles as they are right now** — not against a copy frozen into your token when it was minted. The requested value must be explicitly granted by a role's `assumable` field for that namespace: a POINT check against the one value requested, and a deliberately separate, explicitly-authored question from what the role's `data_scope` permits reading or writing. Holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it.
+
+        **What is preserved, and what is not.** Every clause of your token that does not reference a requested namespace is preserved verbatim, as are all other claims (`partner_user_id`, `context_id`, mint attribution). Clauses that DO reference a requested namespace are kept only if they come from a role that authorized the new value. A role that does not authorize it loses all of its clauses touching that namespace — including any scoped to the value you already held. Assume into a value one role grants and you keep that role's reach, not the reach of roles that never vouched for it.
+
+        The re-minted token's `exp` is IDENTICAL to the presented token's — this call can never extend a session's life. A fresh, independently-revocable `jti` is stamped on every call, and (except when the presented token predates jti support and has none to chain from) the token also carries a `root_jti` revocation-lineage claim so revoking the token you started from closes every value ever assumed from it. Uses the ordinary Vectros `{"message":...}` error shape, not the OAuth envelope `POST /v1/auth/token/exchange` uses — this endpoint's caller is always Vectros-SDK code already holding a bearer token, never generic OAuth tooling.
+
+        Parameters
+        ----------
+        request : typing.Dict[str, typing.Any]
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        TokenAssumeResponse
+            The token was re-minted.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.assume_token(
+            request={"scope:org": "orgB"},
+        )
+        """
+        _response = self._raw_client.assume_token(request=request, request_options=request_options)
         return _response.data
 
     def exchange_token(
@@ -2334,8 +2538,10 @@ class AsyncAuthClient:
         principal_id: str,
         upsert: typing.Optional[bool] = None,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
+        role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         status: typing.Optional[AccessProfileRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
@@ -2353,13 +2559,21 @@ class AsyncAuthClient:
             When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
-            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
+            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
+
+        role_ids : typing.Optional[typing.Sequence[str]]
+            References to one or more roles within the same context that together supply this principal's scopes. The effective grant is each named role's own clauses, concatenated in the order you list them — roles are composed additively, never merged, so each clause keeps meaning exactly what its own author wrote. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400. Every id must name a role that exists in this same app context, and no id may repeat. Changes to a role's scopes take effect for all referencing profiles.
+
+            Composition also decides what `POST /v1/auth/token/assume` will let this principal become: that check is made against ONE role's own `assumable` grant at a time, never against the combination, so listing two roles never creates an entitlement neither role granted on its own.
 
         role_id : typing.Optional[str]
-            Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
+            Deprecated single-role form of `roleIds`, accepted for backward compatibility and equivalent to `roleIds: ["<value>"]`. Setting both is a 400 — send `roleIds` alone. Reads always return `roleIds`; `roleId` is also returned, but only when exactly one role composes.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
             Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -2398,8 +2612,10 @@ class AsyncAuthClient:
             principal_id=principal_id,
             upsert=upsert,
             scopes=scopes,
+            role_ids=role_ids,
             role_id=role_id,
             identity_overrides=identity_overrides,
+            assumable=assumable,
             status=status,
             request_options=request_options,
         )
@@ -2461,6 +2677,9 @@ class AsyncAuthClient:
         name: str,
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        metering_axis: typing.Optional[str] = OMIT,
+        principal_burst_limit: typing.Optional[int] = OMIT,
+        principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
@@ -2479,6 +2698,15 @@ class AsyncAuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        metering_axis : typing.Optional[str]
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+
+        principal_burst_limit : typing.Optional[int]
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+
+        principal_usage_cap : typing.Optional[int]
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2510,7 +2738,14 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create_app_context(
-            context_id=context_id, name=name, upsert=upsert, description=description, request_options=request_options
+            context_id=context_id,
+            name=name,
+            upsert=upsert,
+            description=description,
+            metering_axis=metering_axis,
+            principal_burst_limit=principal_burst_limit,
+            principal_usage_cap=principal_usage_cap,
+            request_options=request_options,
         )
         return _response.data
 
@@ -2578,6 +2813,7 @@ class AsyncAuthClient:
         scopes: typing.Sequence[ScopeClause],
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
@@ -2601,6 +2837,9 @@ class AsyncAuthClient:
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2644,6 +2883,7 @@ class AsyncAuthClient:
             scopes=scopes,
             upsert=upsert,
             description=description,
+            assumable=assumable,
             request_options=request_options,
         )
         return _response.data
@@ -2699,8 +2939,10 @@ class AsyncAuthClient:
         *,
         principal_id: str,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
+        role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
         identity_overrides: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         status: typing.Optional[AccessProfileRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AccessProfileResponse:
@@ -2717,13 +2959,21 @@ class AsyncAuthClient:
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
-            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
+            Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
+
+        role_ids : typing.Optional[typing.Sequence[str]]
+            References to one or more roles within the same context that together supply this principal's scopes. The effective grant is each named role's own clauses, concatenated in the order you list them — roles are composed additively, never merged, so each clause keeps meaning exactly what its own author wrote. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400. Every id must name a role that exists in this same app context, and no id may repeat. Changes to a role's scopes take effect for all referencing profiles.
+
+            Composition also decides what `POST /v1/auth/token/assume` will let this principal become: that check is made against ONE role's own `assumable` grant at a time, never against the combination, so listing two roles never creates an entitlement neither role granted on its own.
 
         role_id : typing.Optional[str]
-            Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.
+            Deprecated single-role form of `roleIds`, accepted for backward compatibility and equivalent to `roleIds: ["<value>"]`. Setting both is a 400 — send `roleIds` alone. Reads always return `roleIds`; `roleId` is also returned, but only when exactly one role composes.
 
         identity_overrides : typing.Optional[typing.Dict[str, typing.Any]]
             Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
             Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
@@ -2763,8 +3013,10 @@ class AsyncAuthClient:
             principal_id_,
             principal_id=principal_id,
             scopes=scopes,
+            role_ids=role_ids,
             role_id=role_id,
             identity_overrides=identity_overrides,
+            assumable=assumable,
             status=status,
             request_options=request_options,
         )
@@ -2864,6 +3116,9 @@ class AsyncAuthClient:
         context_id: str,
         name: str,
         description: typing.Optional[str] = OMIT,
+        metering_axis: typing.Optional[str] = OMIT,
+        principal_burst_limit: typing.Optional[int] = OMIT,
+        principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
@@ -2881,6 +3136,15 @@ class AsyncAuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        metering_axis : typing.Optional[str]
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+
+        principal_burst_limit : typing.Optional[int]
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+
+        principal_usage_cap : typing.Optional[int]
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2913,7 +3177,14 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.update_app_context(
-            context_id_, context_id=context_id, name=name, description=description, request_options=request_options
+            context_id_,
+            context_id=context_id,
+            name=name,
+            description=description,
+            metering_axis=metering_axis,
+            principal_burst_limit=principal_burst_limit,
+            principal_usage_cap=principal_usage_cap,
+            request_options=request_options,
         )
         return _response.data
 
@@ -3019,6 +3290,7 @@ class AsyncAuthClient:
         name: str,
         scopes: typing.Sequence[ScopeClause],
         description: typing.Optional[str] = OMIT,
+        assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
         """
@@ -3041,6 +3313,9 @@ class AsyncAuthClient:
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        assumable : typing.Optional[typing.Dict[str, typing.Any]]
+            The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3085,6 +3360,7 @@ class AsyncAuthClient:
             name=name,
             scopes=scopes,
             description=description,
+            assumable=assumable,
             request_options=request_options,
         )
         return _response.data
@@ -3300,7 +3576,7 @@ class AsyncAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> IssuerResponse:
         """
-        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context.
+        Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns 404 for an issuer registered under any other context unless you re-minted the bootstrap token pinned to that context.
 
         Parameters
         ----------
@@ -3336,6 +3612,99 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.get_issuer(issuer_id, request_options=request_options)
+        return _response.data
+
+    async def update_issuer(
+        self,
+        issuer_id: str,
+        *,
+        issuer: typing.Optional[str] = OMIT,
+        jwks_uri: typing.Optional[str] = OMIT,
+        audience: typing.Optional[str] = OMIT,
+        context_id: typing.Optional[str] = OMIT,
+        sub_claim: typing.Optional[str] = OMIT,
+        email_claim: typing.Optional[str] = OMIT,
+        userinfo_uri: typing.Optional[str] = OMIT,
+        status: typing.Optional[str] = OMIT,
+        self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> IssuerResponse:
+        """
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        issuer : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        jwks_uri : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        audience : typing.Optional[str]
+            Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        context_id : typing.Optional[str]
+            Routing-pin field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+
+        sub_claim : typing.Optional[str]
+            Safe field — updatable. Omit to leave unchanged.
+
+        email_claim : typing.Optional[str]
+            Safe field — updatable. Omit to leave unchanged.
+
+        userinfo_uri : typing.Optional[str]
+            Safe field — updatable. The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source when `emailClaim` misses on the presented access token. Omit to leave unchanged. See `IssuerRequest.userinfoUri` for the full semantics.
+
+        status : typing.Optional[str]
+            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. Omit to leave unchanged.
+
+        self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        IssuerResponse
+            The updated issuer.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.update_issuer(
+                issuer_id="auth0-prod",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.update_issuer(
+            issuer_id,
+            issuer=issuer,
+            jwks_uri=jwks_uri,
+            audience=audience,
+            context_id=context_id,
+            sub_claim=sub_claim,
+            email_claim=email_claim,
+            userinfo_uri=userinfo_uri,
+            status=status,
+            self_signup_policies=self_signup_policies,
+            request_options=request_options,
+        )
         return _response.data
 
     async def delete_issuer(self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
@@ -3385,7 +3754,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerPage:
         """
-        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. Returns a `{data, nextCursor}` envelope.
+        Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns an empty page for a tenant whose issuers are all registered under a different context unless you re-minted the bootstrap token pinned to that context. Returns a `{data, nextCursor}` envelope.
 
         Parameters
         ----------
@@ -3436,6 +3805,7 @@ class AsyncAuthClient:
         context_id: str,
         sub_claim: typing.Optional[str] = OMIT,
         email_claim: typing.Optional[str] = OMIT,
+        userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
@@ -3464,6 +3834,9 @@ class AsyncAuthClient:
 
         email_claim : typing.Optional[str]
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
+
+        userinfo_uri : typing.Optional[str]
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
@@ -3508,6 +3881,7 @@ class AsyncAuthClient:
             context_id=context_id,
             sub_claim=sub_claim,
             email_claim=email_claim,
+            userinfo_uri=userinfo_uri,
             self_signup_policies=self_signup_policies,
             request_options=request_options,
         )
@@ -3686,7 +4060,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Invite a new member to one of your app contexts by email. Creates a pending user with a pre-resolved access profile (their permissions on accept) and signs an invitation token. This call is idempotent on the combination of context and email: re-inviting the same email in the same context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Returns HTTP 201 on a new invite or a successful resend. Returns 409 if that email already belongs to an active or suspended member of the app context, or already has an identity elsewhere in your account (an email can currently belong to only one tenant per account, i.e. your test and live environments cannot share an email). When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
 
         Parameters
         ----------
@@ -3722,7 +4096,7 @@ class AsyncAuthClient:
         Returns
         -------
         CreateInviteResponse
-            Invitation created, or an existing pending invitation resent with a fresh token.
+            Invitation created; an existing pending invitation resent with a fresh token (same context); an existing pending invitation's scope extended to a new context (fresh token, same as a resend); an existing ACTIVE member granted immediate access to a new context (no token, no email — `emailSent` is false, `inviteExpiresAt`/`inviteToken`/`acceptLink` are absent); or, when an existing ACTIVE member's only credential doesn't work for the new context's identity provider, a normal independent invitation (its own new `userId`, a real token/accept link when `sendEmail` is false).
 
         Examples
         --------
@@ -3847,6 +4221,55 @@ class AsyncAuthClient:
             send_email=send_email,
             request_options=request_options,
         )
+        return _response.data
+
+    async def assume_token(
+        self, *, request: typing.Dict[str, typing.Any], request_options: typing.Optional[RequestOptions] = None
+    ) -> TokenAssumeResponse:
+        """
+        Re-mints the presented `st_*` scoped token with one or more `identity.<namespace>` values changed — for a caller whose ROLE explicitly grants assuming those values (an invited hr-admin, a multi-org case-handler) and needs to change which value new writes place records under. The request body names one or more namespaces in canonical `scope:<namespace>` form, e.g. `{"scope:org": "orgB"}` — each value must be a plain literal, never a `${{ ... }}` placeholder. When you name MORE THAN ONE namespace, a single one of your roles must grant all of them together: the combination is never assembled from two different roles, because no role author would have vouched for it. `st_*`-only — a root API key or `ssk_*` scoped API key gets 403; neither needs this (root already has full authority, and an `ssk_*`'s identity shape is not what this resolves against).
+
+        **Only an original token may assume.** A token produced BY this endpoint cannot assume again (403) — every assume starts from the token you exchanged for, so the identity you end up with is always one a single role explicitly granted rather than a combination reached by chaining calls. Keep your original token if you need to switch more than once, or exchange for a new one.
+
+        **Entitlement is checked LIVE, against your roles as they are right now** — not against a copy frozen into your token when it was minted. The requested value must be explicitly granted by a role's `assumable` field for that namespace: a POINT check against the one value requested, and a deliberately separate, explicitly-authored question from what the role's `data_scope` permits reading or writing. Holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it.
+
+        **What is preserved, and what is not.** Every clause of your token that does not reference a requested namespace is preserved verbatim, as are all other claims (`partner_user_id`, `context_id`, mint attribution). Clauses that DO reference a requested namespace are kept only if they come from a role that authorized the new value. A role that does not authorize it loses all of its clauses touching that namespace — including any scoped to the value you already held. Assume into a value one role grants and you keep that role's reach, not the reach of roles that never vouched for it.
+
+        The re-minted token's `exp` is IDENTICAL to the presented token's — this call can never extend a session's life. A fresh, independently-revocable `jti` is stamped on every call, and (except when the presented token predates jti support and has none to chain from) the token also carries a `root_jti` revocation-lineage claim so revoking the token you started from closes every value ever assumed from it. Uses the ordinary Vectros `{"message":...}` error shape, not the OAuth envelope `POST /v1/auth/token/exchange` uses — this endpoint's caller is always Vectros-SDK code already holding a bearer token, never generic OAuth tooling.
+
+        Parameters
+        ----------
+        request : typing.Dict[str, typing.Any]
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        TokenAssumeResponse
+            The token was re-minted.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.assume_token(
+                request={"scope:org": "orgB"},
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.assume_token(request=request, request_options=request_options)
         return _response.data
 
     async def exchange_token(

@@ -784,7 +784,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. `org` and `client` are reserved names, registered the same way as any other namespace.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
@@ -960,7 +960,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user. A context-confined credential additionally receives the collision echo (or, with `?upsert=true`, is allowed to overwrite) only when the colliding user holds an access profile in the credential's own app context — a cross-context collision otherwise gets the same uniform `400` instead of the other context's user data. One narrow exception on the plain (non-upsert) echo only: the CLI's no-code bootstrap credential can be echoed a colliding user across app contexts, needed for a blueprint to idempotently re-apply against a service principal it provisioned in a non-default context; this does not extend to `?upsert=true`.
 
         Parameters
         ----------
@@ -968,7 +968,7 @@ class IdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -989,7 +989,7 @@ class IdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -1000,7 +1000,7 @@ class IdentityClient:
         Returns
         -------
         UserResponse
-            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope, and a context-confined credential additionally reaches only a collision in its own app context, with one narrow exception for the CLI bootstrap credential (see the operation description).
 
         Examples
         --------
@@ -1077,7 +1077,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 
         Parameters
         ----------
@@ -1106,7 +1106,7 @@ class IdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -2199,7 +2199,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> NamespaceResponse:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. `org` and `client` are reserved names, registered the same way as any other namespace.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
@@ -2391,7 +2391,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
+        Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user. A context-confined credential additionally receives the collision echo (or, with `?upsert=true`, is allowed to overwrite) only when the colliding user holds an access profile in the credential's own app context — a cross-context collision otherwise gets the same uniform `400` instead of the other context's user data. One narrow exception on the plain (non-upsert) echo only: the CLI's no-code bootstrap credential can be echoed a colliding user across app contexts, needed for a blueprint to idempotently re-apply against a service principal it provisioned in a non-default context; this does not extend to `?upsert=true`.
 
         Parameters
         ----------
@@ -2399,7 +2399,7 @@ class AsyncIdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -2420,7 +2420,7 @@ class AsyncIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -2431,7 +2431,7 @@ class AsyncIdentityClient:
         Returns
         -------
         UserResponse
-            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope.
+            A user with the same `externalId` already existed and was returned (`created: false`) — unchanged for an idempotent create, or updated when `?upsert=true`. The plain (non-upsert) case additionally requires the `users:r` scope, and a context-confined credential additionally reaches only a collision in its own app context, with one narrow exception for the CLI bootstrap credential (see the operation description).
 
         Examples
         --------
@@ -2524,7 +2524,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UserResponse:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 
         Parameters
         ----------
@@ -2553,7 +2553,7 @@ class AsyncIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.

@@ -9,7 +9,7 @@ from .record_response import RecordResponse
 
 class BatchGetResponse(UniversalBaseModel):
     """
-    The subset of requested records you can access. Ids you cannot access are silently omitted rather than reported as errors, so a missing id never reveals whether that record exists. Reserved for a future release: the endpoint currently returns HTTP 501 (Not Implemented).
+    The subset of requested records you can access. Ids you cannot access are silently omitted rather than reported as errors, so a missing id never reveals whether that record exists.
     """
 
     data: typing.Optional[typing.List[RecordResponse]] = pydantic.Field(default=None)

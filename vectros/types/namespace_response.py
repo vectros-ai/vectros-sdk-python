@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class NamespaceResponse(UniversalBaseModel):
     """
-    A scope-namespace registration — declares whether values in the namespace resolve to identity entities. `org` and `client` are reserved namespace names, registered the same way as any other.
+    A scope-namespace registration — declares whether values in the namespace resolve to identity entities. `org` and `client` are reserved namespace names, registered the same explicit way as any other — nothing provisions them automatically.
     """
 
     namespace: typing.Optional[str] = pydantic.Field(default=None)

@@ -25,15 +25,23 @@ class AccessProfileRequest(UniversalBaseModel):
     ]
     scopes: typing.Optional[typing.List[ScopeClause]] = pydantic.Field(default=None)
     """
-    Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400.
+    Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
     """
 
+    role_ids: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="roleIds"),
+        pydantic.Field(
+            alias="roleIds",
+            description="References to one or more roles within the same context that together supply this principal's scopes. The effective grant is each named role's own clauses, concatenated in the order you list them — roles are composed additively, never merged, so each clause keeps meaning exactly what its own author wrote. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400. Every id must name a role that exists in this same app context, and no id may repeat. Changes to a role's scopes take effect for all referencing profiles. \n\nComposition also decides what `POST /v1/auth/token/assume` will let this principal become: that check is made against ONE role's own `assumable` grant at a time, never against the combination, so listing two roles never creates an entitlement neither role granted on its own.",
+        ),
+    ] = None
     role_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="roleId"),
         pydantic.Field(
             alias="roleId",
-            description="Reference to a role within the same context that supplies this principal's scopes. Provide exactly one of `scopes` or `roleId` — setting both, or neither, returns a 400. Changes to the role's scopes take effect for all referencing profiles.",
+            description='Deprecated single-role form of `roleIds`, accepted for backward compatibility and equivalent to `roleIds: ["<value>"]`. Setting both is a 400 — send `roleIds` alone. Reads always return `roleIds`; `roleId` is also returned, but only when exactly one role composes.',
         ),
     ] = None
     identity_overrides: typing_extensions.Annotated[
@@ -44,6 +52,11 @@ class AccessProfileRequest(UniversalBaseModel):
             description="Optional per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form — `scope:org` and `scope:client` for the reserved namespaces, or any namespace you have registered (for example `scope:group`). At most two namespaces may be overridden; any other key is rejected. Each value is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Omitting the field leaves any existing overrides unchanged; sending an empty map clears them, and sending a populated map replaces them wholesale — a namespace absent from the map you send is removed. If you use a scoped credential, two bounds apply and either returns 403: you may only set a value your own identity holds, and you may only change or clear a value the profile already holds if that value is yours as well — so clearing or repointing another principal's established identity is refused. A root API key (`sk_`) is exempt from both.",
         ),
     ] = None
+    assumable: typing.Optional[typing.Dict[str, typing.Any]] = pydantic.Field(default=None)
+    """
+    The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
+    """
+
     status: typing.Optional[AccessProfileRequestStatus] = pydantic.Field(default=None)
     """
     Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.

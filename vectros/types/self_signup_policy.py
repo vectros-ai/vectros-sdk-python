@@ -8,7 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class SelfSignupPolicy(UniversalBaseModel):
     """
-    Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+    Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
     """
 
     signup_type: str = pydantic.Field()

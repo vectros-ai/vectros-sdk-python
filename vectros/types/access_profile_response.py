@@ -39,15 +39,23 @@ class AccessProfileResponse(UniversalBaseModel):
     ] = None
     scopes: typing.Optional[typing.List[ScopeClause]] = pydantic.Field(default=None)
     """
-    Inline scope clauses granted to the principal. Mutually exclusive with `roleId` — exactly one of the two is present.
+    Inline scope clauses granted to the principal. Mutually exclusive with `roleIds` — exactly one of the two is present.
     """
 
+    role_ids: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="roleIds"),
+        pydantic.Field(
+            alias="roleIds",
+            description="The roles that together supply this principal's scopes, in composition order — the effective grant is each role's own clauses concatenated. Mutually exclusive with `scopes`: exactly one of the two is present.",
+        ),
+    ] = None
     role_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="roleId"),
         pydantic.Field(
             alias="roleId",
-            description="Reference to a role that supplies this principal's scopes. Mutually exclusive with `scopes` — exactly one of the two is present.",
+            description="Deprecated single-role view of `roleIds`, present only when exactly one role composes. A profile composing two or more roles omits this field entirely — read `roleIds`, which is always present for a role-referencing profile.",
         ),
     ] = None
     identity_overrides: typing_extensions.Annotated[
@@ -58,6 +66,11 @@ class AccessProfileResponse(UniversalBaseModel):
             description="Per-context identity overrides, keyed by ownership namespace in `scope:<namespace>` form (for example `scope:org`, `scope:client`, `scope:group`). Read back exactly as authored.",
         ),
     ] = None
+    assumable: typing.Optional[typing.Dict[str, typing.Any]] = pydantic.Field(default=None)
+    """
+    Which values, per `scope:<namespace>`, a holder of this profile may assume via `POST /v1/auth/token/assume`. Only meaningful when `scopes` (not `roleId`) is set — see `assumable`'s own request-field doc. Absent when the profile grants no assumption of anything (the common case, and always the case for a role-referencing profile — the grant lives on the Role instead).
+    """
+
     status: typing.Optional[str] = pydantic.Field(default=None)
     """
     Profile lifecycle status: `active` or `suspended`.

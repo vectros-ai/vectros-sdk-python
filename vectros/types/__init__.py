@@ -191,6 +191,7 @@ if typing.TYPE_CHECKING:
     from .tenant_detail import TenantDetail
     from .tenant_inference_section import TenantInferenceSection
     from .tenants import Tenants
+    from .token_assume_response import TokenAssumeResponse
     from .token_exchange_response import TokenExchangeResponse
     from .truncation_warning_event import TruncationWarningEvent
     from .truncation_warning_event_event import TruncationWarningEventEvent
@@ -386,6 +387,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "TenantDetail": ".tenant_detail",
     "TenantInferenceSection": ".tenant_inference_section",
     "Tenants": ".tenants",
+    "TokenAssumeResponse": ".token_assume_response",
     "TokenExchangeResponse": ".token_exchange_response",
     "TruncationWarningEvent": ".truncation_warning_event",
     "TruncationWarningEventEvent": ".truncation_warning_event_event",
@@ -605,6 +607,7 @@ __all__ = [
     "TenantDetail",
     "TenantInferenceSection",
     "Tenants",
+    "TokenAssumeResponse",
     "TokenExchangeResponse",
     "TruncationWarningEvent",
     "TruncationWarningEventEvent",

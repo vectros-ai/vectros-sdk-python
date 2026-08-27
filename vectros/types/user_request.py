@@ -64,7 +64,7 @@ class UserRequest(UniversalBaseModel):
         FieldMetadata(alias="externalSubject"),
         pydantic.Field(
             alias="externalSubject",
-            description="The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated.",
+            description="The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.",
         ),
     ] = None
     email_verified_attestation: typing_extensions.Annotated[

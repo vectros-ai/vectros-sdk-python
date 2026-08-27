@@ -46,7 +46,7 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchGetResponse:
         """
-        Reserved endpoint for fetching multiple records by ID in one call. When available, the response will contain only the records you can see; any IDs that do not exist or are outside your scope are silently omitted (there is no per-ID existence signal), matching the not-found behavior of the single-record GET. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+        Fetches multiple records by ID in one call (`ids`, maximum 100). The response contains only the records you can access — any id that does not exist, belongs to another account/AppContext, or is outside your token's scope is silently omitted, with no per-id existence signal, matching the not-found behavior of the single-record GET. Payloads are hydrated the same way a by-id GET hydrates them (payloads externalized to object storage are rehydrated for this response). Requires the `records:r` scope (and, for a scoped token, `records:r:<type>` per record type).
 
         Parameters
         ----------
@@ -59,7 +59,7 @@ class RecordsClient:
         Returns
         -------
         BatchGetResponse
-            The subset of the requested records you can see. This is the reserved response shape; the endpoint does not yet return it.
+            The subset of the requested records you can access, in no guaranteed order.
 
         Examples
         --------
@@ -907,7 +907,7 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchGetResponse:
         """
-        Reserved endpoint for fetching multiple records by ID in one call. When available, the response will contain only the records you can see; any IDs that do not exist or are outside your scope are silently omitted (there is no per-ID existence signal), matching the not-found behavior of the single-record GET. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+        Fetches multiple records by ID in one call (`ids`, maximum 100). The response contains only the records you can access — any id that does not exist, belongs to another account/AppContext, or is outside your token's scope is silently omitted, with no per-id existence signal, matching the not-found behavior of the single-record GET. Payloads are hydrated the same way a by-id GET hydrates them (payloads externalized to object storage are rehydrated for this response). Requires the `records:r` scope (and, for a scoped token, `records:r:<type>` per record type).
 
         Parameters
         ----------
@@ -920,7 +920,7 @@ class AsyncRecordsClient:
         Returns
         -------
         BatchGetResponse
-            The subset of the requested records you can see. This is the reserved response shape; the endpoint does not yet return it.
+            The subset of the requested records you can access, in no guaranteed order.
 
         Examples
         --------

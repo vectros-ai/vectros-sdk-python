@@ -49,6 +49,14 @@ class IssuerResponse(UniversalBaseModel):
         FieldMetadata(alias="emailClaim"),
         pydantic.Field(alias="emailClaim", description="The subject-email claim."),
     ] = None
+    userinfo_uri: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="userinfoUri"),
+        pydantic.Field(
+            alias="userinfoUri",
+            description="The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source. Absent when not configured.",
+        ),
+    ] = None
     status: typing.Optional[str] = pydantic.Field(default=None)
     """
     `active` or `suspended`. A suspended issuer is registered but its tokens are no longer accepted for exchange.

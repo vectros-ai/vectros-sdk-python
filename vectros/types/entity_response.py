@@ -28,6 +28,14 @@ class EntityResponse(UniversalBaseModel):
     The namespace this entity belongs to.
     """
 
+    context_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="contextId"),
+        pydantic.Field(
+            alias="contextId",
+            description="The app context that owns this entity, or null for a TENANT-WIDE entity visible to every app context. Mirrors the owning namespace registration's `contextId` (see `GET /v1/namespaces`) — a context-owned namespace's entities all carry that same context.",
+        ),
+    ] = None
     external_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="externalId"),

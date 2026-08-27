@@ -2220,7 +2220,7 @@ client.auth.get_usage(
 <dl>
 <dd>
 
-Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context.
+Retrieves a single registered issuer by issuerId. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns 404 for an issuer registered under any other context unless you re-minted the bootstrap token pinned to that context.
 </dd>
 </dl>
 </dd>
@@ -2261,6 +2261,150 @@ client.auth.get_issuer(
 <dd>
 
 **issuer_id:** `str` — The issuer's slug.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">update_issuer</a>(...) -> IssuerResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.update_issuer(
+    issuer_id="auth0-prod",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**issuer_id:** `str` — The issuer's slug.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**issuer:** `typing.Optional[str]` — Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**jwks_uri:** `typing.Optional[str]` — Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**audience:** `typing.Optional[str]` — Trust-anchor field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**context_id:** `typing.Optional[str]` — Routing-pin field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sub_claim:** `typing.Optional[str]` — Safe field — updatable. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**email_claim:** `typing.Optional[str]` — Safe field — updatable. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**userinfo_uri:** `typing.Optional[str]` — Safe field — updatable. The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source when `emailClaim` misses on the presented access token. Omit to leave unchanged. See `IssuerRequest.userinfoUri` for the full semantics.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**status:** `typing.Optional[str]` — Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
     
 </dd>
 </dl>
@@ -2364,7 +2508,7 @@ client.auth.delete_issuer(
 <dl>
 <dd>
 
-Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. Returns a `{data, nextCursor}` envelope.
+Returns the issuers registered in your tenant. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context sees only the issuers registered in that context; a root API key sees every context. An ordinary bootstrap credential that didn't specify a context resolves to the `default` app context specifically, not every context — so this call returns an empty page for a tenant whose issuers are all registered under a different context unless you re-minted the bootstrap token pinned to that context. Returns a `{data, nextCursor}` envelope.
 </dd>
 </dl>
 </dd>
@@ -2535,6 +2679,14 @@ client.auth.register_issuer(
 <dd>
 
 **email_claim:** `typing.Optional[str]` — The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**userinfo_uri:** `typing.Optional[str]` — The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
     
 </dd>
 </dl>
@@ -2835,7 +2987,7 @@ client.auth.mint_token(
 <dl>
 <dd>
 
-Invite a new member to one of your app contexts by email. Creates a pending user with a pre-resolved access profile (their permissions on accept) and signs an invitation token. This call is idempotent on the combination of context and email: re-inviting the same email in the same context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Returns HTTP 201 on a new invite or a successful resend. Returns 409 if that email already belongs to an active or suspended member of the app context, or already has an identity elsewhere in your account (an email can currently belong to only one tenant per account, i.e. your test and live environments cannot share an email). When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
 </dd>
 </dl>
 </dd>
@@ -2952,6 +3104,88 @@ client.auth.resend_invite(
 <dd>
 
 **request:** `CreateInviteRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">assume_token</a>(...) -> TokenAssumeResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Re-mints the presented `st_*` scoped token with one or more `identity.<namespace>` values changed — for a caller whose ROLE explicitly grants assuming those values (an invited hr-admin, a multi-org case-handler) and needs to change which value new writes place records under. The request body names one or more namespaces in canonical `scope:<namespace>` form, e.g. `{"scope:org": "orgB"}` — each value must be a plain literal, never a `${{ ... }}` placeholder. When you name MORE THAN ONE namespace, a single one of your roles must grant all of them together: the combination is never assembled from two different roles, because no role author would have vouched for it. `st_*`-only — a root API key or `ssk_*` scoped API key gets 403; neither needs this (root already has full authority, and an `ssk_*`'s identity shape is not what this resolves against). 
+
+**Only an original token may assume.** A token produced BY this endpoint cannot assume again (403) — every assume starts from the token you exchanged for, so the identity you end up with is always one a single role explicitly granted rather than a combination reached by chaining calls. Keep your original token if you need to switch more than once, or exchange for a new one. 
+
+**Entitlement is checked LIVE, against your roles as they are right now** — not against a copy frozen into your token when it was minted. The requested value must be explicitly granted by a role's `assumable` field for that namespace: a POINT check against the one value requested, and a deliberately separate, explicitly-authored question from what the role's `data_scope` permits reading or writing. Holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. 
+
+**What is preserved, and what is not.** Every clause of your token that does not reference a requested namespace is preserved verbatim, as are all other claims (`partner_user_id`, `context_id`, mint attribution). Clauses that DO reference a requested namespace are kept only if they come from a role that authorized the new value. A role that does not authorize it loses all of its clauses touching that namespace — including any scoped to the value you already held. Assume into a value one role grants and you keep that role's reach, not the reach of roles that never vouched for it. 
+
+The re-minted token's `exp` is IDENTICAL to the presented token's — this call can never extend a session's life. A fresh, independently-revocable `jti` is stamped on every call, and (except when the presented token predates jti support and has none to chain from) the token also carries a `root_jti` revocation-lineage claim so revoking the token you started from closes every value ever assumed from it. Uses the ordinary Vectros `{"message":...}` error shape, not the OAuth envelope `POST /v1/auth/token/exchange` uses — this endpoint's caller is always Vectros-SDK code already holding a bearer token, never generic OAuth tooling.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.assume_token(
+    request={
+        "scope:org": "orgB"
+    },
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `typing.Dict[str, typing.Any]` — One or more `scope:<namespace>` keys, each mapped to the plain literal value to assume. Every named namespace must be granted by ONE single composing role.
     
 </dd>
 </dl>
@@ -5388,7 +5622,7 @@ client.identity.list_namespaces()
 <dl>
 <dd>
 
-Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. `org` and `client` are reserved names, registered the same way as any other namespace.
+Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 </dd>
 </dl>
 </dd>
@@ -5618,7 +5852,7 @@ client.identity.list_users(
 <dl>
 <dd>
 
-Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user.
+Creates a user identity in your account. The operation is idempotent on `externalId`: if a user with the same `externalId` already exists, the existing record is returned instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing user was returned) tells the two apart. To overwrite an existing user's mutable fields (email, status, payload, schema binding) instead of returning it unchanged, set `?upsert=true` (this also requires the `users:u` scope). Requires the `users:c` scope to create. Being returned the existing user on a collision is a read of that user's data and additionally requires the `users:r` scope — a credential holding `users:c` alone receives a `400` ("already exists") on collision instead of the user. A context-confined credential additionally receives the collision echo (or, with `?upsert=true`, is allowed to overwrite) only when the colliding user holds an access profile in the credential's own app context — a cross-context collision otherwise gets the same uniform `400` instead of the other context's user data. One narrow exception on the plain (non-upsert) echo only: the CLI's no-code bootstrap credential can be echoed a colliding user across app contexts, needed for a blueprint to idempotently re-apply against a service principal it provisioned in a non-default context; this does not extend to `?upsert=true`.
 </dd>
 </dl>
 </dd>
@@ -5666,7 +5900,7 @@ client.identity.create_user(
 <dl>
 <dd>
 
-**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`.
+**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
     
 </dd>
 </dl>
@@ -5770,7 +6004,7 @@ client.identity.get_user(
 <dl>
 <dd>
 
-Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. Requires the `users:u` scope.
+Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 </dd>
 </dl>
 </dd>
@@ -7520,7 +7754,7 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
-Reserved endpoint for fetching multiple records by ID in one call. When available, the response will contain only the records you can see; any IDs that do not exist or are outside your scope are silently omitted (there is no per-ID existence signal), matching the not-found behavior of the single-record GET. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+Fetches multiple records by ID in one call (`ids`, maximum 100). The response contains only the records you can access — any id that does not exist, belongs to another account/AppContext, or is outside your token's scope is silently omitted, with no per-id existence signal, matching the not-found behavior of the single-record GET. Payloads are hydrated the same way a by-id GET hydrates them (payloads externalized to object storage are rehydrated for this response). Requires the `records:r` scope (and, for a scoped token, `records:r:<type>` per record type).
 </dd>
 </dl>
 </dd>
