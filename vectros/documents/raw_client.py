@@ -690,6 +690,8 @@ class RawDocumentsClient:
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
+        sort_from: typing.Optional[str] = None,
+        sort_to: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         order: typing.Optional[LookupDocumentsRequestOrder] = None,
@@ -719,6 +721,12 @@ class RawDocumentsClient:
 
         prefix : typing.Optional[str]
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
@@ -753,6 +761,8 @@ class RawDocumentsClient:
                 "from": from_,
                 "to": to,
                 "prefix": prefix,
+                "sortFrom": sort_from,
+                "sortTo": sort_to,
                 "startFrom": start_from,
                 "limit": limit,
                 "order": order,
@@ -800,6 +810,8 @@ class RawDocumentsClient:
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
         prefix: typing.Optional[str] = OMIT,
+        sort_from: typing.Optional[str] = OMIT,
+        sort_to: typing.Optional[str] = OMIT,
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[DocumentLookupRequestOrder] = OMIT,
@@ -829,6 +841,12 @@ class RawDocumentsClient:
 
         prefix : typing.Optional[str]
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -863,6 +881,8 @@ class RawDocumentsClient:
                 "from": from_,
                 "to": to,
                 "prefix": prefix,
+                "sortFrom": sort_from,
+                "sortTo": sort_to,
                 "startFrom": start_from,
                 "limit": limit,
                 "order": order,
@@ -1893,6 +1913,8 @@ class AsyncRawDocumentsClient:
         from_: typing.Optional[str] = None,
         to: typing.Optional[str] = None,
         prefix: typing.Optional[str] = None,
+        sort_from: typing.Optional[str] = None,
+        sort_to: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         order: typing.Optional[LookupDocumentsRequestOrder] = None,
@@ -1922,6 +1944,12 @@ class AsyncRawDocumentsClient:
 
         prefix : typing.Optional[str]
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
@@ -1956,6 +1984,8 @@ class AsyncRawDocumentsClient:
                 "from": from_,
                 "to": to,
                 "prefix": prefix,
+                "sortFrom": sort_from,
+                "sortTo": sort_to,
                 "startFrom": start_from,
                 "limit": limit,
                 "order": order,
@@ -2003,6 +2033,8 @@ class AsyncRawDocumentsClient:
         from_: typing.Optional[str] = OMIT,
         to: typing.Optional[str] = OMIT,
         prefix: typing.Optional[str] = OMIT,
+        sort_from: typing.Optional[str] = OMIT,
+        sort_to: typing.Optional[str] = OMIT,
         start_from: typing.Optional[str] = OMIT,
         limit: typing.Optional[int] = OMIT,
         order: typing.Optional[DocumentLookupRequestOrder] = OMIT,
@@ -2032,6 +2064,12 @@ class AsyncRawDocumentsClient:
 
         prefix : typing.Optional[str]
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
+
+        sort_from : typing.Optional[str]
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+
+        sort_to : typing.Optional[str]
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -2066,6 +2104,8 @@ class AsyncRawDocumentsClient:
                 "from": from_,
                 "to": to,
                 "prefix": prefix,
+                "sortFrom": sort_from,
+                "sortTo": sort_to,
                 "startFrom": start_from,
                 "limit": limit,
                 "order": order,

@@ -215,7 +215,7 @@ class InferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[RagStreamEvent]:
         """
-        Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if lower-scoring results were dropped to fit the model's context window, then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
+        Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if some retrieved results were dropped before the prompt was built — either because they didn't fit the model's context window or because a result had no groundable text to include — then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -499,7 +499,7 @@ class AsyncInferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[RagStreamEvent]:
         """
-        Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if lower-scoring results were dropped to fit the model's context window, then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
+        Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if some retrieved results were dropped before the prompt was built — either because they didn't fit the model's context window or because a result had no groundable text to include — then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
 
         Parameters
         ----------

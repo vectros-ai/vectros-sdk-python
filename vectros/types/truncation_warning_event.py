@@ -12,7 +12,7 @@ from .truncation_warning_event_reason import TruncationWarningEventReason
 
 class TruncationWarningEvent(UniversalBaseModel):
     """
-    Emitted by `POST /v1/rag` when the retrieved results exceed the model's context window. Lower-scoring results are dropped before the prompt is built, so the answer is grounded on fewer results than were retrieved.
+    Emitted by `POST /v1/rag` when one or more retrieved results were dropped before the prompt was built, for either (or both) of two independent reasons: the results didn't fit the model's context window (`truncatedCount`), or a result had no groundable text to include at all (`noContentCount`) — so the answer is grounded on fewer results than were retrieved.
     """
 
     event: TruncationWarningEventEvent = pydantic.Field()
@@ -23,19 +23,37 @@ class TruncationWarningEvent(UniversalBaseModel):
     results_requested: typing_extensions.Annotated[
         int,
         FieldMetadata(alias="resultsRequested"),
-        pydantic.Field(alias="resultsRequested", description="The number of results retrieved before truncation."),
+        pydantic.Field(
+            alias="resultsRequested", description="The number of results retrieved before any were dropped."
+        ),
     ]
     results_used: typing_extensions.Annotated[
         int,
         FieldMetadata(alias="resultsUsed"),
         pydantic.Field(
             alias="resultsUsed",
-            description="The number of results actually included in the prompt after dropping lower-scoring overflow.",
+            description="The number of results actually included in the prompt — `resultsRequested` minus `truncatedCount` minus `noContentCount`.",
+        ),
+    ]
+    truncated_count: typing_extensions.Annotated[
+        int,
+        FieldMetadata(alias="truncatedCount"),
+        pydantic.Field(
+            alias="truncatedCount",
+            description="How many of the dropped results were cut for context-window budget reasons (lower-scoring overflow). 0 if none were.",
+        ),
+    ]
+    no_content_count: typing_extensions.Annotated[
+        int,
+        FieldMetadata(alias="noContentCount"),
+        pydantic.Field(
+            alias="noContentCount",
+            description="How many of the dropped results had no groundable text to include at all, independent of budget. 0 if none were.",
         ),
     ]
     reason: TruncationWarningEventReason = pydantic.Field()
     """
-    Why truncation occurred. Currently only `context_window_budget` (the results did not fit the model's context window).
+    A single human-readable summary of why results were dropped: `context_window_budget` (only the budget reason applied), `no_groundable_content` (only the no-content reason applied), or `context_window_budget_and_no_content` (both applied). A caller wanting exact attribution should read `truncatedCount`/`noContentCount` directly rather than parse this field.
     """
 
     if IS_PYDANTIC_V2:

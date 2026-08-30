@@ -2,4 +2,6 @@
 
 import typing
 
-TruncationWarningEventReason = typing.Union[typing.Literal["context_window_budget"], typing.Any]
+TruncationWarningEventReason = typing.Union[
+    typing.Literal["context_window_budget", "no_groundable_content", "context_window_budget_and_no_content"], typing.Any
+]

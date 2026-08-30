@@ -32,7 +32,7 @@ class SearchResult(UniversalBaseModel):
     ] = None
     score: typing.Optional[float] = pydantic.Field(default=None)
     """
-    The combined relevance score that fuses the text and semantic signals (reciprocal rank fusion). This is the primary sort key — a higher value means a more relevant result.
+    The primary sort key — a higher value means a more relevant result — but its SCALE depends on `mode`. In HYBRID mode this is a Reciprocal Rank Fusion (RRF) value: 1/(60+rank) per leg the result appears in, summed across legs, so it is small and tightly clustered (a hit ranked top on one leg scores ~0.016; ranked top on both, ~0.033) and is NOT a 0-1 confidence — don't threshold against it as one. In TEXT- or SEMANTIC-only mode, this is that engine's own native score (roughly a 0-1 cosine similarity for SEMANTIC) on a genuinely different scale — never compare scores across modes.
     """
 
     text_score: typing_extensions.Annotated[

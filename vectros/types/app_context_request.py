@@ -31,6 +31,14 @@ class AppContextRequest(UniversalBaseModel):
     Optional free-text description of what this app context is for.
     """
 
+    company_name: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="companyName"),
+        pydantic.Field(
+            alias="companyName",
+            description="Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.",
+        ),
+    ] = None
     metering_axis: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="meteringAxis"),

@@ -59,6 +59,12 @@ class RagStreamEvent_TruncationWarning(UniversalBaseModel):
     results_used: typing_extensions.Annotated[
         int, FieldMetadata(alias="resultsUsed"), pydantic.Field(alias="resultsUsed")
     ]
+    truncated_count: typing_extensions.Annotated[
+        int, FieldMetadata(alias="truncatedCount"), pydantic.Field(alias="truncatedCount")
+    ]
+    no_content_count: typing_extensions.Annotated[
+        int, FieldMetadata(alias="noContentCount"), pydantic.Field(alias="noContentCount")
+    ]
     reason: TruncationWarningEventReason
 
     if IS_PYDANTIC_V2:

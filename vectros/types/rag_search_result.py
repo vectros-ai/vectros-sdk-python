@@ -31,7 +31,7 @@ class RagSearchResult(UniversalBaseModel):
     ] = None
     score: float = pydantic.Field()
     """
-    The combined relevance score from hybrid ranking. Higher is more relevant.
+    Higher is more relevant, but the SCALE depends on the search `mode`. In HYBRID mode this is a Reciprocal Rank Fusion (RRF) value: 1/(60+rank) per leg the result appears in, summed across legs — small and tightly clustered (a hit ranked top on one leg scores ~0.016; ranked top on both, ~0.033), not a 0-1 confidence. In TEXT- or SEMANTIC-only mode, this is that engine's own native score on a different scale — never compare scores across modes.
     """
 
     text_score: typing_extensions.Annotated[

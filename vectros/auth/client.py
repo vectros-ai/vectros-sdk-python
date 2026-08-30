@@ -589,13 +589,14 @@ class AuthClient:
         name: str,
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
@@ -606,10 +607,13 @@ class AuthClient:
             Human-readable display name for this app context. Required.
 
         upsert : typing.Optional[bool]
-            When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+            When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        company_name : typing.Optional[str]
+            Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
             Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
@@ -646,6 +650,7 @@ class AuthClient:
             name=name,
             upsert=upsert,
             description=description,
+            company_name=company_name,
             metering_axis=metering_axis,
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
@@ -970,13 +975,14 @@ class AuthClient:
         context_id: str,
         name: str,
         description: typing.Optional[str] = OMIT,
+        company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Updates the name and/or description of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+        Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -990,6 +996,9 @@ class AuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        company_name : typing.Optional[str]
+            Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
             Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
@@ -1027,6 +1036,7 @@ class AuthClient:
             context_id=context_id,
             name=name,
             description=description,
+            company_name=company_name,
             metering_axis=metering_axis,
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
@@ -1780,7 +1790,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context, as an equally sufficient alternative to every `users:c`/`users:r`/`users:u` requirement in this description.
 
         Parameters
         ----------
@@ -1861,7 +1871,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes.
+        Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context.
 
         Parameters
         ----------
@@ -2677,13 +2687,14 @@ class AsyncAuthClient:
         name: str,
         upsert: typing.Optional[bool] = None,
         description: typing.Optional[str] = OMIT,
+        company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
@@ -2694,10 +2705,13 @@ class AsyncAuthClient:
             Human-readable display name for this app context. Required.
 
         upsert : typing.Optional[bool]
-            When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+            When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        company_name : typing.Optional[str]
+            Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
             Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
@@ -2742,6 +2756,7 @@ class AsyncAuthClient:
             name=name,
             upsert=upsert,
             description=description,
+            company_name=company_name,
             metering_axis=metering_axis,
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
@@ -3116,13 +3131,14 @@ class AsyncAuthClient:
         context_id: str,
         name: str,
         description: typing.Optional[str] = OMIT,
+        company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Updates the name and/or description of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+        Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -3136,6 +3152,9 @@ class AsyncAuthClient:
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
+
+        company_name : typing.Optional[str]
+            Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
             Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
@@ -3181,6 +3200,7 @@ class AsyncAuthClient:
             context_id=context_id,
             name=name,
             description=description,
+            company_name=company_name,
             metering_axis=metering_axis,
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
@@ -4060,7 +4080,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+        Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context, as an equally sufficient alternative to every `users:c`/`users:r`/`users:u` requirement in this description.
 
         Parameters
         ----------
@@ -4149,7 +4169,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> CreateInviteResponse:
         """
-        Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes.
+        Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context.
 
         Parameters
         ----------

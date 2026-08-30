@@ -39,6 +39,14 @@ class AppContextResponse(UniversalBaseModel):
     Free-text description of the app context.
     """
 
+    company_name: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="companyName"),
+        pydantic.Field(
+            alias="companyName",
+            description="Display name for the organization deploying this app context, or absent if unset. Distinct from `name` (the app's own identity) — used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding.",
+        ),
+    ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),

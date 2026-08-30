@@ -5,7 +5,7 @@
   "generatorConfig": {
     "package_name": "vectros"
   },
-  "originGitCommit": "fcbf929e0c67c35fd7967bb51ca342b40f5ab194",
+  "originGitCommit": "24230777d9ca4509cebcfee891b545e63d182784",
   "originGitCommitIsDirty": true,
   "invokedBy": "ci",
   "ciProvider": "gitlab"

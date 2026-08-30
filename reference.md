@@ -940,7 +940,7 @@ client.auth.list_app_contexts()
 <dl>
 <dd>
 
-Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 </dd>
 </dl>
 </dd>
@@ -989,7 +989,7 @@ client.auth.create_app_context(
 <dl>
 <dd>
 
-**upsert:** `typing.Optional[bool]` — When `true`, if an app context with the same `contextId` already exists its `name` and `description` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+**upsert:** `typing.Optional[bool]` — When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
     
 </dd>
 </dl>
@@ -1531,7 +1531,7 @@ client.auth.get_app_context(
 <dl>
 <dd>
 
-Updates the name and/or description of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
 </dd>
 </dl>
 </dd>
@@ -2987,7 +2987,7 @@ client.auth.mint_token(
 <dl>
 <dd>
 
-Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope.
+Invite a new member to one of your app contexts by email, OR grant an existing member access to an additional app context by inviting their same email again. Idempotent on the combination of context and email: re-inviting the same email into the SAME context rotates the token and resends the invitation rather than creating a duplicate — this requires the `users:r` and `users:u` scopes in addition to `users:c`, because resending rotates a credential on an existing invitation and invalidates any link already sent. Without them the collision returns 409 instead, with no invitation details and no change to the outstanding invitation. Inviting the SAME email into a DIFFERENT app context in this tenant, where that email already resolves to an existing member: if that member is active AND already has (or, once accepted, will have) a credential that works for the new context's own identity provider, this immediately grants them access to the new context (no email is sent — there is nothing to accept, `emailSent` is false) — this additionally requires the `users:r` scope (no `users:u`, since nothing is mutated), because the response names the existing member's userId, a fact about them your credential could not otherwise learn through this endpoint. If that active member's ONLY existing credential is for a DIFFERENT identity provider than the one the new context uses, a normal, independent invitation is created instead (its own new member id, a real token/accept link) — attaching them silently would leave no way for them to ever actually sign in to that context. If the existing member's original invitation is still pending, this attaches the new context's access to that same outstanding invitation and rotates its token (`users:r`+`users:u`, same as an ordinary resend — both the disclosure and the credential rotation apply here). A SUSPENDED member's email does not get new-context access this way — reactivate them explicitly first. Returns HTTP 201 in every one of those cases. Returns 409 if that email already belongs to an active or suspended member of THIS specific app context, already has a PENDING invitation for THIS specific app context, or resolves to an existing member elsewhere in the tenant and your token lacks the additional scope the grant/attach requires (`users:r`, or `users:r`+`users:u` for the still-pending case). An email that already has an identity in your OTHER tenant (test vs. live) is not a collision either — it creates an additional, independent membership in this tenant for that same identity. When `sendEmail` is false, the response includes the raw token and a ready-to-use accept link so you can deliver the invitation through your own email provider. Requires the `users:c` scope — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context, as an equally sufficient alternative to every `users:c`/`users:r`/`users:u` requirement in this description.
 </dd>
 </dl>
 </dd>
@@ -3061,7 +3061,7 @@ client.auth.create_invite(
 <dl>
 <dd>
 
-Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes.
+Resend an outstanding invitation, identified by its email and app context. Rotates the invitation token and extends its expiry, then (when `sendEmail` is true) re-delivers the email. Rotating the token invalidates any previously issued link for this invitation, so only the newest link works. The invitee's pending permissions are left unchanged. Because this rotates a credential on an existing invitation, it requires the `users:c`, `users:r` and `users:u` scopes — or, for a credential scoped to a single app context, the `member-lifecycle` capability plus the matching `profiles:c`/`profiles:r`/`profiles:u` grant(s) in that context.
 </dd>
 </dl>
 </dd>
@@ -3947,6 +3947,22 @@ client.documents.lookup_documents(
 <dl>
 <dd>
 
+**sort_from:** `typing.Optional[str]` — Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sort_to:** `typing.Optional[str]` — Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
     
 </dd>
@@ -4093,6 +4109,22 @@ client.documents.lookup_documents_by_body(
 <dd>
 
 **prefix:** `typing.Optional[str]` — Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sort_from:** `typing.Optional[str]` — Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sort_to:** `typing.Optional[str]` — Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
     
 </dd>
 </dl>
@@ -7633,7 +7665,7 @@ client.inference.document_ask(
 <dl>
 <dd>
 
-Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if lower-scoring results were dropped to fit the model's context window, then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
+Runs hybrid search over your indexed content, then streams a model answer grounded in the top results. The SSE stream emits a `search_results` event first (carrying the matched results and their metadata), an optional `truncation_warning` if some retrieved results were dropped before the prompt was built — either because they didn't fit the model's context window or because a result had no groundable text to include — then `content_delta` chunks, and finally a terminal `done` event. Requires the `inference:r` scope.
 </dd>
 </dl>
 </dd>
