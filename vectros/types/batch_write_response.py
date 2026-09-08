@@ -24,7 +24,7 @@ class BatchWriteResponse(UniversalBaseModel):
 
     failed: typing.Optional[int] = pydantic.Field(default=None)
     """
-    The number of items that failed (status `conflict` or `invalid`).
+    The number of items that failed (status `conflict`, `invalid`, `forbidden`, or `not_committed`). Together with `succeeded` this always accounts for every item you submitted.
     """
 
     if IS_PYDANTIC_V2:

@@ -38,9 +38,17 @@ class RagSearch(UniversalBaseModel):
     ] = None
     scope: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Restrict retrieval to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`.
+    Restrict retrieval to content carrying this scope value, in `namespace:value` form — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Resolve an entity's UUID from your own identifier via `GET /v1/entities/{namespace}?externalId=`. Mutually exclusive with `scopeFilters` — use this for a single dimension, `scopeFilters` when you need to narrow by more than one.
     """
 
+    scope_filters: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="scopeFilters"),
+        pydantic.Field(
+            alias="scopeFilters",
+            description='Restrict retrieval to content matching ALL of these scope values (one per namespace), for a credential whose access spans more than one ownership dimension — for example `["org:<id>", "client:<id>"]` to narrow to one specific client within one specific org. Each entry uses the same `namespace:value` form as `scope`. Naming the same namespace twice is rejected. Mutually exclusive with `scope`.',
+        ),
+    ] = None
     content_types: typing_extensions.Annotated[
         typing.Optional[typing.List[RagSearchContentTypesItem]],
         FieldMetadata(alias="contentTypes"),

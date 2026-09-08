@@ -89,7 +89,8 @@ class SearchResult(UniversalBaseModel):
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),
         pydantic.Field(
-            alias="createdAt", description="When the source item was created, as an ISO-8601 UTC timestamp."
+            alias="createdAt",
+            description="When this item was added to the search index, as an ISO-8601 UTC timestamp. Usually the same moment the source item was created, but not always: if the item was re-indexed onto a new index entry at some later point, this reports that later time. Use the item's own `createdAt` from documents.get / records.get when you need the source creation time.",
         ),
     ] = None
 

@@ -17,7 +17,9 @@ if typing.TYPE_CHECKING:
     from .inference.client import AsyncInferenceClient, InferenceClient
     from .records.client import AsyncRecordsClient, RecordsClient
     from .schemas.client import AsyncSchemasClient, SchemasClient
+    from .scripts.client import AsyncScriptsClient, ScriptsClient
     from .search.client import AsyncSearchClient, SearchClient
+    from .triggers.client import AsyncTriggersClient, TriggersClient
 
 
 class VectrosApi:
@@ -95,7 +97,9 @@ class VectrosApi:
         self._inference: typing.Optional[InferenceClient] = None
         self._records: typing.Optional[RecordsClient] = None
         self._schemas: typing.Optional[SchemasClient] = None
+        self._scripts: typing.Optional[ScriptsClient] = None
         self._search: typing.Optional[SearchClient] = None
+        self._triggers: typing.Optional[TriggersClient] = None
 
     @property
     def auth(self):
@@ -162,12 +166,28 @@ class VectrosApi:
         return self._schemas
 
     @property
+    def scripts(self):
+        if self._scripts is None:
+            from .scripts.client import ScriptsClient  # noqa: E402
+
+            self._scripts = ScriptsClient(client_wrapper=self._client_wrapper)
+        return self._scripts
+
+    @property
     def search(self):
         if self._search is None:
             from .search.client import SearchClient  # noqa: E402
 
             self._search = SearchClient(client_wrapper=self._client_wrapper)
         return self._search
+
+    @property
+    def triggers(self):
+        if self._triggers is None:
+            from .triggers.client import TriggersClient  # noqa: E402
+
+            self._triggers = TriggersClient(client_wrapper=self._client_wrapper)
+        return self._triggers
 
 
 def _make_default_async_client(
@@ -266,7 +286,9 @@ class AsyncVectrosApi:
         self._inference: typing.Optional[AsyncInferenceClient] = None
         self._records: typing.Optional[AsyncRecordsClient] = None
         self._schemas: typing.Optional[AsyncSchemasClient] = None
+        self._scripts: typing.Optional[AsyncScriptsClient] = None
         self._search: typing.Optional[AsyncSearchClient] = None
+        self._triggers: typing.Optional[AsyncTriggersClient] = None
 
     @property
     def auth(self):
@@ -333,9 +355,25 @@ class AsyncVectrosApi:
         return self._schemas
 
     @property
+    def scripts(self):
+        if self._scripts is None:
+            from .scripts.client import AsyncScriptsClient  # noqa: E402
+
+            self._scripts = AsyncScriptsClient(client_wrapper=self._client_wrapper)
+        return self._scripts
+
+    @property
     def search(self):
         if self._search is None:
             from .search.client import AsyncSearchClient  # noqa: E402
 
             self._search = AsyncSearchClient(client_wrapper=self._client_wrapper)
         return self._search
+
+    @property
+    def triggers(self):
+        if self._triggers is None:
+            from .triggers.client import AsyncTriggersClient  # noqa: E402
+
+            self._triggers = AsyncTriggersClient(client_wrapper=self._client_wrapper)
+        return self._triggers

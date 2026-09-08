@@ -218,20 +218,32 @@ class RawRecordsClient:
     def batch_write_records(
         self,
         *,
+        upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         atomicity: typing.Optional[BatchWriteRequestAtomicity] = OMIT,
         items: typing.Optional[typing.Sequence[RecordRequest]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[BatchWriteResponse]:
         """
-        Reserved endpoint for bulk record writes. The published response shape includes a per-item partial-failure envelope and an atomicity flag. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available, published now so SDK integrations against it will not break when it ships. Requires the `records:c` scope.
+        Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+
+        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+
+        The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 
         Parameters
         ----------
+        upsert : typing.Optional[bool]
+            Applies to every item, exactly as it does on a single `POST /v1/records`: when `true`, an item whose `externalId` already exists overwrites that record instead of returning it unchanged. Requires the `records:u:<type>` scope in addition to `records:c:<type>`, checked per item. Defaults to `false`.
+
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`; same meaning as on a single `POST /v1/records`. Defaults to `false`.
+
         atomicity : typing.Optional[BatchWriteRequestAtomicity]
-            Controls how the batch commits. `all_or_nothing` commits every item or none (transactional, but allows a smaller maximum batch size); `best_effort` commits each item independently and reports a per-item outcome. Defaults to `best_effort`.
+            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
 
         items : typing.Optional[typing.Sequence[RecordRequest]]
-            The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`).
+            The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`), and goes through the same schema validation, `externalId` idempotency, unique-field enforcement and scope check — the `records:c:<type>` check being applied per item, against that item's own record type.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -239,11 +251,15 @@ class RawRecordsClient:
         Returns
         -------
         HttpResponse[BatchWriteResponse]
-            Per-item write outcomes. This is the reserved response shape; the endpoint does not yet return it.
+            The batch was processed. Inspect the per-item `results` — this status does not mean every item succeeded.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/records/batch",
             method="POST",
+            params={
+                "upsert": upsert,
+                "allowClear": allow_clear,
+            },
             json={
                 "atomicity": atomicity,
                 "items": convert_and_respect_annotation_metadata(
@@ -266,6 +282,17 @@ class RawRecordsClient:
                     ),
                 )
                 return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 403:
                 raise ForbiddenError(
                     headers=dict(_response.headers),
@@ -279,17 +306,6 @@ class RawRecordsClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 501:
-                raise NotImplementedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1557,20 +1573,32 @@ class AsyncRawRecordsClient:
     async def batch_write_records(
         self,
         *,
+        upsert: typing.Optional[bool] = None,
+        allow_clear: typing.Optional[bool] = None,
         atomicity: typing.Optional[BatchWriteRequestAtomicity] = OMIT,
         items: typing.Optional[typing.Sequence[RecordRequest]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[BatchWriteResponse]:
         """
-        Reserved endpoint for bulk record writes. The published response shape includes a per-item partial-failure envelope and an atomicity flag. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available, published now so SDK integrations against it will not break when it ships. Requires the `records:c` scope.
+        Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+
+        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+
+        The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 
         Parameters
         ----------
+        upsert : typing.Optional[bool]
+            Applies to every item, exactly as it does on a single `POST /v1/records`: when `true`, an item whose `externalId` already exists overwrites that record instead of returning it unchanged. Requires the `records:u:<type>` scope in addition to `records:c:<type>`, checked per item. Defaults to `false`.
+
+        allow_clear : typing.Optional[bool]
+            Only relevant with `?upsert=true`; same meaning as on a single `POST /v1/records`. Defaults to `false`.
+
         atomicity : typing.Optional[BatchWriteRequestAtomicity]
-            Controls how the batch commits. `all_or_nothing` commits every item or none (transactional, but allows a smaller maximum batch size); `best_effort` commits each item independently and reports a per-item outcome. Defaults to `best_effort`.
+            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
 
         items : typing.Optional[typing.Sequence[RecordRequest]]
-            The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`).
+            The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`), and goes through the same schema validation, `externalId` idempotency, unique-field enforcement and scope check — the `records:c:<type>` check being applied per item, against that item's own record type.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1578,11 +1606,15 @@ class AsyncRawRecordsClient:
         Returns
         -------
         AsyncHttpResponse[BatchWriteResponse]
-            Per-item write outcomes. This is the reserved response shape; the endpoint does not yet return it.
+            The batch was processed. Inspect the per-item `results` — this status does not mean every item succeeded.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/records/batch",
             method="POST",
+            params={
+                "upsert": upsert,
+                "allowClear": allow_clear,
+            },
             json={
                 "atomicity": atomicity,
                 "items": convert_and_respect_annotation_metadata(
@@ -1605,6 +1637,17 @@ class AsyncRawRecordsClient:
                     ),
                 )
                 return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 403:
                 raise ForbiddenError(
                     headers=dict(_response.headers),
@@ -1618,17 +1661,6 @@ class AsyncRawRecordsClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
-                    headers=dict(_response.headers),
-                    body=typing.cast(
-                        typing.Any,
-                        parse_obj_as(
-                            type_=typing.Any,  # type: ignore
-                            object_=_response.json(),
-                        ),
-                    ),
-                )
-            if _response.status_code == 501:
-                raise NotImplementedError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

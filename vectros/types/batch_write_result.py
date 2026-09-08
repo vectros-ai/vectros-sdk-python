@@ -22,7 +22,7 @@ class BatchWriteResult(UniversalBaseModel):
 
     id: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The id assigned to the written record. Present when this item was created or updated; null when it failed (status `conflict` or `invalid`).
+    The id assigned to the written record. Present when this item was created or updated; null on every failure status.
     """
 
     external_id: typing_extensions.Annotated[
@@ -35,7 +35,7 @@ class BatchWriteResult(UniversalBaseModel):
     ] = None
     status: typing.Optional[BatchWriteResultStatus] = pydantic.Field(default=None)
     """
-    The outcome for this item. `created` and `updated` are successes; `conflict` is a uniqueness or version conflict; `invalid` is a validation failure.
+    The outcome for this item. `created` (a new record was written) and `updated` (an existing record was matched — overwritten with `?upsert=true`, or returned unchanged) are successes. `conflict` is a uniqueness or version conflict; `invalid` is a validation failure; `forbidden` means your credential lacks the scope or ownership this item required, so the fix is to your credential rather than to the item; `not_committed` means this item itself was fine but an `all_or_nothing` batch was aborted by a different item, so nothing was written and resubmitting the batch with that item fixed will write this one unchanged.
     """
 
     error: typing.Optional[BatchItemError] = None

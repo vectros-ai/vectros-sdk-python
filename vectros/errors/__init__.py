@@ -10,23 +10,29 @@ if typing.TYPE_CHECKING:
     from .conflict_error import ConflictError
     from .content_too_large_error import ContentTooLargeError
     from .forbidden_error import ForbiddenError
+    from .gateway_timeout_error import GatewayTimeoutError
     from .internal_server_error import InternalServerError
     from .not_found_error import NotFoundError
     from .not_implemented_error import NotImplementedError
     from .payment_required_error import PaymentRequiredError
+    from .service_unavailable_error import ServiceUnavailableError
     from .too_many_requests_error import TooManyRequestsError
     from .unauthorized_error import UnauthorizedError
+    from .unprocessable_entity_error import UnprocessableEntityError
 _dynamic_imports: typing.Dict[str, str] = {
     "BadRequestError": ".bad_request_error",
     "ConflictError": ".conflict_error",
     "ContentTooLargeError": ".content_too_large_error",
     "ForbiddenError": ".forbidden_error",
+    "GatewayTimeoutError": ".gateway_timeout_error",
     "InternalServerError": ".internal_server_error",
     "NotFoundError": ".not_found_error",
     "NotImplementedError": ".not_implemented_error",
     "PaymentRequiredError": ".payment_required_error",
+    "ServiceUnavailableError": ".service_unavailable_error",
     "TooManyRequestsError": ".too_many_requests_error",
     "UnauthorizedError": ".unauthorized_error",
+    "UnprocessableEntityError": ".unprocessable_entity_error",
 }
 
 
@@ -56,10 +62,13 @@ __all__ = [
     "ConflictError",
     "ContentTooLargeError",
     "ForbiddenError",
+    "GatewayTimeoutError",
     "InternalServerError",
     "NotFoundError",
     "NotImplementedError",
     "PaymentRequiredError",
+    "ServiceUnavailableError",
     "TooManyRequestsError",
     "UnauthorizedError",
+    "UnprocessableEntityError",
 ]

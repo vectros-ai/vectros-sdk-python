@@ -2,4 +2,4 @@
 
 import typing
 
-UserRequestStatus = typing.Union[typing.Literal["ACTIVE", "SUSPENDED", "PENDING"], typing.Any]
+UserRequestStatus = typing.Union[typing.Literal["ACTIVE", "SUSPENDED"], typing.Any]

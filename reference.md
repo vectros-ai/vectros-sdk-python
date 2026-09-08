@@ -302,7 +302,7 @@ client.auth.list_scoped_keys()
 <dl>
 <dd>
 
-Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds.
+Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
 </dd>
 </dl>
 </dd>
@@ -2132,7 +2132,7 @@ client.auth.get_role_versions(
 <dl>
 <dd>
 
-Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room.
+Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 </dd>
 </dl>
 </dd>
@@ -2405,6 +2405,14 @@ client.auth.update_issuer(
 <dd>
 
 **self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**captured_claims:** `typing.Optional[typing.List[str]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
     
 </dd>
 </dl>
@@ -2695,6 +2703,14 @@ client.auth.register_issuer(
 <dd>
 
 **self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**captured_claims:** `typing.Optional[typing.List[str]]` — Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
     
 </dd>
 </dl>
@@ -4116,7 +4132,7 @@ client.documents.lookup_documents_by_body(
 <dl>
 <dd>
 
-**sort_from:** `typing.Optional[str]` — Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+**sort_from:** `typing.Optional[str]` — Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
     
 </dd>
 </dl>
@@ -4124,7 +4140,7 @@ client.documents.lookup_documents_by_body(
 <dl>
 <dd>
 
-**sort_to:** `typing.Optional[str]` — Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
+**sort_to:** `typing.Optional[str]` — Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
     
 </dd>
 </dl>
@@ -4940,7 +4956,7 @@ client.identity.get_entity(
 <dl>
 <dd>
 
-Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
+Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Supplying a different `externalId` re-points the entity's identifier; it must still be unused in this namespace and app context. Requires the `entities:u:<namespace>` scope.
 </dd>
 </dl>
 </dd>
@@ -7131,7 +7147,7 @@ client.folders.update_folder(
 <dl>
 <dd>
 
-Permanently deletes a folder. The folder must be empty (contain no documents or sub-folders) and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
+Permanently deletes a folder. The folder must be empty — it must contain no documents, no records, and no sub-folders — and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
 </dd>
 </dl>
 </dd>
@@ -7926,7 +7942,11 @@ client.records.batch_lookup_records()
 <dl>
 <dd>
 
-Reserved endpoint for bulk record writes. The published response shape includes a per-item partial-failure envelope and an atomicity flag. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available, published now so SDK integrations against it will not break when it ships. Requires the `records:c` scope.
+Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+
+`atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+
+The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 </dd>
 </dl>
 </dd>
@@ -7964,7 +7984,7 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-**atomicity:** `typing.Optional[BatchWriteRequestAtomicity]` — Controls how the batch commits. `all_or_nothing` commits every item or none (transactional, but allows a smaller maximum batch size); `best_effort` commits each item independently and reports a per-item outcome. Defaults to `best_effort`.
+**upsert:** `typing.Optional[bool]` — Applies to every item, exactly as it does on a single `POST /v1/records`: when `true`, an item whose `externalId` already exists overwrites that record instead of returning it unchanged. Requires the `records:u:<type>` scope in addition to `records:c:<type>`, checked per item. Defaults to `false`.
     
 </dd>
 </dl>
@@ -7972,7 +7992,23 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-**items:** `typing.Optional[typing.List[RecordRequest]]` — The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`).
+**allow_clear:** `typing.Optional[bool]` — Only relevant with `?upsert=true`; same meaning as on a single `POST /v1/records`. Defaults to `false`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**atomicity:** `typing.Optional[BatchWriteRequestAtomicity]` — Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**items:** `typing.Optional[typing.List[RecordRequest]]` — The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`), and goes through the same schema validation, `externalId` idempotency, unique-field enforcement and scope check — the `records:c:<type>` check being applied per item, against that item's own record type.
     
 </dd>
 </dl>
@@ -9354,7 +9390,7 @@ client.schemas.get_schema(
 <dl>
 <dd>
 
-Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Requires the `schemas:u` scope.
+Updates a record schema. Fields you omit are preserved; `typeName` is immutable and cannot be changed. Collection fields (`fields`, `lookupFields`, `renderHints`, `capabilities`) are replaced in full when supplied. Because `capabilities` is replaced in full, omitting `triggersEnabled` clears it — the request is refused with 409 if that would disable triggers while trigger rules still fire off this schema, so delete those rules first. Requires the `schemas:u` scope.
 </dd>
 </dl>
 </dd>
@@ -9439,7 +9475,7 @@ client.schemas.update_schema(
 <dl>
 <dd>
 
-Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. Requires the `schemas:d` scope.
+Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
 </dd>
 </dl>
 </dd>
@@ -9579,6 +9615,497 @@ client.schemas.get_schema_versions(
 </dl>
 </details>
 
+## Scripts
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">execute_script</a>(...) -> ScriptExecuteResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body does not until the platform's repair lands — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
+
+**Permission.** Requires the `scripts:x` scope — the permission to *execute* — separate from the `scripts:c` permission to push scripts. Bare `scripts:x` grants every script in the context; `scripts:x:<name>` grants exactly that script name, every version of it. Execution discloses no source, so `scripts:r` is not needed. Inside the script, every read and write is enforced by your credential's data scopes exactly as the equivalent REST call would be — `scripts:x` alone can read and write nothing.
+
+**Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. `params` is not validated — a script that needs a shape checks for it and throws; the script's `declaredInputContract` is documentation for readers and is not enforced.
+
+**Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 3 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field. So "create a folder and file N documents" holds up to 97 plain documents, 48 with one range field or one reference, 32 with both; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
+
+**Reads inside the script.** A `get` sees the script's own staged writes. A list, query or lookup never shows a row the script has deleted, shows a row it re-saved with the updated content, and does not show a row it created — you hold that row's id from `create()`.
+
+**Retries.** Send an optional `Idempotency-Key` header (1–128 characters of letters, digits, `.`, `_`, `:` or `-`) to make a retry safe: a request repeated under the same key within 24 hours receives the same response as the first attempt without executing again — when that first attempt SUCCEEDED (a duplicate still in flight is refused with `409 IDEMPOTENCY_IN_PROGRESS`; the same key on a different request is refused with `422 IDEMPOTENCY_KEY_REUSED`). A first attempt that FAILED with any other status is not remembered: the same key is free to try again, so a retry after a `400` or a `429` executes. If an execution's outcome cannot be determined — the script did not finish inside the budget while its writes may have committed — the response is `500 EXECUTION_OUTCOME_UNKNOWN` carrying `execution.id`, and a keyed retry receives that same answer: inspect what the script would have written, then use a NEW key for a new attempt. When a key is present the serialised `result` is capped at 16 KB instead of 256 KB. Without a key, a lost response cannot be distinguished from a failed one; re-read before retrying.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi, ScriptRefRequest
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.execute_script(
+    idempotency_key="order-8412-attempt",
+    script_ref=ScriptRefRequest(
+        name="notify-assignee",
+        version="3",
+    ),
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**script_ref:** `ScriptRefRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**idempotency_key:** `typing.Optional[str]` — Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without executing again — when that attempt succeeded or ended `EXECUTION_OUTCOME_UNKNOWN`; a failed attempt is not remembered. The body is compared byte for byte, so the same key with a differently formatted body is a different request (`422`). With a key present the serialised `result` is capped at 16 KB.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**input:** `typing.Optional[typing.Dict[str, typing.Any]]` — A free-form JSON object your script receives as `input.params`. The platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">list_scripts</a>(...) -> ScriptPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.list_scripts(
+    name="notify-assignee",
+    start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**name:** `typing.Optional[str]` — List every version of this script name (oldest first), instead of a flat cross-name list.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">create_script</a>(...) -> ScriptResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.create_script(
+    name="notify-assignee",
+    source="export default function(input) { return { ok: true }; }",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `ScriptRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">get_script</a>(...) -> ScriptResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Retrieves a single script version by its ID. Requires the `scripts:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.get_script(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">update_script</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Scripts are immutable per version; this endpoint always returns a 400 regardless of scope or credential — push a new version via `POST /v1/scripts` instead.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.update_script(
+    id="id",
+    name="notify-assignee",
+    source="export default function(input) { return { ok: true }; }",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `ScriptRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">delete_script</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.scripts.delete_script(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 ## Search
 <details><summary><code>client.search.<a href="src/vectros/search/client.py">content</a>(...) -> SearchResponse</code></summary>
 <dl>
@@ -9672,7 +10199,15 @@ client.search.content(
 <dl>
 <dd>
 
-**scope:** `typing.Optional[str]` — Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier.
+**scope:** `typing.Optional[str]` — Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier. Mutually exclusive with `scopeFilters` — use this for a single dimension, `scopeFilters` when you need to narrow by more than one.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scope_filters:** `typing.Optional[typing.List[str]]` — Restrict results to content matching ALL of these scope values (one per namespace), for a credential whose access spans more than one ownership dimension — for example `["org:<id>", "client:<id>"]` to narrow to one specific client within one specific org. Each entry uses the same `namespace:value` form as `scope`. Naming the same namespace twice is rejected. Mutually exclusive with `scope` — use `scope` for a single dimension.
     
 </dd>
 </dl>
@@ -9777,6 +10312,536 @@ client.search.content(
 <dd>
 
 **require_complete:** `typing.Optional[bool]` — A fail-closed override. When true, the request returns HTTP 503 instead of partial results if one of the search engines is unavailable. Defaults to false, in which case an outage degrades to the surviving engine and the response carries `degraded: true` along with the failed engines in `degradedLegs`. Set this to true only when complete results are required and a degraded answer is unacceptable.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+## Triggers
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">list_trigger_failures</a>(...) -> TriggerFailurePage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a page of trigger executions that failed — what went wrong, whether the platform will retry it, and which of your records and rules were involved. Use this to find automation that has stopped running.
+
+A record appears once per FIRING, not once per attempt: if the platform retries a retryable failure, the same record's `attempts` count rises rather than a new record appearing. **If a retry later succeeds, the record is removed** — so this endpoint describes what is currently broken, not a permanent history. Records also expire 30 days after the firing first failed.
+
+`detail` is safe to surface to your own users: it carries only your own content (a script's own thrown message) or public API vocabulary, never platform internals. For `INTERNAL_ERROR` it is absent and a `correlationId` is returned instead — quote that to support.
+
+Scoped to your account and app context, derived from your token — never from input. Requires the `triggers:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.list_trigger_failures(
+    rule_id="3b1c9f2e7a5d8410f6c2e9a1b7d4038f5e6a91c2d7f0b3a4586c9e2f1d0a7b3c",
+    category="SCRIPT_ERROR",
+    start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**rule_id:** `typing.Optional[str]` — Return only failures of this trigger rule.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**category:** `typing.Optional[str]` — Return only failures in this category (e.g. `SCRIPT_ERROR`, `TIMEOUT`, `AUTHORIZATION_DENIED`). Case-insensitive.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**retryable:** `typing.Optional[bool]` — Return only failures the platform will retry (`true`) or will not (`false`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**from:** `typing.Optional[str]` — Return only failures that first occurred at or after this ISO-8601 UTC timestamp.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**to:** `typing.Optional[str]` — Return only failures that first occurred before this ISO-8601 UTC timestamp.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum number of failures to return per page. Must be between 1 and 100; defaults to 20.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">list_triggers</a>(...) -> TriggerRulePage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a paginated list of your trigger rules, newest first. Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `triggers:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.list_triggers(
+    start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum number of trigger rules to return per page. Must be between 1 and 100; defaults to 20.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">create_trigger</a>(...) -> TriggerRuleResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Declares a new trigger rule, or (with `?upsert=true`) reconciles an existing one of the same name to the submitted shape. Once declared, the rule fires: a record write on the named schema dispatches the referenced script, which runs asynchronously under this rule's own grant. Because that grant is executed, a scoped credential may not declare a trigger whose grant exceeds its own — such a request is rejected with a `403`, and a `roleIds` entry that does not resolve in this context with a `400`. Requires the `triggers:c` scope (also `triggers:u` when `?upsert=true` matches an existing row).
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi, FiringSourceRequest, ScriptRefRequest
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.create_trigger(
+    name="on-intake-create",
+    firing_source=FiringSourceRequest(
+        schema_id="sch_9f8e7d6c",
+        event="CREATE",
+    ),
+    script_ref=ScriptRefRequest(
+        name="notify-assignee",
+        version="3",
+    ),
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `TriggerRuleRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**upsert:** `typing.Optional[bool]` — When `true`, if a trigger rule with the same `name` already exists it is reconciled to the submitted shape instead of being returned unchanged. Defaults to `false`. Requires the `triggers:u` scope in addition to `triggers:c`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">get_trigger</a>(...) -> TriggerRuleResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Retrieves a single trigger rule by its ID. Requires the `triggers:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.get_trigger(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">update_trigger</a>(...) -> TriggerRuleResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Updates an existing trigger rule in place. The rule's resulting grant must be within your own granted scope — including a grant you did not change, because a trigger's other fields (its `scriptRef`, its `principalId`) determine what that grant executes. `name`, `principalId` and `provisionedBy` are immutable once set. Requires the `triggers:u` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi, FiringSourceRequest, ScriptRefRequest
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.update_trigger(
+    id="id",
+    name="on-intake-create",
+    firing_source=FiringSourceRequest(
+        schema_id="sch_9f8e7d6c",
+        event="CREATE",
+    ),
+    script_ref=ScriptRefRequest(
+        name="notify-assignee",
+        version="3",
+    ),
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `TriggerRuleRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.triggers.<a href="src/vectros/triggers/client.py">delete_trigger</a>(...)</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Permanently deletes one trigger rule by ID. Requires the `triggers:d` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.triggers.delete_trigger(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
     
 </dd>
 </dl>

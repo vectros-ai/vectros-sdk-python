@@ -9,6 +9,7 @@ from ..core.serialization import FieldMetadata
 from .context_detail import ContextDetail
 from .credits import Credits
 from .documents_section import DocumentsSection
+from .execution_section import ExecutionSection
 from .identity_section import IdentitySection
 from .inference_section import InferenceSection
 from .read_access_section import ReadAccessSection
@@ -38,6 +39,7 @@ class UsageReportResponse(UniversalBaseModel):
     identity: typing.Optional[IdentitySection] = None
     inference: typing.Optional[InferenceSection] = None
     reads: typing.Optional[ReadsSection] = None
+    execution: typing.Optional[ExecutionSection] = None
     tenants: typing.Optional[Tenants] = None
     contexts: typing.Optional[typing.List[ContextDetail]] = pydantic.Field(default=None)
     """

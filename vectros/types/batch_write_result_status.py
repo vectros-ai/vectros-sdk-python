@@ -2,4 +2,6 @@
 
 import typing
 
-BatchWriteResultStatus = typing.Union[typing.Literal["created", "updated", "conflict", "invalid"], typing.Any]
+BatchWriteResultStatus = typing.Union[
+    typing.Literal["created", "updated", "conflict", "invalid", "forbidden", "not_committed"], typing.Any
+]

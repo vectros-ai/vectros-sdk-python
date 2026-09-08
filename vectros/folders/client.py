@@ -274,7 +274,7 @@ class FoldersClient:
 
     def delete_folder(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes a folder. The folder must be empty (contain no documents or sub-folders) and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
+        Permanently deletes a folder. The folder must be empty — it must contain no documents, no records, and no sub-folders — and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
 
         Parameters
         ----------
@@ -712,7 +712,7 @@ class AsyncFoldersClient:
 
     async def delete_folder(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes a folder. The folder must be empty (contain no documents or sub-folders) and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
+        Permanently deletes a folder. The folder must be empty — it must contain no documents, no records, and no sub-folders — and must not be protected. Your context's root folder is protected and cannot be deleted. Requires the `folders:d` scope.
 
         Parameters
         ----------

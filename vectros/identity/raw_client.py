@@ -175,7 +175,7 @@ class RawIdentityClient:
             The entity namespace.
 
         external_id : str
-            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
 
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
@@ -187,7 +187,7 @@ class RawIdentityClient:
             Human-readable name for the entity.
 
         status : typing.Optional[EntityRequestStatus]
-            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
+            Lifecycle status of the entity, which you set and read back. `SUSPENDED` records your own intent to retire the entity; the platform does not enforce it — a suspended entity can still be read, updated, and referenced by other records. Enforce it in your own application if you need it to have an effect.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
@@ -362,7 +362,7 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[EntityResponse]:
         """
-        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
+        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Supplying a different `externalId` re-points the entity's identifier; it must still be unused in this namespace and app context. Requires the `entities:u:<namespace>` scope.
 
         Parameters
         ----------
@@ -372,7 +372,7 @@ class RawIdentityClient:
         id : str
 
         external_id : str
-            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
 
         context_id : typing.Optional[str]
             Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
@@ -381,7 +381,7 @@ class RawIdentityClient:
             Human-readable name for the entity.
 
         status : typing.Optional[EntityRequestStatus]
-            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
+            Lifecycle status of the entity, which you set and read back. `SUSPENDED` records your own intent to retire the entity; the platform does not enforce it — a suspended entity can still be read, updated, and referenced by other records. Enforce it in your own application if you need it to have an effect.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
@@ -430,6 +430,17 @@ class RawIdentityClient:
                     ),
                 )
                 return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 404:
                 raise NotFoundError(
                     headers=dict(_response.headers),
@@ -1325,7 +1336,7 @@ class RawIdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained but blocked from new operations. `PENDING` is a server-managed state for invitations awaiting acceptance — you cannot set it directly. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.) You may set only `ACTIVE` or `SUSPENDED` directly.
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -1512,7 +1523,7 @@ class RawIdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained but blocked from new operations. `PENDING` is a server-managed state for invitations awaiting acceptance — you cannot set it directly. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.) You may set only `ACTIVE` or `SUSPENDED` directly.
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -2071,7 +2082,7 @@ class AsyncRawIdentityClient:
             The entity namespace.
 
         external_id : str
-            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
 
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
@@ -2083,7 +2094,7 @@ class AsyncRawIdentityClient:
             Human-readable name for the entity.
 
         status : typing.Optional[EntityRequestStatus]
-            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
+            Lifecycle status of the entity, which you set and read back. `SUSPENDED` records your own intent to retire the entity; the platform does not enforce it — a suspended entity can still be read, updated, and referenced by other records. Enforce it in your own application if you need it to have an effect.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
@@ -2258,7 +2269,7 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[EntityResponse]:
         """
-        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Requires the `entities:u:<namespace>` scope.
+        Updates the mutable fields of an entity. Omitted fields are preserved (a null value does not clear a field), and the `payload` object is replaced in full when supplied. Providing `scopes` replaces the entity's parent edges. Supplying a different `externalId` re-points the entity's identifier; it must still be unused in this namespace and app context. Requires the `entities:u:<namespace>` scope.
 
         Parameters
         ----------
@@ -2268,7 +2279,7 @@ class AsyncRawIdentityClient:
         id : str
 
         external_id : str
-            Your own unique identifier for this entity, unique within its namespace. Used for idempotent create: if an entity with this `externalId` already exists in the namespace, it is returned instead of creating a duplicate.
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
 
         context_id : typing.Optional[str]
             Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
@@ -2277,7 +2288,7 @@ class AsyncRawIdentityClient:
             Human-readable name for the entity.
 
         status : typing.Optional[EntityRequestStatus]
-            Lifecycle status of the entity. `ACTIVE` entities can be used normally; `SUSPENDED` entities are retained but blocked from new operations.
+            Lifecycle status of the entity, which you set and read back. `SUSPENDED` records your own intent to retire the entity; the platform does not enforce it — a suspended entity can still be read, updated, and referenced by other records. Enforce it in your own application if you need it to have an effect.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             Free-form key-value attributes to store with the entity. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit it to leave the stored payload unchanged.
@@ -2326,6 +2337,17 @@ class AsyncRawIdentityClient:
                     ),
                 )
                 return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 404:
                 raise NotFoundError(
                     headers=dict(_response.headers),
@@ -3221,7 +3243,7 @@ class AsyncRawIdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained but blocked from new operations. `PENDING` is a server-managed state for invitations awaiting acceptance — you cannot set it directly. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.) You may set only `ACTIVE` or `SUSPENDED` directly.
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -3408,7 +3430,7 @@ class AsyncRawIdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained but blocked from new operations. `PENDING` is a server-managed state for invitations awaiting acceptance — you cannot set it directly. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.) You may set only `ACTIVE` or `SUSPENDED` directly.
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.

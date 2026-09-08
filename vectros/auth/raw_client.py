@@ -290,7 +290,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
 
         Parameters
         ----------
@@ -367,6 +367,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -760,7 +771,7 @@ class RawAuthClient:
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
-            Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
+            Profile lifecycle status. `active` permits credential issuance against this profile; `suspended` denies it. **Suspension stops NEW credentials immediately, on both issuance paths** (`0.43.0+`), with a different status code on each: minting a scoped API key at `POST /v1/admin/keys/scoped` returns `409` naming the suspended profile, and exchanging for a scoped token at `POST /v1/auth/token/exchange` returns the same uniform `403 invalid_grant` it returns for every other rejection. Both read this field live on the request. **Credentials ALREADY issued are a separate matter:** an `ssk_*` or `st_*` handed out before you suspended may keep working for up to five minutes while the access-profile cache expires, and an `st_*` keeps its own one-hour lifetime regardless. So suspension is immediate containment against new credentials bound to THIS profile, and eventually-consistent (within five minutes) against credentials already issued against it. It does not reach sideways: a credential that resolves through this profile may, for the same five minutes, still act within its cached scope — including minting against a different, still-active principal it was already entitled to. To stop a specific credential now, revoke that credential. Defaults to `active` when omitted.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -932,6 +943,7 @@ class RawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AppContextResponse]:
         """
@@ -963,6 +975,9 @@ class RawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        identity_projection_claims : typing.Optional[typing.Sequence[str]]
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -985,6 +1000,7 @@ class RawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "identityProjectionClaims": identity_projection_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -1363,7 +1379,7 @@ class RawAuthClient:
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
-            Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
+            Profile lifecycle status. `active` permits credential issuance against this profile; `suspended` denies it. **Suspension stops NEW credentials immediately, on both issuance paths** (`0.43.0+`), with a different status code on each: minting a scoped API key at `POST /v1/admin/keys/scoped` returns `409` naming the suspended profile, and exchanging for a scoped token at `POST /v1/auth/token/exchange` returns the same uniform `403 invalid_grant` it returns for every other rejection. Both read this field live on the request. **Credentials ALREADY issued are a separate matter:** an `ssk_*` or `st_*` handed out before you suspended may keep working for up to five minutes while the access-profile cache expires, and an `st_*` keeps its own one-hour lifetime regardless. So suspension is immediate containment against new credentials bound to THIS profile, and eventually-consistent (within five minutes) against credentials already issued against it. It does not reach sideways: a credential that resolves through this profile may, for the same five minutes, still act within its cached scope — including minting against a different, still-active principal it was already entitled to. To stop a specific credential now, revoke that credential. Defaults to `active` when omitted.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1601,6 +1617,7 @@ class RawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AppContextResponse]:
         """
@@ -1631,6 +1648,9 @@ class RawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        identity_projection_claims : typing.Optional[typing.Sequence[str]]
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1650,6 +1670,7 @@ class RawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "identityProjectionClaims": identity_projection_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -2210,7 +2231,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[UsageReportResponse]:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 
         Parameters
         ----------
@@ -2360,6 +2381,7 @@ class RawAuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
@@ -2397,6 +2419,9 @@ class RawAuthClient:
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
 
+        captured_claims : typing.Optional[typing.Sequence[str]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -2420,6 +2445,7 @@ class RawAuthClient:
                 "selfSignupPolicies": convert_and_respect_annotation_metadata(
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
+                "capturedClaims": captured_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -2646,6 +2672,7 @@ class RawAuthClient:
         email_claim: typing.Optional[str] = OMIT,
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
@@ -2680,6 +2707,9 @@ class RawAuthClient:
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
+        captured_claims : typing.Optional[typing.Sequence[str]]
+            Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -2703,6 +2733,7 @@ class RawAuthClient:
                 "selfSignupPolicies": convert_and_respect_annotation_metadata(
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
+                "capturedClaims": captured_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -3768,7 +3799,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
 
         Parameters
         ----------
@@ -3845,6 +3876,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -4238,7 +4280,7 @@ class AsyncRawAuthClient:
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
-            Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
+            Profile lifecycle status. `active` permits credential issuance against this profile; `suspended` denies it. **Suspension stops NEW credentials immediately, on both issuance paths** (`0.43.0+`), with a different status code on each: minting a scoped API key at `POST /v1/admin/keys/scoped` returns `409` naming the suspended profile, and exchanging for a scoped token at `POST /v1/auth/token/exchange` returns the same uniform `403 invalid_grant` it returns for every other rejection. Both read this field live on the request. **Credentials ALREADY issued are a separate matter:** an `ssk_*` or `st_*` handed out before you suspended may keep working for up to five minutes while the access-profile cache expires, and an `st_*` keeps its own one-hour lifetime regardless. So suspension is immediate containment against new credentials bound to THIS profile, and eventually-consistent (within five minutes) against credentials already issued against it. It does not reach sideways: a credential that resolves through this profile may, for the same five minutes, still act within its cached scope — including minting against a different, still-active principal it was already entitled to. To stop a specific credential now, revoke that credential. Defaults to `active` when omitted.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -4410,6 +4452,7 @@ class AsyncRawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AppContextResponse]:
         """
@@ -4441,6 +4484,9 @@ class AsyncRawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        identity_projection_claims : typing.Optional[typing.Sequence[str]]
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -4463,6 +4509,7 @@ class AsyncRawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "identityProjectionClaims": identity_projection_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -4841,7 +4888,7 @@ class AsyncRawAuthClient:
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS profile may assume via `/assume`. Only meaningful (and only accepted) alongside inline `scopes` — a `roleId`-referencing profile has no clause list of its own to pair a grant with; author the grant on the referenced Role instead, where every profile referencing that role picks it up uniformly. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
 
         status : typing.Optional[AccessProfileRequestStatus]
-            Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
+            Profile lifecycle status. `active` permits credential issuance against this profile; `suspended` denies it. **Suspension stops NEW credentials immediately, on both issuance paths** (`0.43.0+`), with a different status code on each: minting a scoped API key at `POST /v1/admin/keys/scoped` returns `409` naming the suspended profile, and exchanging for a scoped token at `POST /v1/auth/token/exchange` returns the same uniform `403 invalid_grant` it returns for every other rejection. Both read this field live on the request. **Credentials ALREADY issued are a separate matter:** an `ssk_*` or `st_*` handed out before you suspended may keep working for up to five minutes while the access-profile cache expires, and an `st_*` keeps its own one-hour lifetime regardless. So suspension is immediate containment against new credentials bound to THIS profile, and eventually-consistent (within five minutes) against credentials already issued against it. It does not reach sideways: a credential that resolves through this profile may, for the same five minutes, still act within its cached scope — including minting against a different, still-active principal it was already entitled to. To stop a specific credential now, revoke that credential. Defaults to `active` when omitted.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -5079,6 +5126,7 @@ class AsyncRawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AppContextResponse]:
         """
@@ -5109,6 +5157,9 @@ class AsyncRawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        identity_projection_claims : typing.Optional[typing.Sequence[str]]
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -5128,6 +5179,7 @@ class AsyncRawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "identityProjectionClaims": identity_projection_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -5688,7 +5740,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[UsageReportResponse]:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, and records) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 
         Parameters
         ----------
@@ -5838,6 +5890,7 @@ class AsyncRawAuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
@@ -5875,6 +5928,9 @@ class AsyncRawAuthClient:
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
 
+        captured_claims : typing.Optional[typing.Sequence[str]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -5898,6 +5954,7 @@ class AsyncRawAuthClient:
                 "selfSignupPolicies": convert_and_respect_annotation_metadata(
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
+                "capturedClaims": captured_claims,
             },
             headers={
                 "content-type": "application/json",
@@ -6124,6 +6181,7 @@ class AsyncRawAuthClient:
         email_claim: typing.Optional[str] = OMIT,
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
+        captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
@@ -6158,6 +6216,9 @@ class AsyncRawAuthClient:
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
+        captured_claims : typing.Optional[typing.Sequence[str]]
+            Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -6181,6 +6242,7 @@ class AsyncRawAuthClient:
                 "selfSignupPolicies": convert_and_respect_annotation_metadata(
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
+                "capturedClaims": captured_claims,
             },
             headers={
                 "content-type": "application/json",

@@ -59,7 +59,7 @@ class AccessProfileRequest(UniversalBaseModel):
 
     status: typing.Optional[AccessProfileRequestStatus] = pydantic.Field(default=None)
     """
-    Profile lifecycle status. `active` permits token minting; `suspended` denies it (minting returns a uniform 403). Defaults to `active` when omitted.
+    Profile lifecycle status. `active` permits credential issuance against this profile; `suspended` denies it. **Suspension stops NEW credentials immediately, on both issuance paths** (`0.43.0+`), with a different status code on each: minting a scoped API key at `POST /v1/admin/keys/scoped` returns `409` naming the suspended profile, and exchanging for a scoped token at `POST /v1/auth/token/exchange` returns the same uniform `403 invalid_grant` it returns for every other rejection. Both read this field live on the request. **Credentials ALREADY issued are a separate matter:** an `ssk_*` or `st_*` handed out before you suspended may keep working for up to five minutes while the access-profile cache expires, and an `st_*` keeps its own one-hour lifetime regardless. So suspension is immediate containment against new credentials bound to THIS profile, and eventually-consistent (within five minutes) against credentials already issued against it. It does not reach sideways: a credential that resolves through this profile may, for the same five minutes, still act within its cached scope — including minting against a different, still-active principal it was already entitled to. To stop a specific credential now, revoke that credential. Defaults to `active` when omitted.
     """
 
     if IS_PYDANTIC_V2:

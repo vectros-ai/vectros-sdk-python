@@ -90,6 +90,14 @@ class AppContextResponse(UniversalBaseModel):
             description="Per-principal, per-billing-period operation cap for the opt-in per-principal usage/quota feature, or absent if unset (usage is still tracked for visibility/billing without a cap when `meteringAxis` is set but this is absent).",
         ),
     ] = None
+    identity_projection_claims: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="identityProjectionClaims"),
+        pydantic.Field(
+            alias="identityProjectionClaims",
+            description="The golden IdP-asserted identity claim names projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later. Absent when no projection is declared.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

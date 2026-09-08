@@ -81,6 +81,8 @@ if typing.TYPE_CHECKING:
     from .erasure_request_response_status import ErasureRequestResponseStatus
     from .error_event import ErrorEvent
     from .error_event_event import ErrorEventEvent
+    from .execution import Execution
+    from .execution_section import ExecutionSection
     from .export_manifest import ExportManifest
     from .export_manifest_format import ExportManifestFormat
     from .export_request_response import ExportRequestResponse
@@ -91,6 +93,7 @@ if typing.TYPE_CHECKING:
     from .file_upload_response import FileUploadResponse
     from .filter_condition import FilterCondition
     from .filter_value import FilterValue
+    from .firing_source_request import FiringSourceRequest
     from .folder_page import FolderPage
     from .folder_request import FolderRequest
     from .folder_response import FolderResponse
@@ -158,6 +161,7 @@ if typing.TYPE_CHECKING:
     from .region_rates import RegionRates
     from .render_hint_def import RenderHintDef
     from .render_hint_def_widget import RenderHintDefWidget
+    from .resolved_scope import ResolvedScope
     from .role_page import RolePage
     from .role_request import RoleRequest
     from .role_response import RoleResponse
@@ -178,6 +182,11 @@ if typing.TYPE_CHECKING:
     from .scoped_key_response_key_type import ScopedKeyResponseKeyType
     from .scoped_key_response_status import ScopedKeyResponseStatus
     from .scoped_key_response_user_type import ScopedKeyResponseUserType
+    from .script_execute_response import ScriptExecuteResponse
+    from .script_page import ScriptPage
+    from .script_ref_request import ScriptRefRequest
+    from .script_request import ScriptRequest
+    from .script_response import ScriptResponse
     from .search_response import SearchResponse
     from .search_result import SearchResult
     from .search_result_source_type import SearchResultSourceType
@@ -193,6 +202,12 @@ if typing.TYPE_CHECKING:
     from .tenants import Tenants
     from .token_assume_response import TokenAssumeResponse
     from .token_exchange_response import TokenExchangeResponse
+    from .trigger_failure_page import TriggerFailurePage
+    from .trigger_failure_response import TriggerFailureResponse
+    from .trigger_failure_response_event import TriggerFailureResponseEvent
+    from .trigger_rule_page import TriggerRulePage
+    from .trigger_rule_request import TriggerRuleRequest
+    from .trigger_rule_response import TriggerRuleResponse
     from .truncation_warning_event import TruncationWarningEvent
     from .truncation_warning_event_event import TruncationWarningEventEvent
     from .truncation_warning_event_reason import TruncationWarningEventReason
@@ -279,6 +294,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ErasureRequestResponseStatus": ".erasure_request_response_status",
     "ErrorEvent": ".error_event",
     "ErrorEventEvent": ".error_event_event",
+    "Execution": ".execution",
+    "ExecutionSection": ".execution_section",
     "ExportManifest": ".export_manifest",
     "ExportManifestFormat": ".export_manifest_format",
     "ExportRequestResponse": ".export_request_response",
@@ -289,6 +306,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "FileUploadResponse": ".file_upload_response",
     "FilterCondition": ".filter_condition",
     "FilterValue": ".filter_value",
+    "FiringSourceRequest": ".firing_source_request",
     "FolderPage": ".folder_page",
     "FolderRequest": ".folder_request",
     "FolderResponse": ".folder_response",
@@ -354,6 +372,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RegionRates": ".region_rates",
     "RenderHintDef": ".render_hint_def",
     "RenderHintDefWidget": ".render_hint_def_widget",
+    "ResolvedScope": ".resolved_scope",
     "RolePage": ".role_page",
     "RoleRequest": ".role_request",
     "RoleResponse": ".role_response",
@@ -374,6 +393,11 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ScopedKeyResponseKeyType": ".scoped_key_response_key_type",
     "ScopedKeyResponseStatus": ".scoped_key_response_status",
     "ScopedKeyResponseUserType": ".scoped_key_response_user_type",
+    "ScriptExecuteResponse": ".script_execute_response",
+    "ScriptPage": ".script_page",
+    "ScriptRefRequest": ".script_ref_request",
+    "ScriptRequest": ".script_request",
+    "ScriptResponse": ".script_response",
     "SearchResponse": ".search_response",
     "SearchResult": ".search_result",
     "SearchResultSourceType": ".search_result_source_type",
@@ -389,6 +413,12 @@ _dynamic_imports: typing.Dict[str, str] = {
     "Tenants": ".tenants",
     "TokenAssumeResponse": ".token_assume_response",
     "TokenExchangeResponse": ".token_exchange_response",
+    "TriggerFailurePage": ".trigger_failure_page",
+    "TriggerFailureResponse": ".trigger_failure_response",
+    "TriggerFailureResponseEvent": ".trigger_failure_response_event",
+    "TriggerRulePage": ".trigger_rule_page",
+    "TriggerRuleRequest": ".trigger_rule_request",
+    "TriggerRuleResponse": ".trigger_rule_response",
     "TruncationWarningEvent": ".truncation_warning_event",
     "TruncationWarningEventEvent": ".truncation_warning_event_event",
     "TruncationWarningEventReason": ".truncation_warning_event_reason",
@@ -499,6 +529,8 @@ __all__ = [
     "ErasureRequestResponseStatus",
     "ErrorEvent",
     "ErrorEventEvent",
+    "Execution",
+    "ExecutionSection",
     "ExportManifest",
     "ExportManifestFormat",
     "ExportRequestResponse",
@@ -509,6 +541,7 @@ __all__ = [
     "FileUploadResponse",
     "FilterCondition",
     "FilterValue",
+    "FiringSourceRequest",
     "FolderPage",
     "FolderRequest",
     "FolderResponse",
@@ -574,6 +607,7 @@ __all__ = [
     "RegionRates",
     "RenderHintDef",
     "RenderHintDefWidget",
+    "ResolvedScope",
     "RolePage",
     "RoleRequest",
     "RoleResponse",
@@ -594,6 +628,11 @@ __all__ = [
     "ScopedKeyResponseKeyType",
     "ScopedKeyResponseStatus",
     "ScopedKeyResponseUserType",
+    "ScriptExecuteResponse",
+    "ScriptPage",
+    "ScriptRefRequest",
+    "ScriptRequest",
+    "ScriptResponse",
     "SearchResponse",
     "SearchResult",
     "SearchResultSourceType",
@@ -609,6 +648,12 @@ __all__ = [
     "Tenants",
     "TokenAssumeResponse",
     "TokenExchangeResponse",
+    "TriggerFailurePage",
+    "TriggerFailureResponse",
+    "TriggerFailureResponseEvent",
+    "TriggerRulePage",
+    "TriggerRuleRequest",
+    "TriggerRuleResponse",
     "TruncationWarningEvent",
     "TruncationWarningEventEvent",
     "TruncationWarningEventReason",

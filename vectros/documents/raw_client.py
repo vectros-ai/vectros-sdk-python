@@ -843,10 +843,10 @@ class RawDocumentsClient:
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
 
         sort_from : typing.Optional[str]
-            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
 
         sort_to : typing.Optional[str]
-            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.
@@ -2066,10 +2066,10 @@ class AsyncRawDocumentsClient:
             Prefix to match for a prefix lookup (range-enabled string fields only). Mutually exclusive with `value` and `from`/`to`.
 
         sort_from : typing.Optional[str]
-            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point (#870). Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
+            Inclusive lower bound on the lookup field's sort key, narrowing a `value` match to documents at or after this point. Use with `value`; combine with `sortTo` to bound both ends. Give the bound in the same form as the sorted field's own values — epoch milliseconds when the lookup sorts by `createdAt` or `lastUpdated`. Documents with no value for the sorted field are never included in a bounded window.
 
         sort_to : typing.Optional[str]
-            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point (#870). Use with `value`; combine with `sortFrom`.
+            Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
             Pagination cursor. Pass the `nextCursor` from the previous page to fetch the next page; omit it for the first page.

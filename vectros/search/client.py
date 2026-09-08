@@ -39,6 +39,7 @@ class SearchClient:
         offset: typing.Optional[int] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scope: typing.Optional[str] = OMIT,
+        scope_filters: typing.Optional[typing.Sequence[str]] = OMIT,
         filters: typing.Optional[typing.Dict[str, FilterValue]] = OMIT,
         text_mode: typing.Optional[SearchRequestTextMode] = OMIT,
         min_similarity: typing.Optional[float] = OMIT,
@@ -75,7 +76,10 @@ class SearchClient:
             Restrict results to content owned by this user — the Vectros-assigned UUID of a user in your account. Use `GET /v1/users?externalId=` to look up a user's ID from your own identifier.
 
         scope : typing.Optional[str]
-            Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier.
+            Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier. Mutually exclusive with `scopeFilters` — use this for a single dimension, `scopeFilters` when you need to narrow by more than one.
+
+        scope_filters : typing.Optional[typing.Sequence[str]]
+            Restrict results to content matching ALL of these scope values (one per namespace), for a credential whose access spans more than one ownership dimension — for example `["org:<id>", "client:<id>"]` to narrow to one specific client within one specific org. Each entry uses the same `namespace:value` form as `scope`. Naming the same namespace twice is rejected. Mutually exclusive with `scope` — use `scope` for a single dimension.
 
         filters : typing.Optional[typing.Dict[str, FilterValue]]
             Field-level filters applied to your document and record metadata. Each key is a field name, and top-level keys are AND-combined. Each value is one of: a scalar (string, number, or boolean) for an exact match; an array of scalars to match any one of them; or an operator map for ranges, negation, and membership. The supported operators are a closed set: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` (each takes a scalar) and `$in`, `$nin` (each takes an array of scalars). Operators within one map are AND-combined, so `{"price":{"$gte":100,"$lte":500}}` expresses a closed range; `$in` and `$nin` may not be combined with other operators. Numbers and booleans are matched by type, so the field must have been ingested under a typed schema; dates may be sent as ISO 8601 strings or epoch milliseconds. Unknown operators, non-scalar operands, and malformed field names are rejected with a 400.
@@ -143,6 +147,7 @@ class SearchClient:
             offset=offset,
             user_id=user_id,
             scope=scope,
+            scope_filters=scope_filters,
             filters=filters,
             text_mode=text_mode,
             min_similarity=min_similarity,
@@ -185,6 +190,7 @@ class AsyncSearchClient:
         offset: typing.Optional[int] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scope: typing.Optional[str] = OMIT,
+        scope_filters: typing.Optional[typing.Sequence[str]] = OMIT,
         filters: typing.Optional[typing.Dict[str, FilterValue]] = OMIT,
         text_mode: typing.Optional[SearchRequestTextMode] = OMIT,
         min_similarity: typing.Optional[float] = OMIT,
@@ -221,7 +227,10 @@ class AsyncSearchClient:
             Restrict results to content owned by this user — the Vectros-assigned UUID of a user in your account. Use `GET /v1/users?externalId=` to look up a user's ID from your own identifier.
 
         scope : typing.Optional[str]
-            Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier.
+            Restrict results to content carrying this scope value, in `namespace:value` form (a value is 1-128 chars: a letter or digit first, then letters, digits, `_` or `-`) — for example `group:eng-team`, `org:<id>`, or `client:<id>`. Scope values are attached to records and documents at creation (the `scopes` field). Use `GET /v1/entities/{namespace}?externalId=` to look up an entity's ID from your own identifier. Mutually exclusive with `scopeFilters` — use this for a single dimension, `scopeFilters` when you need to narrow by more than one.
+
+        scope_filters : typing.Optional[typing.Sequence[str]]
+            Restrict results to content matching ALL of these scope values (one per namespace), for a credential whose access spans more than one ownership dimension — for example `["org:<id>", "client:<id>"]` to narrow to one specific client within one specific org. Each entry uses the same `namespace:value` form as `scope`. Naming the same namespace twice is rejected. Mutually exclusive with `scope` — use `scope` for a single dimension.
 
         filters : typing.Optional[typing.Dict[str, FilterValue]]
             Field-level filters applied to your document and record metadata. Each key is a field name, and top-level keys are AND-combined. Each value is one of: a scalar (string, number, or boolean) for an exact match; an array of scalars to match any one of them; or an operator map for ranges, negation, and membership. The supported operators are a closed set: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` (each takes a scalar) and `$in`, `$nin` (each takes an array of scalars). Operators within one map are AND-combined, so `{"price":{"$gte":100,"$lte":500}}` expresses a closed range; `$in` and `$nin` may not be combined with other operators. Numbers and booleans are matched by type, so the field must have been ingested under a typed schema; dates may be sent as ISO 8601 strings or epoch milliseconds. Unknown operators, non-scalar operands, and malformed field names are rejected with a 400.
@@ -297,6 +306,7 @@ class AsyncSearchClient:
             offset=offset,
             user_id=user_id,
             scope=scope,
+            scope_filters=scope_filters,
             filters=filters,
             text_mode=text_mode,
             min_similarity=min_similarity,

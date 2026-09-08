@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .resolved_scope import ResolvedScope
 
 
 class MintTokenResponse(UniversalBaseModel):
@@ -25,6 +26,9 @@ class MintTokenResponse(UniversalBaseModel):
             alias="expiresAt",
             description="When the token expires, as seconds since the Unix epoch (matches the token's `exp` claim).",
         ),
+    ]
+    resolved_scope: typing_extensions.Annotated[
+        ResolvedScope, FieldMetadata(alias="resolvedScope"), pydantic.Field(alias="resolvedScope")
     ]
 
     if IS_PYDANTIC_V2:

@@ -3,7 +3,10 @@
 import typing
 
 import pydantic
+import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..core.serialization import FieldMetadata
+from .resolved_scope import ResolvedScope
 
 
 class TokenAssumeResponse(UniversalBaseModel):
@@ -25,6 +28,10 @@ class TokenAssumeResponse(UniversalBaseModel):
     """
     Seconds until expiry. ALWAYS the presented token's own remaining lifetime — assuming a namespace value never resets or extends it.
     """
+
+    resolved_scope: typing_extensions.Annotated[
+        typing.Optional[ResolvedScope], FieldMetadata(alias="resolvedScope"), pydantic.Field(alias="resolvedScope")
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

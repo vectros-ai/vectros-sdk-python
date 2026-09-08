@@ -82,6 +82,14 @@ class IssuerResponse(UniversalBaseModel):
             description="Configured self-service signup policies, if any. Absent (not an empty list) when self-signup is not configured for this issuer.",
         ),
     ] = None
+    captured_claims: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="capturedClaims"),
+        pydantic.Field(
+            alias="capturedClaims",
+            description="Additional OIDC claim names captured from this issuer's tokens on every successful exchange, beyond `emailClaim`. Absent (not an empty list) when none are configured.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

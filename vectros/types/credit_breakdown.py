@@ -100,6 +100,19 @@ class CreditBreakdown(UniversalBaseModel):
         FieldMetadata(alias="dataOutMilli"),
         pydantic.Field(alias="dataOutMilli", description="dataOut in milli-credit precision (exact)"),
     ] = None
+    script_execution: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="scriptExecution"),
+        pydantic.Field(
+            alias="scriptExecution",
+            description="Credits consumed by script execution time (trigger rules and synchronous `POST /v1/scripts/execute` calls) beyond the allowance your billable operations earned. See the `execution` section for the millisecond figures behind this charge.",
+        ),
+    ] = None
+    script_execution_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="scriptExecutionMilli"),
+        pydantic.Field(alias="scriptExecutionMilli", description="scriptExecution in milli-credit precision (exact)"),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

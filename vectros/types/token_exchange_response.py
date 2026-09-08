@@ -3,7 +3,10 @@
 import typing
 
 import pydantic
+import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..core.serialization import FieldMetadata
+from .resolved_scope import ResolvedScope
 
 
 class TokenExchangeResponse(UniversalBaseModel):
@@ -30,6 +33,10 @@ class TokenExchangeResponse(UniversalBaseModel):
     """
     Seconds until expiry.
     """
+
+    resolved_scope: typing_extensions.Annotated[
+        typing.Optional[ResolvedScope], FieldMetadata(alias="resolvedScope"), pydantic.Field(alias="resolvedScope")
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
