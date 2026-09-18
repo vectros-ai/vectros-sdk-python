@@ -565,7 +565,7 @@ class RawAuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -943,6 +943,7 @@ class RawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        read_access_log_default: typing.Optional[bool] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AppContextResponse]:
@@ -975,6 +976,9 @@ class RawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        read_access_log_default : typing.Optional[bool]
+            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
 
@@ -1000,6 +1004,7 @@ class RawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "readAccessLogDefault": read_access_log_default,
                 "identityProjectionClaims": identity_projection_claims,
             },
             headers={
@@ -1521,6 +1526,17 @@ class RawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1617,11 +1633,12 @@ class RawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        read_access_log_default: typing.Optional[bool] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AppContextResponse]:
         """
-        Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -1648,6 +1665,9 @@ class RawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        read_access_log_default : typing.Optional[bool]
+            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
 
@@ -1670,6 +1690,7 @@ class RawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "readAccessLogDefault": read_access_log_default,
                 "identityProjectionClaims": identity_projection_claims,
             },
             headers={
@@ -1738,7 +1759,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[None]:
         """
-        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, and access profile belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 
         Parameters
         ----------
@@ -2382,10 +2403,11 @@ class RawAuthClient:
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -2405,7 +2427,7 @@ class RawAuthClient:
             Routing-pin field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
 
         sub_claim : typing.Optional[str]
-            Safe field — updatable. Omit to leave unchanged.
+            Updatable, but NOT a "safe" field in the sense the others on this object are: it names which verified JWT claim becomes a federated user's internal identity key, so changing it re-identifies (or, under self-signup, orphans) every user already bound through this issuer. Refused with 400 once the issuer has ever bound a user; freely updatable before that, and supplying the current value back is always a no-op. Omit to leave unchanged.
 
         email_claim : typing.Optional[str]
             Safe field — updatable. Omit to leave unchanged.
@@ -2421,6 +2443,9 @@ class RawAuthClient:
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
+        restricted_to_domain : typing.Optional[str]
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted). Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2446,6 +2471,7 @@ class RawAuthClient:
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
                 "capturedClaims": captured_claims,
+                "restrictedToDomain": restricted_to_domain,
             },
             headers={
                 "content-type": "application/json",
@@ -2520,7 +2546,7 @@ class RawAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[None]:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. Deactivate the affected users first if you intend to cut off their access, or register a replacement issuer before removing this one. An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -2673,10 +2699,11 @@ class RawAuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description for the full contract, including why it does NOT protect a shared/consumer-IdP registration with no company-domain population.
 
         Parameters
         ----------
@@ -2687,7 +2714,7 @@ class RawAuthClient:
             The IdP's `iss` claim value, exactly as it appears in tokens it issues.
 
         jwks_uri : str
-            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures.
+            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures. Must use the https:// scheme — an http:// endpoint is refused, since a plaintext fetch lets an on-path attacker substitute the signing keys this platform trusts for the issuer.
 
         audience : str
             The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
@@ -2702,13 +2729,16 @@ class RawAuthClient:
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
 
         userinfo_uri : typing.Optional[str]
-            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
+        restricted_to_domain : typing.Optional[str]
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit to leave this issuer domain-less (the current, unrestricted behavior) — required for a shared/consumer IdP with no company-domain population, but note that population is NOT protected by proof-of-control: with no `hd` claim in a presented token, only a domain-less registration can ever match, exactly as today.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2734,6 +2764,7 @@ class RawAuthClient:
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
                 "capturedClaims": captured_claims,
+                "restrictedToDomain": restricted_to_domain,
             },
             headers={
                 "content-type": "application/json",
@@ -3445,7 +3476,7 @@ class RawAuthClient:
             Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
 
         invite_token : typing.Optional[str]
-            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet (TOKEN-EXCHANGE-CONTRACT.md §6). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
 
         signup_type : typing.Optional[str]
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
@@ -4074,7 +4105,7 @@ class AsyncRawAuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -4452,6 +4483,7 @@ class AsyncRawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        read_access_log_default: typing.Optional[bool] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AppContextResponse]:
@@ -4484,6 +4516,9 @@ class AsyncRawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        read_access_log_default : typing.Optional[bool]
+            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
 
@@ -4509,6 +4544,7 @@ class AsyncRawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "readAccessLogDefault": read_access_log_default,
                 "identityProjectionClaims": identity_projection_claims,
             },
             headers={
@@ -5030,6 +5066,17 @@ class AsyncRawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -5126,11 +5173,12 @@ class AsyncRawAuthClient:
         metering_axis: typing.Optional[str] = OMIT,
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
+        read_access_log_default: typing.Optional[bool] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AppContextResponse]:
         """
-        Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -5157,6 +5205,9 @@ class AsyncRawAuthClient:
         principal_usage_cap : typing.Optional[int]
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
+        read_access_log_default : typing.Optional[bool]
+            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
 
@@ -5179,6 +5230,7 @@ class AsyncRawAuthClient:
                 "meteringAxis": metering_axis,
                 "principalBurstLimit": principal_burst_limit,
                 "principalUsageCap": principal_usage_cap,
+                "readAccessLogDefault": read_access_log_default,
                 "identityProjectionClaims": identity_projection_claims,
             },
             headers={
@@ -5247,7 +5299,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, and access profile belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 
         Parameters
         ----------
@@ -5891,10 +5943,11 @@ class AsyncRawAuthClient:
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -5914,7 +5967,7 @@ class AsyncRawAuthClient:
             Routing-pin field — immutable. Present only so the current value may be echoed back without error; a differing value is rejected.
 
         sub_claim : typing.Optional[str]
-            Safe field — updatable. Omit to leave unchanged.
+            Updatable, but NOT a "safe" field in the sense the others on this object are: it names which verified JWT claim becomes a federated user's internal identity key, so changing it re-identifies (or, under self-signup, orphans) every user already bound through this issuer. Refused with 400 once the issuer has ever bound a user; freely updatable before that, and supplying the current value back is always a no-op. Omit to leave unchanged.
 
         email_claim : typing.Optional[str]
             Safe field — updatable. Omit to leave unchanged.
@@ -5930,6 +5983,9 @@ class AsyncRawAuthClient:
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
+        restricted_to_domain : typing.Optional[str]
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted). Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -5955,6 +6011,7 @@ class AsyncRawAuthClient:
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
                 "capturedClaims": captured_claims,
+                "restrictedToDomain": restricted_to_domain,
             },
             headers={
                 "content-type": "application/json",
@@ -6029,7 +6086,7 @@ class AsyncRawAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. Deactivate the affected users first if you intend to cut off their access, or register a replacement issuer before removing this one. An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -6182,10 +6239,11 @@ class AsyncRawAuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description for the full contract, including why it does NOT protect a shared/consumer-IdP registration with no company-domain population.
 
         Parameters
         ----------
@@ -6196,7 +6254,7 @@ class AsyncRawAuthClient:
             The IdP's `iss` claim value, exactly as it appears in tokens it issues.
 
         jwks_uri : str
-            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures.
+            The IdP's remote JWKS endpoint, used to verify presented tokens' signatures. Must use the https:// scheme — an http:// endpoint is refused, since a plaintext fetch lets an on-path attacker substitute the signing keys this platform trusts for the issuer.
 
         audience : str
             The `aud` claim value this contract requires a presented subject_token to carry. Must be globally unique in combination with `issuer` — use a distinct audience per environment/context sharing one IdP account (most OIDC providers support this as an ordinary per-API/application default).
@@ -6211,13 +6269,16 @@ class AsyncRawAuthClient:
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
 
         userinfo_uri : typing.Optional[str]
-            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
+        restricted_to_domain : typing.Optional[str]
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit to leave this issuer domain-less (the current, unrestricted behavior) — required for a shared/consumer IdP with no company-domain population, but note that population is NOT protected by proof-of-control: with no `hd` claim in a presented token, only a domain-less registration can ever match, exactly as today.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -6243,6 +6304,7 @@ class AsyncRawAuthClient:
                     object_=self_signup_policies, annotation=typing.Sequence[SelfSignupPolicy], direction="write"
                 ),
                 "capturedClaims": captured_claims,
+                "restrictedToDomain": restricted_to_domain,
             },
             headers={
                 "content-type": "application/json",
@@ -6954,7 +7016,7 @@ class AsyncRawAuthClient:
             Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
 
         invite_token : typing.Optional[str]
-            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet (TOKEN-EXCHANGE-CONTRACT.md §6). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
 
         signup_type : typing.Optional[str]
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.

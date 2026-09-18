@@ -15,6 +15,7 @@ from ..types.record_request import RecordRequest
 from ..types.record_request_index_mode import RecordRequestIndexMode
 from ..types.record_request_status import RecordRequestStatus
 from ..types.record_response import RecordResponse
+from ..types.tombstone_response import TombstoneResponse
 from .raw_client import AsyncRawRecordsClient, RawRecordsClient
 from .types.batch_write_request_atomicity import BatchWriteRequestAtomicity
 from .types.lookup_records_request_order import LookupRecordsRequestOrder
@@ -824,9 +825,9 @@ class RecordsClient:
 
     def get_record_tombstone(
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> RecordResponse:
+    ) -> TombstoneResponse:
         """
-        Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope.
+        Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope, granted without a `data_scope` restriction: the owner of a deleted record cannot be checked, so a credential confined to an ownership compartment (e.g. `data_scope: {scope:org: [org_A]}`) cannot read tombstones, including for records it owned.
 
         Parameters
         ----------
@@ -837,7 +838,7 @@ class RecordsClient:
 
         Returns
         -------
-        RecordResponse
+        TombstoneResponse
             The tombstone was found and is returned.
 
         Examples
@@ -1785,9 +1786,9 @@ class AsyncRecordsClient:
 
     async def get_record_tombstone(
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
-    ) -> RecordResponse:
+    ) -> TombstoneResponse:
         """
-        Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope.
+        Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope, granted without a `data_scope` restriction: the owner of a deleted record cannot be checked, so a credential confined to an ownership compartment (e.g. `data_scope: {scope:org: [org_A]}`) cannot read tombstones, including for records it owned.
 
         Parameters
         ----------
@@ -1798,7 +1799,7 @@ class AsyncRecordsClient:
 
         Returns
         -------
-        RecordResponse
+        TombstoneResponse
             The tombstone was found and is returned.
 
         Examples

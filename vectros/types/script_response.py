@@ -33,15 +33,31 @@ class ScriptResponse(UniversalBaseModel):
     ] = None
     source: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The script's source text.
+    The script's source text. On a by-id GET this is always the full text. On a list response (GET /v1/scripts) it is omitted by default — see `sourceOmitted` — because scripts are immutable per version and a version-history listing can otherwise carry every version's complete source at once. Pass `?includeSource=true` to a list call to get it back inline (at the cost of the same per-row weight a by-id GET pays).
     """
 
+    source_omitted: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="sourceOmitted"),
+        pydantic.Field(
+            alias="sourceOmitted",
+            description="True when THIS response omitted `source` because it came from a list call (GET /v1/scripts) without `?includeSource=true` — fetch the full source with a by-id GET or `?includeSource=true`. Null (omitted from the response) on a by-id GET or a create response, which return the full source unconditionally — same convention as a document's `payloadPartial`. Unlike that field, this is never a PARTIAL value: `source` is either the complete text or entirely absent, never truncated.",
+        ),
+    ] = None
     declared_input_contract: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="declaredInputContract"),
         pydantic.Field(
             alias="declaredInputContract",
             description="Free-text description of the input shape this script expects, or null if not supplied.",
+        ),
+    ] = None
+    provisioned_by: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="provisionedBy"),
+        pydantic.Field(
+            alias="provisionedBy",
+            description="The name of the blueprint that provisions this script, or null if it is unmanaged (hand-authored, or pushed before this field existed and never re-pushed). A later push of this name inherits it forward automatically when the push omits the field — see `ScriptRequest.provisionedBy` for the full mechanism, including why this is a live comparison against the current latest version rather than a value fixed for the name's whole history.",
         ),
     ] = None
     created_at: typing_extensions.Annotated[

@@ -968,13 +968,13 @@ class IdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, `email` cannot be changed while an invitation to that user is still outstanding, and a user whose invitation has not been accepted cannot be set to `ACTIVE`. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -1091,7 +1091,7 @@ class IdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -1311,7 +1311,7 @@ class IdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ModelDataVersionPage:
         """
-        Returns the audit trail of changes to a user, most recent first. Identity history is always recorded and always available. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+        Returns the audit trail of changes to a user, most recent first, including after the user has been deleted. Identity history is always recorded. Post-delete, this is readable by an account-level (root) API key only — a context-confined credential 404s after the delete, the same response it would get for a nonexistent id. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
 
         Parameters
         ----------
@@ -2399,13 +2399,13 @@ class AsyncIdentityClient:
             Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
 
         upsert : typing.Optional[bool]
-            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
+            When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, `email` cannot be changed while an invitation to that user is still outstanding, and a user whose invitation has not been accepted cannot be set to `ACTIVE`. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -2538,7 +2538,7 @@ class AsyncIdentityClient:
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -2790,7 +2790,7 @@ class AsyncIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ModelDataVersionPage:
         """
-        Returns the audit trail of changes to a user, most recent first. Identity history is always recorded and always available. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+        Returns the audit trail of changes to a user, most recent first, including after the user has been deleted. Identity history is always recorded. Post-delete, this is readable by an account-level (root) API key only — a context-confined credential 404s after the delete, the same response it would get for a nonexistent id. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
 
         Parameters
         ----------

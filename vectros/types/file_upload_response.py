@@ -15,7 +15,7 @@ class FileUploadResponse(UniversalBaseModel):
 
     created: typing.Optional[bool] = pydantic.Field(default=None)
     """
-    Whether this call created a new document. True when a new document was created; false when a document with the same `externalId` already existed and a fresh upload URL to its existing object was re-issued (idempotent upload). Present only on the upload response (POST /v1/documents/upload). The HTTP status mirrors it — 201 when created, 200 when an existing document was returned.
+    Whether this call created a new document. True when a new document was created; false when a document with the same `externalId` already existed and a fresh upload URL was issued for it (idempotent upload); the upload targets a new object, and the document adopts it once the upload is validated. Present only on the upload response (POST /v1/documents/upload). The HTTP status mirrors it — 201 when created, 200 when an existing document was returned.
     """
 
     id: typing.Optional[str] = pydantic.Field(default=None)
@@ -28,7 +28,7 @@ class FileUploadResponse(UniversalBaseModel):
         FieldMetadata(alias="uploadUrl"),
         pydantic.Field(
             alias="uploadUrl",
-            description="Presigned upload URL. Upload the raw file bytes directly to this URL with an HTTP PUT request, setting the Content-Type header to the `fileType` you provided. No Authorization header is needed — the URL is self-authenticating.",
+            description="Presigned upload URL. Upload the raw file bytes directly to this URL with an HTTP PUT request, setting the Content-Type header to the `fileType` you provided. No Authorization header is needed — the URL is self-authenticating. Your PUT MUST also include the header named in `requiredHeaderName`, set to `requiredHeaderValue` exactly — the URL is single-use and this header is part of what makes it so; omitting it fails the request.",
         ),
     ] = None
     expires_at: typing_extensions.Annotated[
@@ -36,7 +36,7 @@ class FileUploadResponse(UniversalBaseModel):
         FieldMetadata(alias="expiresAt"),
         pydantic.Field(
             alias="expiresAt",
-            description="ISO-8601 UTC timestamp at which the presigned URL expires. The upload must complete before this time. Default expiry is 60 minutes.",
+            description="ISO-8601 UTC timestamp at which the presigned URL expires. The upload must complete before this time. Default expiry is 15 minutes.",
         ),
     ] = None
     external_id: typing_extensions.Annotated[
@@ -45,6 +45,21 @@ class FileUploadResponse(UniversalBaseModel):
         pydantic.Field(
             alias="externalId",
             description="The stable identifier you supplied on the request, echoed back. Immutable, and unique within your account and context. Null when you did not supply one.",
+        ),
+    ] = None
+    required_header_name: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="requiredHeaderName"),
+        pydantic.Field(
+            alias="requiredHeaderName",
+            description="HTTP header your PUT to `uploadUrl` MUST send. The presigned URL is single-use (S3 conditional writes) and this header is part of what makes its signature valid — omit it, or change its value, and the PUT is rejected.",
+        ),
+    ] = None
+    required_header_value: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="requiredHeaderValue"),
+        pydantic.Field(
+            alias="requiredHeaderValue", description="The exact value to send for `requiredHeaderName`, verbatim."
         ),
     ] = None
 

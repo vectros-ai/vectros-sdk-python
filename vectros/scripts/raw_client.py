@@ -23,9 +23,9 @@ from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..errors.unprocessable_entity_error import UnprocessableEntityError
 from ..types.script_execute_response import ScriptExecuteResponse
-from ..types.script_page import ScriptPage
 from ..types.script_ref_request import ScriptRefRequest
 from ..types.script_response import ScriptResponse
+from .types.list_scripts_response import ListScriptsResponse
 from pydantic import ValidationError
 
 # this is used as the default value for optional parameters
@@ -237,29 +237,37 @@ class RawScriptsClient:
         name: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        include_source: typing.Optional[bool] = None,
+        latest: typing.Optional[bool] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> HttpResponse[ScriptPage]:
+    ) -> HttpResponse[ListScriptsResponse]:
         """
-        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope. **Each row's `source` is omitted by default** (`sourceOmitted: true`) — scripts are immutable per version, so a name's version history can otherwise carry every version's complete source in one response. Pass `?includeSource=true` to get it back inline, or fetch one version's full source with a by-id GET. **`?name=<n>&latest=true`** answers "what is the current version of this name" in one bounded call — a single `ScriptResponse` object (not a page), instead of draining every page of the name's version history to find the newest yourself.
 
         Parameters
         ----------
         name : typing.Optional[str]
-            List every version of this script name (oldest first), instead of a flat cross-name list.
+            List every version of this script name (oldest first), instead of a flat cross-name list. Required when `latest=true`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged. Ignored when `latest=true`.
 
         limit : typing.Optional[int]
-            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20. Ignored when `latest=true`.
+
+        include_source : typing.Optional[bool]
+            Include each row's full `source` inline instead of the default omitted projection. Costs the same per-row weight a by-id GET pays; at `limit=100` on large scripts this can approach the response-payload ceiling (the reason the default changed). Defaults to false.
+
+        latest : typing.Optional[bool]
+            Instead of a page, return a single `ScriptResponse`: the current newest version of `name` (required alongside this). One bounded read (`GET`-by-id-equivalent cost) instead of draining every page of the name's version history to compute the max version yourself. Defaults to false.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        HttpResponse[ScriptPage]
-            A page of script versions, returned as a `{data, nextCursor}` envelope. `nextCursor` is null when there are no more pages.
+        HttpResponse[ListScriptsResponse]
+            Either a page of script versions (the `{data, nextCursor}` envelope; `nextCursor` is null when there are no more pages, and each row omits `source` unless `?includeSource=true` was passed), or — when `?latest=true` was passed alongside `name` — a single script version object, the newest of that name. Distinguish the two by shape: the page envelope has a top-level `data` array, the single-object form does not.
         """
         _response = self._client_wrapper.httpx_client.request(
             "v1/scripts",
@@ -268,19 +276,43 @@ class RawScriptsClient:
                 "name": name,
                 "startFrom": start_from,
                 "limit": limit,
+                "includeSource": include_source,
+                "latest": latest,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ScriptPage,
+                    ListScriptsResponse,
                     parse_obj_as(
-                        type_=ScriptPage,  # type: ignore
+                        type_=ListScriptsResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
                 return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             _response_json = _response.json()
         except JSONDecodeError:
             raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
@@ -296,10 +328,11 @@ class RawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScriptResponse]:
         """
-        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. `provisionedBy` MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value; if the latest version already has one, an omitted value inherits it forward and a DIFFERENT value is refused — a live comparison against whichever version is newest at push time, not a value fixed for the name's whole history. Pushing onto an EXISTING name with no `provisionedBy` recorded on its current latest version additionally requires that you were the caller who pushed that latest version — a name carrying a `provisionedBy` marker is exempt from this check (proving you can supply or inherit the matching marker is itself the ownership proof there). Requires the `scripts:c` scope.
 
         Parameters
         ----------
@@ -311,6 +344,9 @@ class RawScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -327,6 +363,7 @@ class RawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "provisionedBy": provisioned_by,
             },
             request_options=request_options,
             omit=OMIT,
@@ -454,6 +491,7 @@ class RawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[None]:
         """
@@ -472,6 +510,9 @@ class RawScriptsClient:
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
 
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -486,6 +527,7 @@ class RawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "provisionedBy": provisioned_by,
             },
             headers={
                 "content-type": "application/json",
@@ -529,7 +571,7 @@ class RawScriptsClient:
 
     def delete_script(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
         """
-        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope. Refused with 409 if a live trigger rule still references this version — either directly (a pinned `scriptRef`), or via `"latest"` when this IS the newest version of its name. Delete or re-point those rules first.
 
         Parameters
         ----------
@@ -552,6 +594,17 @@ class RawScriptsClient:
                 return HttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -787,29 +840,37 @@ class AsyncRawScriptsClient:
         name: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        include_source: typing.Optional[bool] = None,
+        latest: typing.Optional[bool] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> AsyncHttpResponse[ScriptPage]:
+    ) -> AsyncHttpResponse[ListScriptsResponse]:
         """
-        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope. **Each row's `source` is omitted by default** (`sourceOmitted: true`) — scripts are immutable per version, so a name's version history can otherwise carry every version's complete source in one response. Pass `?includeSource=true` to get it back inline, or fetch one version's full source with a by-id GET. **`?name=<n>&latest=true`** answers "what is the current version of this name" in one bounded call — a single `ScriptResponse` object (not a page), instead of draining every page of the name's version history to find the newest yourself.
 
         Parameters
         ----------
         name : typing.Optional[str]
-            List every version of this script name (oldest first), instead of a flat cross-name list.
+            List every version of this script name (oldest first), instead of a flat cross-name list. Required when `latest=true`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged. Ignored when `latest=true`.
 
         limit : typing.Optional[int]
-            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20. Ignored when `latest=true`.
+
+        include_source : typing.Optional[bool]
+            Include each row's full `source` inline instead of the default omitted projection. Costs the same per-row weight a by-id GET pays; at `limit=100` on large scripts this can approach the response-payload ceiling (the reason the default changed). Defaults to false.
+
+        latest : typing.Optional[bool]
+            Instead of a page, return a single `ScriptResponse`: the current newest version of `name` (required alongside this). One bounded read (`GET`-by-id-equivalent cost) instead of draining every page of the name's version history to compute the max version yourself. Defaults to false.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        AsyncHttpResponse[ScriptPage]
-            A page of script versions, returned as a `{data, nextCursor}` envelope. `nextCursor` is null when there are no more pages.
+        AsyncHttpResponse[ListScriptsResponse]
+            Either a page of script versions (the `{data, nextCursor}` envelope; `nextCursor` is null when there are no more pages, and each row omits `source` unless `?includeSource=true` was passed), or — when `?latest=true` was passed alongside `name` — a single script version object, the newest of that name. Distinguish the two by shape: the page envelope has a top-level `data` array, the single-object form does not.
         """
         _response = await self._client_wrapper.httpx_client.request(
             "v1/scripts",
@@ -818,19 +879,43 @@ class AsyncRawScriptsClient:
                 "name": name,
                 "startFrom": start_from,
                 "limit": limit,
+                "includeSource": include_source,
+                "latest": latest,
             },
             request_options=request_options,
         )
         try:
             if 200 <= _response.status_code < 300:
                 _data = typing.cast(
-                    ScriptPage,
+                    ListScriptsResponse,
                     parse_obj_as(
-                        type_=ScriptPage,  # type: ignore
+                        type_=ListScriptsResponse,  # type: ignore
                         object_=_response.json(),
                     ),
                 )
                 return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             _response_json = _response.json()
         except JSONDecodeError:
             raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
@@ -846,10 +931,11 @@ class AsyncRawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScriptResponse]:
         """
-        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. `provisionedBy` MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value; if the latest version already has one, an omitted value inherits it forward and a DIFFERENT value is refused — a live comparison against whichever version is newest at push time, not a value fixed for the name's whole history. Pushing onto an EXISTING name with no `provisionedBy` recorded on its current latest version additionally requires that you were the caller who pushed that latest version — a name carrying a `provisionedBy` marker is exempt from this check (proving you can supply or inherit the matching marker is itself the ownership proof there). Requires the `scripts:c` scope.
 
         Parameters
         ----------
@@ -861,6 +947,9 @@ class AsyncRawScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -877,6 +966,7 @@ class AsyncRawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "provisionedBy": provisioned_by,
             },
             request_options=request_options,
             omit=OMIT,
@@ -1004,6 +1094,7 @@ class AsyncRawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[None]:
         """
@@ -1022,6 +1113,9 @@ class AsyncRawScriptsClient:
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
 
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1036,6 +1130,7 @@ class AsyncRawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "provisionedBy": provisioned_by,
             },
             headers={
                 "content-type": "application/json",
@@ -1081,7 +1176,7 @@ class AsyncRawScriptsClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope. Refused with 409 if a live trigger rule still references this version — either directly (a pinned `scriptRef`), or via `"latest"` when this IS the newest version of its name. Delete or re-point those rules first.
 
         Parameters
         ----------
@@ -1104,6 +1199,17 @@ class AsyncRawScriptsClient:
                 return AsyncHttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

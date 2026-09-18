@@ -5,10 +5,10 @@ import typing
 from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.script_execute_response import ScriptExecuteResponse
-from ..types.script_page import ScriptPage
 from ..types.script_ref_request import ScriptRefRequest
 from ..types.script_response import ScriptResponse
 from .raw_client import AsyncRawScriptsClient, RawScriptsClient
+from .types.list_scripts_response import ListScriptsResponse
 
 # this is used as the default value for optional parameters
 OMIT = typing.cast(typing.Any, ...)
@@ -95,29 +95,37 @@ class ScriptsClient:
         name: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        include_source: typing.Optional[bool] = None,
+        latest: typing.Optional[bool] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> ScriptPage:
+    ) -> ListScriptsResponse:
         """
-        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope. **Each row's `source` is omitted by default** (`sourceOmitted: true`) — scripts are immutable per version, so a name's version history can otherwise carry every version's complete source in one response. Pass `?includeSource=true` to get it back inline, or fetch one version's full source with a by-id GET. **`?name=<n>&latest=true`** answers "what is the current version of this name" in one bounded call — a single `ScriptResponse` object (not a page), instead of draining every page of the name's version history to find the newest yourself.
 
         Parameters
         ----------
         name : typing.Optional[str]
-            List every version of this script name (oldest first), instead of a flat cross-name list.
+            List every version of this script name (oldest first), instead of a flat cross-name list. Required when `latest=true`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged. Ignored when `latest=true`.
 
         limit : typing.Optional[int]
-            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20. Ignored when `latest=true`.
+
+        include_source : typing.Optional[bool]
+            Include each row's full `source` inline instead of the default omitted projection. Costs the same per-row weight a by-id GET pays; at `limit=100` on large scripts this can approach the response-payload ceiling (the reason the default changed). Defaults to false.
+
+        latest : typing.Optional[bool]
+            Instead of a page, return a single `ScriptResponse`: the current newest version of `name` (required alongside this). One bounded read (`GET`-by-id-equivalent cost) instead of draining every page of the name's version history to compute the max version yourself. Defaults to false.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        ScriptPage
-            A page of script versions, returned as a `{data, nextCursor}` envelope. `nextCursor` is null when there are no more pages.
+        ListScriptsResponse
+            Either a page of script versions (the `{data, nextCursor}` envelope; `nextCursor` is null when there are no more pages, and each row omits `source` unless `?includeSource=true` was passed), or — when `?latest=true` was passed alongside `name` — a single script version object, the newest of that name. Distinguish the two by shape: the page envelope has a top-level `data` array, the single-object form does not.
 
         Examples
         --------
@@ -133,7 +141,12 @@ class ScriptsClient:
         )
         """
         _response = self._raw_client.list_scripts(
-            name=name, start_from=start_from, limit=limit, request_options=request_options
+            name=name,
+            start_from=start_from,
+            limit=limit,
+            include_source=include_source,
+            latest=latest,
+            request_options=request_options,
         )
         return _response.data
 
@@ -143,10 +156,11 @@ class ScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ScriptResponse:
         """
-        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. `provisionedBy` MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value; if the latest version already has one, an omitted value inherits it forward and a DIFFERENT value is refused — a live comparison against whichever version is newest at push time, not a value fixed for the name's whole history. Pushing onto an EXISTING name with no `provisionedBy` recorded on its current latest version additionally requires that you were the caller who pushed that latest version — a name carrying a `provisionedBy` marker is exempt from this check (proving you can supply or inherit the matching marker is itself the ownership proof there). Requires the `scripts:c` scope.
 
         Parameters
         ----------
@@ -158,6 +172,9 @@ class ScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -181,7 +198,11 @@ class ScriptsClient:
         )
         """
         _response = self._raw_client.create_script(
-            name=name, source=source, declared_input_contract=declared_input_contract, request_options=request_options
+            name=name,
+            source=source,
+            declared_input_contract=declared_input_contract,
+            provisioned_by=provisioned_by,
+            request_options=request_options,
         )
         return _response.data
 
@@ -223,6 +244,7 @@ class ScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> None:
         """
@@ -240,6 +262,9 @@ class ScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -267,13 +292,14 @@ class ScriptsClient:
             name=name,
             source=source,
             declared_input_contract=declared_input_contract,
+            provisioned_by=provisioned_by,
             request_options=request_options,
         )
         return _response.data
 
     def delete_script(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope. Refused with 409 if a live trigger rule still references this version — either directly (a pinned `scriptRef`), or via `"latest"` when this IS the newest version of its name. Delete or re-point those rules first.
 
         Parameters
         ----------
@@ -391,29 +417,37 @@ class AsyncScriptsClient:
         name: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
+        include_source: typing.Optional[bool] = None,
+        latest: typing.Optional[bool] = None,
         request_options: typing.Optional[RequestOptions] = None,
-    ) -> ScriptPage:
+    ) -> ListScriptsResponse:
         """
-        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+        Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope. **Each row's `source` is omitted by default** (`sourceOmitted: true`) — scripts are immutable per version, so a name's version history can otherwise carry every version's complete source in one response. Pass `?includeSource=true` to get it back inline, or fetch one version's full source with a by-id GET. **`?name=<n>&latest=true`** answers "what is the current version of this name" in one bounded call — a single `ScriptResponse` object (not a page), instead of draining every page of the name's version history to find the newest yourself.
 
         Parameters
         ----------
         name : typing.Optional[str]
-            List every version of this script name (oldest first), instead of a flat cross-name list.
+            List every version of this script name (oldest first), instead of a flat cross-name list. Required when `latest=true`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged. Ignored when `latest=true`.
 
         limit : typing.Optional[int]
-            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+            Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20. Ignored when `latest=true`.
+
+        include_source : typing.Optional[bool]
+            Include each row's full `source` inline instead of the default omitted projection. Costs the same per-row weight a by-id GET pays; at `limit=100` on large scripts this can approach the response-payload ceiling (the reason the default changed). Defaults to false.
+
+        latest : typing.Optional[bool]
+            Instead of a page, return a single `ScriptResponse`: the current newest version of `name` (required alongside this). One bounded read (`GET`-by-id-equivalent cost) instead of draining every page of the name's version history to compute the max version yourself. Defaults to false.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Returns
         -------
-        ScriptPage
-            A page of script versions, returned as a `{data, nextCursor}` envelope. `nextCursor` is null when there are no more pages.
+        ListScriptsResponse
+            Either a page of script versions (the `{data, nextCursor}` envelope; `nextCursor` is null when there are no more pages, and each row omits `source` unless `?includeSource=true` was passed), or — when `?latest=true` was passed alongside `name` — a single script version object, the newest of that name. Distinguish the two by shape: the page envelope has a top-level `data` array, the single-object form does not.
 
         Examples
         --------
@@ -437,7 +471,12 @@ class AsyncScriptsClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.list_scripts(
-            name=name, start_from=start_from, limit=limit, request_options=request_options
+            name=name,
+            start_from=start_from,
+            limit=limit,
+            include_source=include_source,
+            latest=latest,
+            request_options=request_options,
         )
         return _response.data
 
@@ -447,10 +486,11 @@ class AsyncScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ScriptResponse:
         """
-        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+        Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. `provisionedBy` MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value; if the latest version already has one, an omitted value inherits it forward and a DIFFERENT value is refused — a live comparison against whichever version is newest at push time, not a value fixed for the name's whole history. Pushing onto an EXISTING name with no `provisionedBy` recorded on its current latest version additionally requires that you were the caller who pushed that latest version — a name carrying a `provisionedBy` marker is exempt from this check (proving you can supply or inherit the matching marker is itself the ownership proof there). Requires the `scripts:c` scope.
 
         Parameters
         ----------
@@ -462,6 +502,9 @@ class AsyncScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -493,7 +536,11 @@ class AsyncScriptsClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create_script(
-            name=name, source=source, declared_input_contract=declared_input_contract, request_options=request_options
+            name=name,
+            source=source,
+            declared_input_contract=declared_input_contract,
+            provisioned_by=provisioned_by,
+            request_options=request_options,
         )
         return _response.data
 
@@ -543,6 +590,7 @@ class AsyncScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> None:
         """
@@ -560,6 +608,9 @@ class AsyncScriptsClient:
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced in this release. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        provisioned_by : typing.Optional[str]
+            An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. Not currently sent by `vectros bootstrap --blueprint`, which does not yet set this field for scripts. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -595,13 +646,14 @@ class AsyncScriptsClient:
             name=name,
             source=source,
             declared_input_contract=declared_input_contract,
+            provisioned_by=provisioned_by,
             request_options=request_options,
         )
         return _response.data
 
     async def delete_script(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> None:
         """
-        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+        Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope. Refused with 409 if a live trigger rule still references this version — either directly (a pinned `scriptRef`), or via `"latest"` when this IS the newest version of its name. Delete or re-point those rules first.
 
         Parameters
         ----------

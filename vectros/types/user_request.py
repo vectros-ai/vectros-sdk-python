@@ -30,7 +30,7 @@ class UserRequest(UniversalBaseModel):
 
     status: typing.Optional[UserRequestStatus] = pydantic.Field(default=None)
     """
-    The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained, and no new credentials can be issued for them — credentials they already hold keep working until they expire or are revoked. `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+    The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
     """
 
     type: typing.Optional[UserRequestType] = pydantic.Field(default=None)

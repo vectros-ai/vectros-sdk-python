@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .read_access_log_response_action import ReadAccessLogResponseAction
+from .read_access_subject import ReadAccessSubject
 
 
 class ReadAccessLogResponse(UniversalBaseModel):
@@ -26,19 +27,11 @@ class ReadAccessLogResponse(UniversalBaseModel):
             alias="contextId", description="The app context the read occurred in (the data-partition axis)."
         ),
     ] = None
-    subject_type: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="subjectType"),
-        pydantic.Field(
-            alias="subjectType",
-            description="The kind of subject whose PHI was read: `user`, or an ownership namespace such as `org` or `client`.",
-        ),
-    ] = None
-    subject_id: typing_extensions.Annotated[
-        typing.Optional[str],
-        FieldMetadata(alias="subjectId"),
-        pydantic.Field(alias="subjectId", description="Identifier of the data subject whose PHI was read."),
-    ] = None
+    subjects: typing.Optional[typing.List[ReadAccessSubject]] = pydantic.Field(default=None)
+    """
+    Every subject whose PHI this read disclosed — the ownership dimensions the accessed row carried at the moment of disclosure. A record owned by a user AND an organisation AND a team is ONE disclosure with THREE subjects, and is returned by a query on any of them. Empty only when the accessed row carried no ownership at all, in which case the read is accounted at tenant level.
+    """
+
     caller_key_id: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="callerKeyId"),

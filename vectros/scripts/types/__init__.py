@@ -6,8 +6,8 @@ import typing
 from importlib import import_module
 
 if typing.TYPE_CHECKING:
-    from .types import ListScriptsResponse
-_dynamic_imports: typing.Dict[str, str] = {"ListScriptsResponse": ".types"}
+    from .list_scripts_response import ListScriptsResponse
+_dynamic_imports: typing.Dict[str, str] = {"ListScriptsResponse": ".list_scripts_response"}
 
 
 def __getattr__(attr_name: str) -> typing.Any:

@@ -613,7 +613,7 @@ client.auth.get_admin_logs(
 <dl>
 <dd>
 
-**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, or `export`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names.
+**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
     
 </dd>
 </dl>
@@ -1531,7 +1531,7 @@ client.auth.get_app_context(
 <dl>
 <dd>
 
-Updates the name, description, and/or companyName of an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Requires the `app-contexts:u` scope.
+Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 </dd>
 </dl>
 </dd>
@@ -1613,7 +1613,7 @@ client.auth.update_app_context(
 <dl>
 <dd>
 
-Permanently deletes an app context and everything in it — every record, document, folder, schema, role, and access profile belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 </dd>
 </dl>
 </dd>
@@ -2292,7 +2292,7 @@ client.auth.get_issuer(
 <dl>
 <dd>
 
-Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 </dd>
 </dl>
 </dd>
@@ -2372,7 +2372,7 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
-**sub_claim:** `typing.Optional[str]` — Safe field — updatable. Omit to leave unchanged.
+**sub_claim:** `typing.Optional[str]` — Updatable, but NOT a "safe" field in the sense the others on this object are: it names which verified JWT claim becomes a federated user's internal identity key, so changing it re-identifies (or, under self-signup, orphans) every user already bound through this issuer. Refused with 400 once the issuer has ever bound a user; freely updatable before that, and supplying the current value back is always a no-op. Omit to leave unchanged.
     
 </dd>
 </dl>
@@ -2420,6 +2420,14 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
+**restricted_to_domain:** `typing.Optional[str]` — Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted). Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
     
 </dd>
@@ -2444,7 +2452,7 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
-Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. Deactivate the affected users first if you intend to cut off their access, or register a replacement issuer before removing this one. An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 </dd>
 </dl>
 </dd>
@@ -2594,7 +2602,7 @@ client.auth.list_issuers()
 <dl>
 <dd>
 
-Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`.
+Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description for the full contract, including why it does NOT protect a shared/consumer-IdP registration with no company-domain population.
 </dd>
 </dl>
 </dd>
@@ -2654,7 +2662,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-**jwks_uri:** `str` — The IdP's remote JWKS endpoint, used to verify presented tokens' signatures.
+**jwks_uri:** `str` — The IdP's remote JWKS endpoint, used to verify presented tokens' signatures. Must use the https:// scheme — an http:// endpoint is refused, since a plaintext fetch lets an on-path attacker substitute the signing keys this platform trusts for the issuer.
     
 </dd>
 </dl>
@@ -2694,7 +2702,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-**userinfo_uri:** `typing.Optional[str]` — The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today.
+**userinfo_uri:** `typing.Optional[str]` — The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
     
 </dd>
 </dl>
@@ -2711,6 +2719,14 @@ client.auth.register_issuer(
 <dd>
 
 **captured_claims:** `typing.Optional[typing.List[str]]` — Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**restricted_to_domain:** `typing.Optional[str]` — Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit to leave this issuer domain-less (the current, unrestricted behavior) — required for a shared/consumer IdP with no company-domain population, but note that population is NOT protected by proof-of-control: with no `hd` claim in a presented token, only a domain-less registration can ever match, exactly as today.
     
 </dd>
 </dl>
@@ -3307,7 +3323,7 @@ client.auth.exchange_token(
 <dl>
 <dd>
 
-**invite_token:** `typing.Optional[str]` — The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet (TOKEN-EXCHANGE-CONTRACT.md §6). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+**invite_token:** `typing.Optional[str]` — The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
     
 </dd>
 </dl>
@@ -4436,7 +4452,7 @@ client.documents.get_document_versions(
 <dl>
 <dd>
 
-Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL to the SAME existing document/object (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata).
+Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one.
 </dd>
 </dl>
 </dd>
@@ -5948,7 +5964,7 @@ client.identity.create_user(
 <dl>
 <dd>
 
-**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, and `email` cannot be changed while an invitation to that user is still outstanding. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
+**upsert:** `typing.Optional[bool]` — When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, `email` cannot be changed while an invitation to that user is still outstanding, and a user whose invitation has not been accepted cannot be set to `ACTIVE`. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
     
 </dd>
 </dl>
@@ -6359,7 +6375,7 @@ client.identity.user_exists_by_email(
 <dl>
 <dd>
 
-Returns the audit trail of changes to a user, most recent first. Identity history is always recorded and always available. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
+Returns the audit trail of changes to a user, most recent first, including after the user has been deleted. Identity history is always recorded. Post-delete, this is readable by an account-level (root) API key only — a context-confined credential 404s after the delete, the same response it would get for a nonexistent id. Sensitive field values are redacted in every historical version. Returns a page in the `{data, nextCursor}` envelope. Requires the `users:r` scope.
 </dd>
 </dl>
 </dd>
@@ -8930,7 +8946,7 @@ You may supply fewer values than the lookup declares, as long as they are a lead
 </dl>
 </details>
 
-<details><summary><code>client.records.<a href="src/vectros/records/client.py">get_record_tombstone</a>(...) -> RecordResponse</code></summary>
+<details><summary><code>client.records.<a href="src/vectros/records/client.py">get_record_tombstone</a>(...) -> TombstoneResponse</code></summary>
 <dl>
 <dd>
 
@@ -8942,7 +8958,7 @@ You may supply fewer values than the lookup declares, as long as they are a lead
 <dl>
 <dd>
 
-Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope.
+Returns the tombstone left behind when a record was hard-deleted, confirming the deletion and recording when it happened. Look it up using the deleted record's original ID. Requires the `records:r:<type>` scope, granted without a `data_scope` restriction: the owner of a deleted record cannot be checked, so a credential confined to an ownership compartment (e.g. `data_scope: {scope:org: [org_A]}`) cannot read tombstones, including for records it owned.
 </dd>
 </dl>
 </dd>
@@ -9475,7 +9491,7 @@ client.schemas.update_schema(
 <dl>
 <dd>
 
-Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
 </dd>
 </dl>
 </dd>
@@ -9718,7 +9734,7 @@ client.scripts.execute_script(
 </dl>
 </details>
 
-<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">list_scripts</a>(...) -> ScriptPage</code></summary>
+<details><summary><code>client.scripts.<a href="src/vectros/scripts/client.py">list_scripts</a>(...) -> ListScriptsResponse</code></summary>
 <dl>
 <dd>
 
@@ -9730,7 +9746,7 @@ client.scripts.execute_script(
 <dl>
 <dd>
 
-Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope.
+Returns a paginated list of your scripts. Pass `name` to list every version of one script name (oldest first); omit it for a flat list across every name in your account (newest first). Results are returned as a `{data, nextCursor}` envelope — pass `nextCursor` as `startFrom` to fetch the next page. Requires the `scripts:r` scope. **Each row's `source` is omitted by default** (`sourceOmitted: true`) — scripts are immutable per version, so a name's version history can otherwise carry every version's complete source in one response. Pass `?includeSource=true` to get it back inline, or fetch one version's full source with a by-id GET. **`?name=<n>&latest=true`** answers "what is the current version of this name" in one bounded call — a single `ScriptResponse` object (not a page), instead of draining every page of the name's version history to find the newest yourself.
 </dd>
 </dl>
 </dd>
@@ -9771,7 +9787,7 @@ client.scripts.list_scripts(
 <dl>
 <dd>
 
-**name:** `typing.Optional[str]` — List every version of this script name (oldest first), instead of a flat cross-name list.
+**name:** `typing.Optional[str]` — List every version of this script name (oldest first), instead of a flat cross-name list. Required when `latest=true`.
     
 </dd>
 </dl>
@@ -9779,7 +9795,7 @@ client.scripts.list_scripts(
 <dl>
 <dd>
 
-**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged.
+**start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged. Ignored when `latest=true`.
     
 </dd>
 </dl>
@@ -9787,7 +9803,23 @@ client.scripts.list_scripts(
 <dl>
 <dd>
 
-**limit:** `typing.Optional[int]` — Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20.
+**limit:** `typing.Optional[int]` — Maximum number of scripts to return per page. Must be between 1 and 100; defaults to 20. Ignored when `latest=true`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**include_source:** `typing.Optional[bool]` — Include each row's full `source` inline instead of the default omitted projection. Costs the same per-row weight a by-id GET pays; at `limit=100` on large scripts this can approach the response-payload ceiling (the reason the default changed). Defaults to false.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**latest:** `typing.Optional[bool]` — Instead of a page, return a single `ScriptResponse`: the current newest version of `name` (required alongside this). One bounded read (`GET`-by-id-equivalent cost) instead of draining every page of the name's version history to compute the max version yourself. Defaults to false.
     
 </dd>
 </dl>
@@ -9819,7 +9851,7 @@ client.scripts.list_scripts(
 <dl>
 <dd>
 
-Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. Requires the `scripts:c` scope.
+Stores a new version of a script object. Every POST creates a genuinely new version — this is NOT idempotent-by-name: pushing `name` again always creates a new row with `scriptVersion` auto-incremented (the first version pushed for a name is 1). `source` is stored as-is: nothing parses or validates it at push time. A version runs when a trigger rule references it (`POST /v1/triggers`) or when `POST /v1/scripts/execute` names it. `provisionedBy` MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value; if the latest version already has one, an omitted value inherits it forward and a DIFFERENT value is refused — a live comparison against whichever version is newest at push time, not a value fixed for the name's whole history. Pushing onto an EXISTING name with no `provisionedBy` recorded on its current latest version additionally requires that you were the caller who pushed that latest version — a name carrying a `provisionedBy` marker is exempt from this check (proving you can supply or inherit the matching marker is itself the ownership proof there). Requires the `scripts:c` scope.
 </dd>
 </dl>
 </dd>
@@ -10046,7 +10078,7 @@ client.scripts.update_script(
 <dl>
 <dd>
 
-Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope.
+Permanently deletes one script version by ID. Deleting one version does not affect any other version of the same name. Requires the `scripts:d` scope. Refused with 409 if a live trigger rule still references this version — either directly (a pinned `scriptRef`), or via `"latest"` when this IS the newest version of its name. Delete or re-point those rules first.
 </dd>
 </dl>
 </dd>

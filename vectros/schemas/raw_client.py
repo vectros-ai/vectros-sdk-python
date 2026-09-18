@@ -523,7 +523,7 @@ class RawSchemasClient:
 
     def delete_schema(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
 
         Parameters
         ----------
@@ -1157,7 +1157,7 @@ class AsyncRawSchemasClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
 
         Parameters
         ----------

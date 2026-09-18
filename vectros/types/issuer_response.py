@@ -90,6 +90,14 @@ class IssuerResponse(UniversalBaseModel):
             description="Additional OIDC claim names captured from this issuer's tokens on every successful exchange, beyond `emailClaim`. Absent (not an empty list) when none are configured.",
         ),
     ] = None
+    restricted_to_domain: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="restrictedToDomain"),
+        pydantic.Field(
+            alias="restrictedToDomain",
+            description="The verified domain this issuer's (issuer, audience) uniqueness is scoped to, if opted into. Absent when this registration is domain-less (the unrestricted, unscoped-to-any-population default).",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
