@@ -8,7 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class SelfSignupPolicy(UniversalBaseModel):
     """
-    Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+    Configured self-service signup policies, if any. Absent (not an empty list) when self-signup is not configured for this issuer.
     """
 
     signup_type: str = pydantic.Field()

@@ -59,7 +59,7 @@ class IssuerResponse(UniversalBaseModel):
     ] = None
     status: typing.Optional[str] = pydantic.Field(default=None)
     """
-    `active` or `suspended`. A suspended issuer is registered but its tokens are no longer accepted for exchange.
+    `active`, `suspended` or `pending_verification`. A suspended issuer is registered but its tokens are no longer accepted for exchange. A registration created WITHOUT `restrictedToDomain` starts as `pending_verification`: it accepts no tokens until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify` (see the `verification*` fields). A registration scoped to a verified domain is `active` at once.
     """
 
     created_at: typing_extensions.Annotated[
@@ -96,6 +96,30 @@ class IssuerResponse(UniversalBaseModel):
         pydantic.Field(
             alias="restrictedToDomain",
             description="The verified domain this issuer's (issuer, audience) uniqueness is scoped to, if opted into. Absent when this registration is domain-less (the unrestricted, unscoped-to-any-population default).",
+        ),
+    ] = None
+    verification_claim: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="verificationClaim"),
+        pydantic.Field(
+            alias="verificationClaim",
+            description="Present only while `status` is `pending_verification`. The name of the token claim your IdP must stamp `verificationNonce` into. Fixed by the platform; configure an admin-controlled rule at your IdP (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper) that adds it — never map it from an attribute your end users can edit.",
+        ),
+    ] = None
+    verification_nonce: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="verificationNonce"),
+        pydantic.Field(
+            alias="verificationNonce",
+            description="Present only while `status` is `pending_verification`. The one-time value your IdP's rule must place in the `verificationClaim` claim. Not a credential: it proves nothing unless it arrives inside a token signed by the issuer's own keys.",
+        ),
+    ] = None
+    verification_expires_at: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="verificationExpiresAt"),
+        pydantic.Field(
+            alias="verificationExpiresAt",
+            description="Present only while `status` is `pending_verification`. When the challenge expires, as an ISO-8601 UTC timestamp. An expired registration can no longer be verified; delete it and register again.",
         ),
     ] = None
 

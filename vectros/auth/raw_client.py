@@ -2407,7 +2407,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -2436,7 +2436,7 @@ class RawAuthClient:
             Safe field — updatable. The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source when `emailClaim` misses on the presented access token. Omit to leave unchanged. See `IssuerRequest.userinfoUri` for the full semantics.
 
         status : typing.Optional[str]
-            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. Omit to leave unchanged.
+            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. A registration in `pending_verification` accepts no status change at all (only its own current status echoed back is tolerated) — prove control of the issuer with `POST /v1/auth/issuers/{issuerId}/verify` first — and `pending_verification` itself can never be set. Omit to leave unchanged.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
@@ -2445,7 +2445,7 @@ class RawAuthClient:
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
-            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted). Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted) — refused with 400 unless this registration has itself proven control of the unrestricted (issuer, audience) pair (it was registered without a domain and verified); a registration created scoped to a domain must instead register a new issuer without `restrictedToDomain` and verify it. Refused on a registration awaiting verification. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2703,7 +2703,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description for the full contract, including why it does NOT protect a shared/consumer-IdP registration with no company-domain population.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -2738,7 +2738,7 @@ class RawAuthClient:
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
 
         restricted_to_domain : typing.Optional[str]
-            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit to leave this issuer domain-less (the current, unrestricted behavior) — required for a shared/consumer IdP with no company-domain population, but note that population is NOT protected by proof-of-control: with no `hd` claim in a presented token, only a domain-less registration can ever match, exactly as today.
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2795,6 +2795,114 @@ class RawAuthClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def verify_issuer(
+        self, issuer_id: str, *, token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[IssuerResponse]:
+        """
+        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        token : str
+            A JWT your IdP issued for a real login, carrying the issuer's `verificationClaim` with the registration's `verificationNonce`. It is checked against the issuer's own published key set, then discarded — it is never stored or used to sign anyone in.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[IssuerResponse]
+            The registration is verified and now `active`.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}/verify",
+            method="POST",
+            json={
+                "token": token,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -5947,7 +6055,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -5976,7 +6084,7 @@ class AsyncRawAuthClient:
             Safe field — updatable. The IdP's OIDC userinfo endpoint, used as a fallback email-resolution source when `emailClaim` misses on the presented access token. Omit to leave unchanged. See `IssuerRequest.userinfoUri` for the full semantics.
 
         status : typing.Optional[str]
-            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. Omit to leave unchanged.
+            Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. A registration in `pending_verification` accepts no status change at all (only its own current status echoed back is tolerated) — prove control of the issuer with `POST /v1/auth/issuers/{issuerId}/verify` first — and `pending_verification` itself can never be set. Omit to leave unchanged.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
@@ -5985,7 +6093,7 @@ class AsyncRawAuthClient:
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
-            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted). Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted) — refused with 400 unless this registration has itself proven control of the unrestricted (issuer, audience) pair (it was registered without a domain and verified); a registration created scoped to a domain must instead register a new issuer without `restrictedToDomain` and verify it. Refused on a registration awaiting verification. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -6243,7 +6351,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. Idempotent by `issuerId` within your tenant; the `(issuer, audience)` pair must not already be registered by a different issuerId/tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description for the full contract, including why it does NOT protect a shared/consumer-IdP registration with no company-domain population.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -6278,7 +6386,7 @@ class AsyncRawAuthClient:
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
 
         restricted_to_domain : typing.Optional[str]
-            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit to leave this issuer domain-less (the current, unrestricted behavior) — required for a shared/consumer IdP with no company-domain population, but note that population is NOT protected by proof-of-control: with no `hd` claim in a presented token, only a domain-less registration can ever match, exactly as today.
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -6335,6 +6443,114 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def verify_issuer(
+        self, issuer_id: str, *, token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[IssuerResponse]:
+        """
+        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        token : str
+            A JWT your IdP issued for a real login, carrying the issuer's `verificationClaim` with the registration's `verificationNonce`. It is checked against the issuer's own published key set, then discarded — it is never stored or used to sign anyone in.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[IssuerResponse]
+            The registration is verified and now `active`.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/auth/issuers/{encode_path_param(issuer_id)}/verify",
+            method="POST",
+            json={
+                "token": token,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    IssuerResponse,
+                    parse_obj_as(
+                        type_=IssuerResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
