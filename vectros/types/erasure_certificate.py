@@ -12,7 +12,7 @@ from .erasure_context_result import ErasureContextResult
 
 class ErasureCertificate(UniversalBaseModel):
     """
-    Verifiable proof of an erasure: which contexts were swept, the per-context deletion counts, and reports of references and shared rows that were detected but deliberately left intact rather than cascaded.
+    Completion certificate for an erasure request: which contexts were swept, the per-context deletion counts, whether the identity was kept, and reports of references and shared rows that were detected but not cascaded.
     """
 
     contexts_swept: typing_extensions.Annotated[
@@ -20,7 +20,7 @@ class ErasureCertificate(UniversalBaseModel):
         FieldMetadata(alias="contextsSwept"),
         pydantic.Field(
             alias="contextsSwept",
-            description="The contexts that were actually swept. When you omit or leave the request's context scope empty, this lists every context the subject had data in. Any context not listed here was not erased.",
+            description="The contexts that were actually swept. When you omit or leave the request's context scope empty, this lists every context of your account, whether or not the subject held data in it. Any context not listed here was not erased.",
         ),
     ] = None
     per_context: typing_extensions.Annotated[
@@ -36,7 +36,7 @@ class ErasureCertificate(UniversalBaseModel):
         FieldMetadata(alias="danglingReferences"),
         pydantic.Field(
             alias="danglingReferences",
-            description="Number of reference fields within your account that point at the erased subject and were left dangling. These are reported for your own diagnosis and are never automatically cascaded into another subject's records.",
+            description="Number of rows that referenced the erased subject through a reverse-indexed `reference` field, counted before the erasure ran (including any such rows that the same request then deleted). Reverse indexing is a schema setting the public API does not offer, so this is 0 for schemas created through it; a plain `reference` field, or an id copied into a text field, is not counted. This is a report for your own diagnosis: erasure does not change records it does not solely own, so nothing is repaired for you.",
         ),
     ] = None
     shared_rows_skipped: typing_extensions.Annotated[
@@ -44,14 +44,23 @@ class ErasureCertificate(UniversalBaseModel):
         FieldMetadata(alias="sharedRowsSkipped"),
         pydantic.Field(
             alias="sharedRowsSkipped",
-            description="Number of shared or ownerless rows that the subject did not solely own. These are reported but not erased — erasure only removes rows the subject solely owns.",
+            description="Number of rows the subject owned together with another owner scope or principal. These are kept and counted here, not erased: erasure removes only rows the subject solely owns.",
         ),
     ] = None
     audit_disposition: typing_extensions.Annotated[
         typing.Optional[ErasureCertificateAuditDisposition],
         FieldMetadata(alias="auditDisposition"),
         pydantic.Field(
-            alias="auditDisposition", description="The audit-trail disposition that was applied, echoing the request."
+            alias="auditDisposition",
+            description="The audit-trail disposition that was applied, echoing the request. `purge` is reported only for a request that was accepted for a subject type that supports it, and means the audit records of the erased rows were removed; stored audit payloads are deleted asynchronously and follow shortly after the request completes, and a delete that cannot complete is retried and raised to Vectros operations, so a completed request does not by itself prove every payload is already gone.",
+        ),
+    ] = None
+    identity_retained: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="identityRetained"),
+        pydantic.Field(
+            alias="identityRetained",
+            description="Present and true when the subject's identity, and its identity-level audit history under `purge`, were deliberately kept because the request's `contextScope` did not cover every context of your account. The identity is account-wide, so it is deleted only by a request that covers every context (or, for an entity that belongs to a single context, that lists that context); send a further request without `contextScope` to finish. Absent when the identity was deleted.",
         ),
     ] = None
 

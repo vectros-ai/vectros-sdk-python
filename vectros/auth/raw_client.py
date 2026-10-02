@@ -16,6 +16,7 @@ from ..errors.conflict_error import ConflictError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
 from ..errors.not_found_error import NotFoundError
+from ..errors.payment_required_error import PaymentRequiredError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..errors.unauthorized_error import UnauthorizedError
 from ..types.access_profile_page import AccessProfilePage
@@ -120,7 +121,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ReadAccessLogPage]:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
@@ -977,7 +978,7 @@ class RawAuthClient:
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         read_access_log_default : typing.Optional[bool]
-            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
@@ -1025,6 +1026,17 @@ class RawAuthClient:
                 return HttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 402:
+                raise PaymentRequiredError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1666,7 +1678,7 @@ class RawAuthClient:
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         read_access_log_default : typing.Optional[bool]
-            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
@@ -2407,7 +2419,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -2445,7 +2457,7 @@ class RawAuthClient:
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
-            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted) — refused with 400 unless this registration has itself proven control of the unrestricted (issuer, audience) pair (it was registered without a domain and verified); a registration created scoped to a domain must instead register a new issuer without `restrictedToDomain` and verify it. Refused on a registration awaiting verification. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted), and is refused with 400 unless this registration holds the unrestricted (issuer, audience) pair. A registration holds it if it was registered without a domain and then verified (it keeps it if later scoped to a domain); a registration created scoped to a domain never holds it, and neither does an older registration that predates pair claims. To get an unrestricted issuer in that case, delete the scoped registration, register a new issuer without `restrictedToDomain`, and verify it. An app context holds one issuer registration at a time, of any status, so a replacement in the same context is possible only after the delete succeeds. A registration that any user was created or matched through cannot be deleted (409): register the replacement under a different app context, which does not carry over the old context's users, roles or access profiles. A registration awaiting verification cannot be re-scoped. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3768,7 +3780,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ReadAccessLogPage]:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
@@ -4625,7 +4637,7 @@ class AsyncRawAuthClient:
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         read_access_log_default : typing.Optional[bool]
-            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
@@ -4673,6 +4685,17 @@ class AsyncRawAuthClient:
                 return AsyncHttpResponse(response=_response, data=_data)
             if _response.status_code == 400:
                 raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 402:
+                raise PaymentRequiredError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -5314,7 +5337,7 @@ class AsyncRawAuthClient:
             Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
 
         read_access_log_default : typing.Optional[bool]
-            Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
             Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
@@ -6055,7 +6078,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -6093,7 +6116,7 @@ class AsyncRawAuthClient:
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
-            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted) — refused with 400 unless this registration has itself proven control of the unrestricted (issuer, audience) pair (it was registered without a domain and verified); a registration created scoped to a domain must instead register a new issuer without `restrictedToDomain` and verify it. Refused on a registration awaiting verification. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+            Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted), and is refused with 400 unless this registration holds the unrestricted (issuer, audience) pair. A registration holds it if it was registered without a domain and then verified (it keeps it if later scoped to a domain); a registration created scoped to a domain never holds it, and neither does an older registration that predates pair claims. To get an unrestricted issuer in that case, delete the scoped registration, register a new issuer without `restrictedToDomain`, and verify it. An app context holds one issuer registration at a time, of any status, so a replacement in the same context is possible only after the delete succeeds. A registration that any user was created or matched through cannot be deleted (409): register the replacement under a different app context, which does not carry over the old context's users, roles or access profiles. A registration awaiting verification cannot be re-scoped. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.

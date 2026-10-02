@@ -95,7 +95,7 @@ class AppContextResponse(UniversalBaseModel):
         FieldMetadata(alias="readAccessLogDefault"),
         pydantic.Field(
             alias="readAccessLogDefault",
-            description='Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Null means no context default is set, so the platform default applies and logging is OFF. Use it to tell an empty `GET /v1/admin/access-log` result that genuinely means "no one accessed this subject" from one that means "nothing was being recorded".',
+            description='Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Null means no context default is set, so the platform default applies and logging is OFF. Use it to tell an empty `GET /v1/admin/access-log` result that genuinely means "no one accessed this subject" from one that means "nothing was being recorded".',
         ),
     ] = None
     identity_projection_claims: typing_extensions.Annotated[

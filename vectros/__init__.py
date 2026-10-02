@@ -239,7 +239,12 @@ if typing.TYPE_CHECKING:
     from ._default_clients import DefaultAioHttpClient, DefaultAsyncHttpxClient
     from .client import AsyncVectrosApi, VectrosApi
     from .compliance import ErasureRequestAuditDisposition, ExportRequestFormat, ExportRequestScope
-    from .documents import DocumentLookupRequestOrder, FileUploadRequestIndexMode, LookupDocumentsRequestOrder
+    from .documents import (
+        DocumentLookupRequestOrder,
+        DocumentPatchRequestStatus,
+        FileUploadRequestIndexMode,
+        LookupDocumentsRequestOrder,
+    )
     from .identity import ListEntitiesRequestOrder, ListUsersRequestOrder
     from .records import BatchWriteRequestAtomicity, LookupRecordsRequestOrder, RecordLookupRequestOrder
     from .scripts import ListScriptsResponse
@@ -300,6 +305,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DocumentLookupPage": ".types",
     "DocumentLookupRequestOrder": ".documents",
     "DocumentPage": ".types",
+    "DocumentPatchRequestStatus": ".documents",
     "DocumentRequest": ".types",
     "DocumentRequestIndexMode": ".types",
     "DocumentRequestStatus": ".types",
@@ -580,6 +586,7 @@ __all__ = [
     "DocumentLookupPage",
     "DocumentLookupRequestOrder",
     "DocumentPage",
+    "DocumentPatchRequestStatus",
     "DocumentRequest",
     "DocumentRequestIndexMode",
     "DocumentRequestStatus",

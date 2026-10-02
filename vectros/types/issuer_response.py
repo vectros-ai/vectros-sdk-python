@@ -95,7 +95,7 @@ class IssuerResponse(UniversalBaseModel):
         FieldMetadata(alias="restrictedToDomain"),
         pydantic.Field(
             alias="restrictedToDomain",
-            description="The verified domain this issuer's (issuer, audience) uniqueness is scoped to, if opted into. Absent when this registration is domain-less (the unrestricted, unscoped-to-any-population default).",
+            description="The verified domain this issuer's (issuer, audience) uniqueness is scoped to, if opted into. Absent when this registration is domain-less (unrestricted).",
         ),
     ] = None
     verification_claim: typing_extensions.Annotated[

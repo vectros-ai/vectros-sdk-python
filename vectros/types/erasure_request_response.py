@@ -12,7 +12,7 @@ from .erasure_request_response_status import ErasureRequestResponseStatus
 
 class ErasureRequestResponse(UniversalBaseModel):
     """
-    Job handle and result for an asynchronous erasure request. While the job runs this carries its status; once it completes it also carries a certificate that is the verifiable record of exactly what was erased.
+    Job handle and result for an asynchronous erasure request. While the job runs this carries its status; once it completes it also carries a certificate recording what the request swept and deleted.
     """
 
     request_id: typing_extensions.Annotated[

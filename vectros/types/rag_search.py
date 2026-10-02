@@ -23,7 +23,7 @@ class RagSearch(UniversalBaseModel):
 
     limit: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Maximum number of results to retrieve before building the prompt. Defaults to 10; the maximum is 50.
+    Maximum number of results to retrieve before building the prompt. Defaults to 10; the maximum is 100. Values outside 1-100 are rejected with a 400 (not silently clamped).
     """
 
     filters: typing.Optional[typing.Dict[str, FilterValue]] = pydantic.Field(default=None)

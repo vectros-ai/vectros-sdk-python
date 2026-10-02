@@ -25,6 +25,7 @@ from ..types.document_text_response import DocumentTextResponse
 from ..types.file_upload_response import FileUploadResponse
 from ..types.model_data_version_page import ModelDataVersionPage
 from .types.document_lookup_request_order import DocumentLookupRequestOrder
+from .types.document_patch_request_status import DocumentPatchRequestStatus
 from .types.file_upload_request_index_mode import FileUploadRequestIndexMode
 from .types.lookup_documents_request_order import LookupDocumentsRequestOrder
 from pydantic import ValidationError
@@ -112,6 +113,7 @@ class RawDocumentsClient:
         title: str,
         upsert: typing.Optional[bool] = None,
         allow_clear: typing.Optional[bool] = None,
+        confirm_untyped: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -125,7 +127,7 @@ class RawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[DocumentResponse]:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 
         Parameters
         ----------
@@ -137,6 +139,9 @@ class RawDocumentsClient:
 
         allow_clear : typing.Optional[bool]
             Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
+        confirm_untyped : typing.Optional[bool]
+            Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -182,6 +187,7 @@ class RawDocumentsClient:
             params={
                 "upsert": upsert,
                 "allowClear": allow_clear,
+                "confirmUntyped": confirm_untyped,
             },
             json={
                 "title": title,
@@ -524,17 +530,15 @@ class RawDocumentsClient:
         self,
         id: str,
         *,
-        title: str,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
-        index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
-        external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
-        status: typing.Optional[DocumentRequestStatus] = OMIT,
+        status: typing.Optional[DocumentPatchRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[DocumentResponse]:
         """
@@ -544,38 +548,32 @@ class RawDocumentsClient:
         ----------
         id : str
 
-        title : str
-            Human-readable document title
+        title : typing.Optional[str]
+            Human-readable document title. Omit to leave the existing title unchanged.
 
         text : typing.Optional[str]
-            Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
-
-        index_mode : typing.Optional[DocumentRequestIndexMode]
-            Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
+            Raw text content. Supply it to re-ingest and replace the stored text; omit it to leave the existing text unchanged.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. Omit to leave unchanged.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
+            The document's structured data, as a flat key/value object. Deep-merged into the existing payload: keys you send overwrite existing values, a key set to `null` is deleted, and keys you omit are preserved. Omit the field entirely to leave the payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a record schema to bind this document to. When set, the document's `payload` is validated against the schema's fields on save, and the schema's lookup fields become directly queryable (the same behavior as records). On update, omit to leave unchanged.
+            ID of a record schema to bind this document to. Omit to leave unchanged.
 
         user_id : typing.Optional[str]
-            Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
+            Owning user ID. With an API key, sets the document's owner explicitly. With a scoped token the owning user is attributed by the server and cannot be changed; supplying one that conflicts is rejected. Omit to leave unchanged.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a document owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
-
-        external_id : typing.Optional[str]
-            Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces; a value is 1-128 characters, a letter or digit first then letters/digits/`_`/`-`) — the COMPLETE new selection when supplied (`[]` clears it to the private tier). Omit to leave ownership unchanged.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
 
-        status : typing.Optional[DocumentRequestStatus]
-            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+        status : typing.Optional[DocumentPatchRequestStatus]
+            Caller-controlled lifecycle status. `ARCHIVED` soft-retracts the document (pulled from search, kept and recoverable); `ACTIVE` restores it. Omit to leave unchanged.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -591,13 +589,11 @@ class RawDocumentsClient:
             json={
                 "title": title,
                 "text": text,
-                "indexMode": index_mode,
                 "folderId": folder_id,
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
                 "scopes": scopes,
-                "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
             },
@@ -1123,6 +1119,7 @@ class RawDocumentsClient:
         file_name: str,
         file_type: str,
         upsert: typing.Optional[bool] = None,
+        confirm_untyped: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1134,7 +1131,7 @@ class RawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FileUploadResponse]:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 
         Parameters
         ----------
@@ -1146,6 +1143,9 @@ class RawDocumentsClient:
 
         upsert : typing.Optional[bool]
             When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+
+        confirm_untyped : typing.Optional[bool]
+            Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -1184,6 +1184,7 @@ class RawDocumentsClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "confirmUntyped": confirm_untyped,
             },
             json={
                 "fileName": file_name,
@@ -1335,6 +1336,7 @@ class AsyncRawDocumentsClient:
         title: str,
         upsert: typing.Optional[bool] = None,
         allow_clear: typing.Optional[bool] = None,
+        confirm_untyped: typing.Optional[bool] = None,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1348,7 +1350,7 @@ class AsyncRawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[DocumentResponse]:
         """
-        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
+        Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 
         Parameters
         ----------
@@ -1360,6 +1362,9 @@ class AsyncRawDocumentsClient:
 
         allow_clear : typing.Optional[bool]
             Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
+        confirm_untyped : typing.Optional[bool]
+            Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -1405,6 +1410,7 @@ class AsyncRawDocumentsClient:
             params={
                 "upsert": upsert,
                 "allowClear": allow_clear,
+                "confirmUntyped": confirm_untyped,
             },
             json={
                 "title": title,
@@ -1747,17 +1753,15 @@ class AsyncRawDocumentsClient:
         self,
         id: str,
         *,
-        title: str,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
-        index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         schema_id: typing.Optional[str] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
-        external_id: typing.Optional[str] = OMIT,
         expected_version: typing.Optional[int] = OMIT,
-        status: typing.Optional[DocumentRequestStatus] = OMIT,
+        status: typing.Optional[DocumentPatchRequestStatus] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[DocumentResponse]:
         """
@@ -1767,38 +1771,32 @@ class AsyncRawDocumentsClient:
         ----------
         id : str
 
-        title : str
-            Human-readable document title
+        title : typing.Optional[str]
+            Human-readable document title. Omit to leave the existing title unchanged.
 
         text : typing.Optional[str]
-            Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
-
-        index_mode : typing.Optional[DocumentRequestIndexMode]
-            Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
+            Raw text content. Supply it to re-ingest and replace the stored text; omit it to leave the existing text unchanged.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. Omit to leave unchanged.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
-            The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
+            The document's structured data, as a flat key/value object. Deep-merged into the existing payload: keys you send overwrite existing values, a key set to `null` is deleted, and keys you omit are preserved. Omit the field entirely to leave the payload unchanged.
 
         schema_id : typing.Optional[str]
-            Optional ID of a record schema to bind this document to. When set, the document's `payload` is validated against the schema's fields on save, and the schema's lookup fields become directly queryable (the same behavior as records). On update, omit to leave unchanged.
+            ID of a record schema to bind this document to. Omit to leave unchanged.
 
         user_id : typing.Optional[str]
-            Owning user ID — the Vectros-assigned UUID of a user in your account. Optional. With an API key, sets the document's owner explicitly. With a scoped token the owning user is attributed by the server from your credential and cannot be set to a different user; supplying one that conflicts is rejected.
+            Owning user ID. With an API key, sets the document's owner explicitly. With a scoped token the owning user is attributed by the server and cannot be changed; supplying one that conflicts is rejected. Omit to leave unchanged.
 
         scopes : typing.Optional[typing.Sequence[str]]
-            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the document's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a document owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
-
-        external_id : typing.Optional[str]
-            Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
+            The document's scope ownership, as `namespace:value` entries (at most 2 namespaces; a value is 1-128 characters, a letter or digit first then letters/digits/`_`/`-`) — the COMPLETE new selection when supplied (`[]` clears it to the private tier). Omit to leave ownership unchanged.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
 
-        status : typing.Optional[DocumentRequestStatus]
-            Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
+        status : typing.Optional[DocumentPatchRequestStatus]
+            Caller-controlled lifecycle status. `ARCHIVED` soft-retracts the document (pulled from search, kept and recoverable); `ACTIVE` restores it. Omit to leave unchanged.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1814,13 +1812,11 @@ class AsyncRawDocumentsClient:
             json={
                 "title": title,
                 "text": text,
-                "indexMode": index_mode,
                 "folderId": folder_id,
                 "payload": payload,
                 "schemaId": schema_id,
                 "userId": user_id,
                 "scopes": scopes,
-                "externalId": external_id,
                 "expectedVersion": expected_version,
                 "status": status,
             },
@@ -2346,6 +2342,7 @@ class AsyncRawDocumentsClient:
         file_name: str,
         file_type: str,
         upsert: typing.Optional[bool] = None,
+        confirm_untyped: typing.Optional[bool] = None,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -2357,7 +2354,7 @@ class AsyncRawDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FileUploadResponse]:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 
         Parameters
         ----------
@@ -2369,6 +2366,9 @@ class AsyncRawDocumentsClient:
 
         upsert : typing.Optional[bool]
             When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+
+        confirm_untyped : typing.Optional[bool]
+            Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -2407,6 +2407,7 @@ class AsyncRawDocumentsClient:
             method="POST",
             params={
                 "upsert": upsert,
+                "confirmUntyped": confirm_untyped,
             },
             json={
                 "fileName": file_name,

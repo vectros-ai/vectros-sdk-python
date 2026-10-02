@@ -51,6 +51,14 @@ class SearchResultsEvent(UniversalBaseModel):
             description="Which retrieval legs were unavailable: `text` (keyword) and/or `vector` (semantic). Empty when retrieval was not degraded.",
         ),
     ] = None
+    has_more: typing_extensions.Annotated[
+        bool,
+        FieldMetadata(alias="hasMore"),
+        pydantic.Field(
+            alias="hasMore",
+            description="True when more matching results may exist than `results` returned — raise `search.limit` (maximum 100) or narrow your filters.",
+        ),
+    ]
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

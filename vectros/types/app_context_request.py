@@ -68,7 +68,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="readAccessLogDefault"),
         pydantic.Field(
             alias="readAccessLogDefault",
-            description="Whether PHI read-access logging (the HIPAA §164.528 accounting of disclosures) is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.",
+            description="Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.",
         ),
     ] = None
     identity_projection_claims: typing_extensions.Annotated[

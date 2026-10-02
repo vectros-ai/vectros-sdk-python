@@ -67,6 +67,7 @@ class InferenceClient:
         temperature: typing.Optional[float] = OMIT,
         top_p: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[ChatStreamEvent]:
         """
@@ -78,7 +79,7 @@ class InferenceClient:
             The conversation history, in order. A message with role `system` is extracted and used as the system prompt; `user` and `assistant` messages are sent to the model as conversation turns.
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         max_tokens : typing.Optional[int]
             Maximum number of tokens to generate. Defaults to 2048; the maximum is 8192.
@@ -91,6 +92,9 @@ class InferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting. Configure data residency under Data Residency and Region settings in the developer portal.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -126,6 +130,7 @@ class InferenceClient:
             temperature=temperature,
             top_p=top_p,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             yield from r.data
@@ -140,6 +145,7 @@ class InferenceClient:
         max_tokens: typing.Optional[int] = OMIT,
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[DocumentAskStreamEvent]:
         """
@@ -156,7 +162,7 @@ class InferenceClient:
             Optional system prompt that overrides the default. Defaults to a generic instruction to act as a helpful document analyst.
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         max_tokens : typing.Optional[int]
             Maximum number of tokens to generate. Defaults to 2048; the maximum is 8192.
@@ -166,6 +172,9 @@ class InferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -198,6 +207,7 @@ class InferenceClient:
             max_tokens=max_tokens,
             temperature=temperature,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             yield from r.data
@@ -212,6 +222,7 @@ class InferenceClient:
         max_tokens: typing.Optional[int] = OMIT,
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[RagStreamEvent]:
         """
@@ -220,13 +231,13 @@ class InferenceClient:
         Parameters
         ----------
         query : str
-            The natural-language question to answer over your indexed content.
+            The natural-language question to answer over your indexed content. Combined with `instructions`, must not exceed roughly 8,000 tokens (~32K characters) — this field is a question, not a place for bulk context; large context belongs in your indexed content, retrieved via search.
 
         instructions : typing.Optional[str]
-            Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context.
+            Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context. Combined with `query`, must not exceed roughly 8,000 tokens (~32K characters).
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         search : typing.Optional[RagSearch]
 
@@ -238,6 +249,9 @@ class InferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -269,6 +283,7 @@ class InferenceClient:
             max_tokens=max_tokens,
             temperature=temperature,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             yield from r.data
@@ -333,6 +348,7 @@ class AsyncInferenceClient:
         temperature: typing.Optional[float] = OMIT,
         top_p: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[ChatStreamEvent]:
         """
@@ -344,7 +360,7 @@ class AsyncInferenceClient:
             The conversation history, in order. A message with role `system` is extracted and used as the system prompt; `user` and `assistant` messages are sent to the model as conversation turns.
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         max_tokens : typing.Optional[int]
             Maximum number of tokens to generate. Defaults to 2048; the maximum is 8192.
@@ -357,6 +373,9 @@ class AsyncInferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting. Configure data residency under Data Residency and Region settings in the developer portal.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -400,6 +419,7 @@ class AsyncInferenceClient:
             temperature=temperature,
             top_p=top_p,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             async for _chunk in r.data:
@@ -415,6 +435,7 @@ class AsyncInferenceClient:
         max_tokens: typing.Optional[int] = OMIT,
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[DocumentAskStreamEvent]:
         """
@@ -431,7 +452,7 @@ class AsyncInferenceClient:
             Optional system prompt that overrides the default. Defaults to a generic instruction to act as a helpful document analyst.
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         max_tokens : typing.Optional[int]
             Maximum number of tokens to generate. Defaults to 2048; the maximum is 8192.
@@ -441,6 +462,9 @@ class AsyncInferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -481,6 +505,7 @@ class AsyncInferenceClient:
             max_tokens=max_tokens,
             temperature=temperature,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             async for _chunk in r.data:
@@ -496,6 +521,7 @@ class AsyncInferenceClient:
         max_tokens: typing.Optional[int] = OMIT,
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
+        provider_alias: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[RagStreamEvent]:
         """
@@ -504,13 +530,13 @@ class AsyncInferenceClient:
         Parameters
         ----------
         query : str
-            The natural-language question to answer over your indexed content.
+            The natural-language question to answer over your indexed content. Combined with `instructions`, must not exceed roughly 8,000 tokens (~32K characters) — this field is a question, not a place for bulk context; large context belongs in your indexed content, retrieved via search.
 
         instructions : typing.Optional[str]
-            Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context.
+            Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context. Combined with `query`, must not exceed roughly 8,000 tokens (~32K characters).
 
         model : typing.Optional[str]
-            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+            Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
 
         search : typing.Optional[RagSearch]
 
@@ -522,6 +548,9 @@ class AsyncInferenceClient:
 
         allow_global_region : typing.Optional[bool]
             Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+
+        provider_alias : typing.Optional[str]
+            Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -561,6 +590,7 @@ class AsyncInferenceClient:
             max_tokens=max_tokens,
             temperature=temperature,
             allow_global_region=allow_global_region,
+            provider_alias=provider_alias,
             request_options=request_options,
         ) as r:
             async for _chunk in r.data:

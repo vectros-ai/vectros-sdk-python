@@ -7,10 +7,12 @@ from importlib import import_module
 
 if typing.TYPE_CHECKING:
     from .document_lookup_request_order import DocumentLookupRequestOrder
+    from .document_patch_request_status import DocumentPatchRequestStatus
     from .file_upload_request_index_mode import FileUploadRequestIndexMode
     from .lookup_documents_request_order import LookupDocumentsRequestOrder
 _dynamic_imports: typing.Dict[str, str] = {
     "DocumentLookupRequestOrder": ".document_lookup_request_order",
+    "DocumentPatchRequestStatus": ".document_patch_request_status",
     "FileUploadRequestIndexMode": ".file_upload_request_index_mode",
     "LookupDocumentsRequestOrder": ".lookup_documents_request_order",
 }
@@ -37,4 +39,9 @@ def __dir__():
     return sorted(lazy_attrs)
 
 
-__all__ = ["DocumentLookupRequestOrder", "FileUploadRequestIndexMode", "LookupDocumentsRequestOrder"]
+__all__ = [
+    "DocumentLookupRequestOrder",
+    "DocumentPatchRequestStatus",
+    "FileUploadRequestIndexMode",
+    "LookupDocumentsRequestOrder",
+]

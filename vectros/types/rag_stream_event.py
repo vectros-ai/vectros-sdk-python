@@ -35,6 +35,7 @@ class RagStreamEvent_SearchResults(UniversalBaseModel):
     degraded_legs: typing_extensions.Annotated[
         typing.Optional[typing.List[str]], FieldMetadata(alias="degradedLegs"), pydantic.Field(alias="degradedLegs")
     ] = None
+    has_more: typing_extensions.Annotated[bool, FieldMetadata(alias="hasMore"), pydantic.Field(alias="hasMore")]
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

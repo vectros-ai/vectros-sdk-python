@@ -74,7 +74,7 @@ client.auth.get_jwks()
 <dl>
 <dd>
 
-Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. This is the disclosure-accounting surface from which a covered entity derives its HIPAA §164.528 accounting of disclosures. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 </dd>
 </dl>
 </dd>
@@ -2292,7 +2292,7 @@ client.auth.get_issuer(
 <dl>
 <dd>
 
-Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it back to domain-less; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 </dd>
 </dl>
 </dd>
@@ -2420,7 +2420,7 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
-**restricted_to_domain:** `typing.Optional[str]` — Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted) — refused with 400 unless this registration has itself proven control of the unrestricted (issuer, audience) pair (it was registered without a domain and verified); a registration created scoped to a domain must instead register a new issuer without `restrictedToDomain` and verify it. Refused on a registration awaiting verification. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
+**restricted_to_domain:** `typing.Optional[str]` — Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted), and is refused with 400 unless this registration holds the unrestricted (issuer, audience) pair. A registration holds it if it was registered without a domain and then verified (it keeps it if later scoped to a domain); a registration created scoped to a domain never holds it, and neither does an older registration that predates pair claims. To get an unrestricted issuer in that case, delete the scoped registration, register a new issuer without `restrictedToDomain`, and verify it. An app context holds one issuer registration at a time, of any status, so a replacement in the same context is possible only after the delete succeeds. A registration that any user was created or matched through cannot be deleted (409): register the replacement under a different app context, which does not carry over the old context's users, roles or access profiles. A registration awaiting verification cannot be re-scoped. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
     
 </dd>
 </dl>
@@ -3564,7 +3564,7 @@ client.documents.list_documents(
 <dl>
 <dd>
 
-Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document.
+Creates a document from a raw text string and queues it for asynchronous indexing so it becomes searchable. Optionally supply an `externalId` to make the create idempotent — if a document with the same `externalId` already exists in your context, that existing document is returned unchanged instead of a duplicate being created. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing document was returned) tells the two apart. To overwrite an existing document's content instead of returning it unchanged, set `?upsert=true` (this also requires the `documents:u` scope). Requires the `documents:c` scope to create. Being returned the existing document on a collision is a read of that document's data and additionally requires the `documents:r` scope — a credential holding `documents:c` alone receives a `400` ("already exists") on collision instead of the document. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 </dd>
 </dl>
 </dd>
@@ -3621,6 +3621,14 @@ client.documents.ingest_document(
 <dd>
 
 **allow_clear:** `typing.Optional[bool]` — Only relevant with `?upsert=true`, which overwrites an existing document as a full replacement. If the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the overwrite is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**confirm_untyped:** `typing.Optional[bool]` — Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
     
 </dd>
 </dl>
@@ -3909,7 +3917,6 @@ client = VectrosApi(
 
 client.documents.patch_document(
     id="id",
-    title="Patient Intake Form — Jane Doe",
 )
 
 ```
@@ -3934,7 +3941,71 @@ client.documents.patch_document(
 <dl>
 <dd>
 
-**request:** `DocumentRequest` 
+**title:** `typing.Optional[str]` — Human-readable document title. Omit to leave the existing title unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**text:** `typing.Optional[str]` — Raw text content. Supply it to re-ingest and replace the stored text; omit it to leave the existing text unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**folder_id:** `typing.Optional[str]` — ID of the folder to place this document in. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**payload:** `typing.Optional[typing.Dict[str, typing.Any]]` — The document's structured data, as a flat key/value object. Deep-merged into the existing payload: keys you send overwrite existing values, a key set to `null` is deleted, and keys you omit are preserved. Omit the field entirely to leave the payload unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**schema_id:** `typing.Optional[str]` — ID of a record schema to bind this document to. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Owning user ID. With an API key, sets the document's owner explicitly. With a scoped token the owning user is attributed by the server and cannot be changed; supplying one that conflicts is rejected. Omit to leave unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**scopes:** `typing.Optional[typing.List[str]]` — The document's scope ownership, as `namespace:value` entries (at most 2 namespaces; a value is 1-128 characters, a letter or digit first then letters/digits/`_`/`-`) — the COMPLETE new selection when supplied (`[]` clears it to the private tier). Omit to leave ownership unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**expected_version:** `typing.Optional[int]` — Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**status:** `typing.Optional[DocumentPatchRequestStatus]` — Caller-controlled lifecycle status. `ARCHIVED` soft-retracts the document (pulled from search, kept and recoverable); `ACTIVE` restores it. Omit to leave unchanged.
     
 </dd>
 </dl>
@@ -4533,7 +4604,7 @@ client.documents.get_document_versions(
 <dl>
 <dd>
 
-Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one.
+Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
 </dd>
 </dl>
 </dd>
@@ -4591,6 +4662,14 @@ client.documents.upload_document(
 <dd>
 
 **upsert:** `typing.Optional[bool]` — When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**confirm_untyped:** `typing.Optional[bool]` — Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
     
 </dd>
 </dl>
@@ -6537,7 +6616,7 @@ client.identity.get_user_versions(
 <dl>
 <dd>
 
-Submits a right-to-erasure request for a single end-subject (a user, or an identity entity in any namespace). Erasure removes exactly the data the subject solely owns across the declared contexts, plus the subject's identity and lookup rows. It never touches another account's data and never cascades into another subject's data. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
+Submits an erasure request for a single end-subject (a user, or an identity entity in any namespace). Erasure deletes the records, documents, folders and record schemas the subject solely owns across the declared contexts (and, for a user, its access profiles there), plus its identity and lookup rows when all contexts are covered. Rows co-owned with another owner scope or principal are kept; read-access log entries are not erased. The request is asynchronous: it returns 202 with a `requestId`; poll `GET /v1/erasure-requests/{id}` until the job completes to obtain the completion certificate. Requires a root API key — a scoped credential is rejected with 403.
 </dd>
 </dl>
 </dd>
@@ -6601,7 +6680,7 @@ client.compliance.create_erasure_request(
 <dl>
 <dd>
 
-**context_scope:** `typing.Optional[typing.List[str]]` — The contexts in which to erase the subject. As the data controller, you declare the blast radius: each listed context is erased independently and reported separately on the certificate. Omit or leave empty to erase every context the subject has data in; those contexts are then enumerated and erased one at a time, never as a single account-wide sweep. Any context you do not list is left untouched, and managing that residual data is your responsibility.
+**context_scope:** `typing.Optional[typing.List[str]]` — The contexts in which to erase the subject. As the data controller, you declare the blast radius: each listed context is erased independently and reported separately on the certificate. Omit or leave empty to erase in every context of your account: every context is swept, whether or not the subject holds data in it. Any context you do not list is left untouched, including the subject's access grants there, and managing that residual data is your responsibility. Every listed context must exist in your account: a `contextScope` that names a context that does not exist is rejected with 400 before anything is erased. A row in a listed context that is co-owned with another owner scope or principal is kept, not erased, and counted as `sharedRowsSkipped`. The subject's identity (its user or entity record) is account-wide rather than per-context, so it is deleted only when the request covers every context of your account, by omitting `contextScope` or by listing them all; the one exception is an entity that belongs to a single context (a context-owned namespace), which is deleted when that context is listed. A request that lists only some contexts leaves the identity in place and sets `identityRetained` on the certificate, so you can send further requests for the remaining contexts; send one without `contextScope` to finish and delete the identity.
     
 </dd>
 </dl>
@@ -6609,7 +6688,7 @@ client.compliance.create_erasure_request(
 <dl>
 <dd>
 
-**audit_disposition:** `typing.Optional[ErasureRequestAuditDisposition]` — How to handle the subject's audit and version-history trail. This governs only the audit data — the subject's records and documents are always erased regardless. `retain-redacted` (the default) keeps the compliance audit trail with sensitive data redacted; `purge` additionally hard-removes the audit history itself (subject to your legal obligations).
+**audit_disposition:** `typing.Optional[ErasureRequestAuditDisposition]` — How to handle the subject's audit and version-history trail. This governs only the audit data — the subject's records and documents are always erased regardless. `retain-redacted` (the default) keeps the compliance audit trail with sensitive data redacted. `purge` additionally hard-removes the audit history of the rows this request erased, including the subject's own identity history and the audit payloads stored outside the database for those rows. `purge` is supported only for subject types `user`, `org` and `client` — a request for any other subject type is rejected with 400 — and it never removes the history of a row that was retained because another principal also owns it. `purge` finds history through the owner each version carried when it was written, so it is a primitive, not a completeness guarantee: versions written while a row belonged to a different owner are not found, and the history of an already-deleted row that another owner shared is removed together with the erased owner's. Stored audit payloads are deleted asynchronously: the request completes once the audit records are removed, and the payloads follow shortly after; a payload delete that cannot complete is retried and raised to Vectros operations, so `completed` does not by itself prove every payload is already gone. `purge` is subject to your own legal-retention obligations; it does not consult a retention setting.
     
 </dd>
 </dl>
@@ -6641,7 +6720,7 @@ client.compliance.create_erasure_request(
 <dl>
 <dd>
 
-Polls an erasure request by id. While the job is still running this returns its status only; once it completes, the response also includes the verifiable completion certificate (which contexts were swept, per-context deletion counts, and reports of dangling references and shared rows that were left intact). Requires a root API key.
+Polls an erasure request by id. While the job is still running this returns its status only; once it completes, the response also includes the completion certificate (which contexts were swept, per-context deletion counts, whether the identity was kept, and reports of dangling references and shared rows left intact). Requires a root API key.
 </dd>
 </dl>
 </dd>
@@ -7593,7 +7672,7 @@ client.inference.chat_inference(
 <dl>
 <dd>
 
-**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
     
 </dd>
 </dl>
@@ -7626,6 +7705,14 @@ client.inference.chat_inference(
 <dd>
 
 **allow_global_region:** `typing.Optional[bool]` — Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting. Configure data residency under Data Residency and Region settings in the developer portal.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
     
 </dd>
 </dl>
@@ -7722,7 +7809,7 @@ client.inference.document_ask(
 <dl>
 <dd>
 
-**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
     
 </dd>
 </dl>
@@ -7747,6 +7834,14 @@ client.inference.document_ask(
 <dd>
 
 **allow_global_region:** `typing.Optional[bool]` — Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
     
 </dd>
 </dl>
@@ -7818,7 +7913,7 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
-**query:** `str` — The natural-language question to answer over your indexed content.
+**query:** `str` — The natural-language question to answer over your indexed content. Combined with `instructions`, must not exceed roughly 8,000 tokens (~32K characters) — this field is a question, not a place for bulk context; large context belongs in your indexed content, retrieved via search.
     
 </dd>
 </dl>
@@ -7826,7 +7921,7 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
-**instructions:** `typing.Optional[str]` — Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context.
+**instructions:** `typing.Optional[str]` — Optional system prompt that overrides the default. Defaults to a generic instruction to answer using only the provided context. Combined with `query`, must not exceed roughly 8,000 tokens (~32K characters).
     
 </dd>
 </dl>
@@ -7834,7 +7929,7 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
-**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`.
+**model:** `typing.Optional[str]` — Model alias to use, from the list returned by `GET /v1/models`. Defaults to `claude-haiku-4-5`. When `providerAlias` is set, this instead names the MODEL on that BYO provider's own id space (opaque to Vectros) — falls back to the provider config's own default model when omitted.
     
 </dd>
 </dl>
@@ -7867,6 +7962,14 @@ client.inference.rag_inference(
 <dd>
 
 **allow_global_region:** `typing.Optional[bool]` — Opt this request into global (non-US) region serving for lower cost. Requires a signed global-processing waiver on your account that permits per-request override; otherwise the request is rejected with 403. When omitted, the request follows your account's default residency setting.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
     
 </dd>
 </dl>
