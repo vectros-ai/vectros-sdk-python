@@ -16,7 +16,7 @@ from .error_event_event import ErrorEventEvent
 
 class DocumentAskStreamEvent_DocumentContext(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["document_context"] = "document_context"
@@ -38,7 +38,7 @@ class DocumentAskStreamEvent_DocumentContext(UniversalBaseModel):
 
 class DocumentAskStreamEvent_ContentDelta(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["content_delta"] = "content_delta"
@@ -57,7 +57,7 @@ class DocumentAskStreamEvent_ContentDelta(UniversalBaseModel):
 
 class DocumentAskStreamEvent_Done(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["done"] = "done"
@@ -94,7 +94,7 @@ class DocumentAskStreamEvent_Done(UniversalBaseModel):
 
 class DocumentAskStreamEvent_Error(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["error"] = "error"

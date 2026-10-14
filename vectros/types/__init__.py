@@ -113,6 +113,7 @@ if typing.TYPE_CHECKING:
     from .jwk import Jwk
     from .jwks_response import JwksResponse
     from .log_entry import LogEntry
+    from .long_context_pricing import LongContextPricing
     from .lookup_def import LookupDef
     from .mint_token_response import MintTokenResponse
     from .model_changes import ModelChanges
@@ -328,6 +329,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "Jwk": ".jwk",
     "JwksResponse": ".jwks_response",
     "LogEntry": ".log_entry",
+    "LongContextPricing": ".long_context_pricing",
     "LookupDef": ".lookup_def",
     "MintTokenResponse": ".mint_token_response",
     "ModelChanges": ".model_changes",
@@ -565,6 +567,7 @@ __all__ = [
     "Jwk",
     "JwksResponse",
     "LogEntry",
+    "LongContextPricing",
     "LookupDef",
     "MintTokenResponse",
     "ModelChanges",

@@ -93,6 +93,22 @@ class ReadAccessLogResponse(UniversalBaseModel):
             description="Reserved for future use — not yet populated, so this is currently always null. When implemented, it will record the basis for the access (e.g. treatment, payment, operations, or an external disclosure).",
         ),
     ] = None
+    destination_alias: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="destinationAlias"),
+        pydantic.Field(
+            alias="destinationAlias",
+            description="For a disclosure into a model call that you routed to your own model provider (a `providerAlias` request): the alias of the provider configuration the call was sent through. It is recorded when the content is disclosed to the call, before the provider answers. Null for every other read.",
+        ),
+    ] = None
+    destination_host: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="destinationHost"),
+        pydantic.Field(
+            alias="destinationHost",
+            description="For a disclosure into a routed model call: the host of the endpoint address the call is sent to, as saved on the provider configuration when the call was made (host only, no path). Null for every other read.",
+        ),
+    ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),

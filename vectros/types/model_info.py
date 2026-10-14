@@ -6,12 +6,13 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .long_context_pricing import LongContextPricing
 from .region_pricing import RegionPricing
 
 
 class ModelInfo(UniversalBaseModel):
     """
-    The available inference models.
+    The models in the platform catalog.
     """
 
     id: str = pydantic.Field()
@@ -47,7 +48,7 @@ class ModelInfo(UniversalBaseModel):
         FieldMetadata(alias="inputCreditsPer1kTokens"),
         pydantic.Field(
             alias="inputCreditsPer1kTokens",
-            description="Base (non-US) credit rate per 1K input tokens; 1 credit = 1 cent. Requests are served from a US region by default and billed `regionPricing.us` (this value multiplied by `regionPremiumFactor`). See `regionPricing` for both the US and base rates.",
+            description="Base (non-US) credit rate per 1K input tokens; 1 credit = 1 cent. Requests are served from a US region by default and billed `regionPricing.us` (this value multiplied by `regionPremiumFactor`). See `regionPricing` for both the US and base rates. For a model that has `longContext` pricing, this is the rate for a prompt of up to `longContext.promptTokensOver` tokens.",
         ),
     ]
     output_credits_per1k_tokens: typing_extensions.Annotated[
@@ -55,12 +56,15 @@ class ModelInfo(UniversalBaseModel):
         FieldMetadata(alias="outputCreditsPer1kTokens"),
         pydantic.Field(
             alias="outputCreditsPer1kTokens",
-            description="Base (non-US) credit rate per 1K output tokens; 1 credit = 1 cent. The default US-served rate is this value multiplied by `regionPremiumFactor`; see `regionPricing` for both rates.",
+            description="Base (non-US) credit rate per 1K output tokens; 1 credit = 1 cent. The default US-served rate is this value multiplied by `regionPremiumFactor`; see `regionPricing` for both rates. For a model that has `longContext` pricing, this is the rate for a prompt of up to `longContext.promptTokensOver` tokens.",
         ),
     ]
     region_pricing: typing_extensions.Annotated[
         RegionPricing, FieldMetadata(alias="regionPricing"), pydantic.Field(alias="regionPricing")
     ]
+    long_context: typing_extensions.Annotated[
+        typing.Optional[LongContextPricing], FieldMetadata(alias="longContext"), pydantic.Field(alias="longContext")
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

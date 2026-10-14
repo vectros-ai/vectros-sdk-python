@@ -15,7 +15,7 @@ from .error_event_event import ErrorEventEvent
 
 class ChatStreamEvent_ContentDelta(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["content_delta"] = "content_delta"
@@ -34,7 +34,7 @@ class ChatStreamEvent_ContentDelta(UniversalBaseModel):
 
 class ChatStreamEvent_Done(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["done"] = "done"
@@ -71,7 +71,7 @@ class ChatStreamEvent_Done(UniversalBaseModel):
 
 class ChatStreamEvent_Error(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility).
+    A single Server-Sent Event from `POST /v1/chat`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["error"] = "error"

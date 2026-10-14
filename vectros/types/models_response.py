@@ -11,18 +11,21 @@ from .model_info import ModelInfo
 
 class ModelsResponse(UniversalBaseModel):
     """
-    The list of available inference models plus the default model alias.
+    The platform model catalog plus the default model alias.
     """
 
     models: typing.List[ModelInfo] = pydantic.Field()
     """
-    The available inference models.
+    The models in the platform catalog.
     """
 
     default_model: typing_extensions.Annotated[
         str,
         FieldMetadata(alias="defaultModel"),
-        pydantic.Field(alias="defaultModel", description="Model alias used when a request omits the `model` field."),
+        pydantic.Field(
+            alias="defaultModel",
+            description="Model alias used when a request omits the `model` field. It is `claude-haiku-5-5`. `claude-haiku-4-5` remains available: name it to use that model.",
+        ),
     ]
 
     if IS_PYDANTIC_V2:
