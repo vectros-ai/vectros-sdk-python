@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class FolderRequest(UniversalBaseModel):
     """
-    Request body for creating or updating a folder. On update (PUT or PATCH), omitted fields are preserved — a null does not clear a field. `parentFolderId` is honored only at creation and ignored on update, because a folder cannot currently be moved via the API.
+    Request body for creating or updating a folder. On update (PUT or PATCH), omitted fields are preserved — a null does not clear a field. `parentFolderId` is honored only at creation and ignored on update, because a folder cannot be moved via the API.
     """
 
     name: str = pydantic.Field()
@@ -28,7 +28,7 @@ class FolderRequest(UniversalBaseModel):
         FieldMetadata(alias="parentFolderId"),
         pydantic.Field(
             alias="parentFolderId",
-            description="ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.",
+            description="ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.",
         ),
     ] = None
     slug: typing.Optional[str] = pydantic.Field(default=None)
@@ -54,7 +54,7 @@ class FolderRequest(UniversalBaseModel):
         FieldMetadata(alias="expectedVersion"),
         pydantic.Field(
             alias="expectedVersion",
-            description="Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.",
+            description="Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.",
         ),
     ] = None
 

@@ -62,7 +62,7 @@ class ErasureRequestResponse(UniversalBaseModel):
         FieldMetadata(alias="failureReason"),
         pydantic.Field(
             alias="failureReason",
-            description="Reason the erasure failed, suitable for display or programmatic handling so you do not have to inspect logs. Present only when `status` is `failed`; null otherwise.",
+            description="Free text describing why the erasure failed. Its wording is not stable, so do not branch on it. Present only when `status` is `failed`; null otherwise.",
         ),
     ] = None
     certificate: typing.Optional[ErasureCertificate] = None

@@ -12,11 +12,12 @@ from .content_delta_event_event import ContentDeltaEventEvent
 from .document_context_event_event import DocumentContextEventEvent
 from .done_event_event import DoneEventEvent
 from .error_event_event import ErrorEventEvent
+from .reasoning_delta_event_event import ReasoningDeltaEventEvent
 
 
 class DocumentAskStreamEvent_DocumentContext(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["document_context"] = "document_context"
@@ -36,9 +37,28 @@ class DocumentAskStreamEvent_DocumentContext(UniversalBaseModel):
             extra = pydantic.Extra.allow
 
 
+class DocumentAskStreamEvent_ReasoningDelta(UniversalBaseModel):
+    """
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
+    """
+
+    type: typing.Literal["reasoning_delta"] = "reasoning_delta"
+    event: ReasoningDeltaEventEvent
+    delta: str
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            frozen = True
+            smart_union = True
+            extra = pydantic.Extra.allow
+
+
 class DocumentAskStreamEvent_ContentDelta(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["content_delta"] = "content_delta"
@@ -57,7 +77,7 @@ class DocumentAskStreamEvent_ContentDelta(UniversalBaseModel):
 
 class DocumentAskStreamEvent_Done(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["done"] = "done"
@@ -94,7 +114,7 @@ class DocumentAskStreamEvent_Done(UniversalBaseModel):
 
 class DocumentAskStreamEvent_Error(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/documents/{id}/ask`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["error"] = "error"
@@ -115,6 +135,7 @@ class DocumentAskStreamEvent_Error(UniversalBaseModel):
 DocumentAskStreamEvent = typing_extensions.Annotated[
     typing.Union[
         DocumentAskStreamEvent_DocumentContext,
+        DocumentAskStreamEvent_ReasoningDelta,
         DocumentAskStreamEvent_ContentDelta,
         DocumentAskStreamEvent_Done,
         DocumentAskStreamEvent_Error,

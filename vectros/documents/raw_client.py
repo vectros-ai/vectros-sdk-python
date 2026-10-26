@@ -150,7 +150,7 @@ class RawDocumentsClient:
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot be cleared once set.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
@@ -168,7 +168,7 @@ class RawDocumentsClient:
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the document; with `?upsert=true` on an existing document it makes the update conditional.
 
         status : typing.Optional[DocumentRequestStatus]
             Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
@@ -231,6 +231,28 @@ class RawDocumentsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -351,7 +373,7 @@ class RawDocumentsClient:
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot be cleared once set.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
@@ -369,7 +391,7 @@ class RawDocumentsClient:
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the document; with `?upsert=true` on an existing document it makes the update conditional.
 
         status : typing.Optional[DocumentRequestStatus]
             Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
@@ -506,6 +528,17 @@ class RawDocumentsClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -570,7 +603,7 @@ class RawDocumentsClient:
             The document's scope ownership, as `namespace:value` entries (at most 2 namespaces; a value is 1-128 characters, a letter or digit first then letters/digits/`_`/`-`) — the COMPLETE new selection when supplied (`[]` clears it to the private tier). Omit to leave ownership unchanged.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
+            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`.
 
         status : typing.Optional[DocumentPatchRequestStatus]
             Caller-controlled lifecycle status. `ARCHIVED` soft-retracts the document (pulled from search, kept and recoverable); `ACTIVE` restores it. Omit to leave unchanged.
@@ -1000,7 +1033,7 @@ class RawDocumentsClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[DocumentTextResponse]:
         """
-        Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: retained for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -1236,6 +1269,17 @@ class RawDocumentsClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1373,7 +1417,7 @@ class AsyncRawDocumentsClient:
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot be cleared once set.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
@@ -1391,7 +1435,7 @@ class AsyncRawDocumentsClient:
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the document; with `?upsert=true` on an existing document it makes the update conditional.
 
         status : typing.Optional[DocumentRequestStatus]
             Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
@@ -1454,6 +1498,28 @@ class AsyncRawDocumentsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1574,7 +1640,7 @@ class AsyncRawDocumentsClient:
             Indexing strategy for this document. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended for most use cases). `SEMANTIC` indexes only as dense vectors — best for conceptual similarity search. `TEXT` indexes only with BM25 — best for exact keyword matching. `NONE` stores the document without search indexing (store-only / archival): it remains retrievable by id and by structured-field lookup but never appears in search results. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-document value wins.
 
         folder_id : typing.Optional[str]
-            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.
+            ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot be cleared once set.
 
         payload : typing.Optional[typing.Dict[str, typing.Any]]
             The document's structured data, as a flat key/value object. When `schemaId` is set, declared fields are validated against the schema and its lookup fields become directly queryable via `GET /v1/documents?type=&field=&value=` (sensitive fields are blind-indexed); undeclared keys pass through as free-form and are searchable via the `filters` parameter on `POST /v1/search`. A strict schema rejects undeclared keys. On update, the supplied object replaces the stored payload in full (it is not key-merged); omit to leave it unchanged.
@@ -1592,7 +1658,7 @@ class AsyncRawDocumentsClient:
             Stable, caller-supplied identifier for this document. Optional. Immutable after create. Unique within your account and context: posting again with the same `externalId` returns the existing document (idempotent ingest), and it is the key other records use to reference this one. Max 256 characters.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the document; with `?upsert=true` on an existing document it makes the update conditional.
 
         status : typing.Optional[DocumentRequestStatus]
             Caller-controlled lifecycle status. `ACTIVE` (the default) keeps the document live and searchable; `ARCHIVED` soft-retracts it — the document is pulled from search/recall but kept and recoverable (set it back to `ACTIVE` to re-index and restore). Use this to retire superseded content without deleting it. On update, omit to leave the current lifecycle status unchanged. Distinct from the read-only `indexStatus` (the processing pipeline).
@@ -1729,6 +1795,17 @@ class AsyncRawDocumentsClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1793,7 +1870,7 @@ class AsyncRawDocumentsClient:
             The document's scope ownership, as `namespace:value` entries (at most 2 namespaces; a value is 1-128 characters, a letter or digit first then letters/digits/`_`/`-`) — the COMPLETE new selection when supplied (`[]` clears it to the private tier). Omit to leave ownership unchanged.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
+            Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`.
 
         status : typing.Optional[DocumentPatchRequestStatus]
             Caller-controlled lifecycle status. `ARCHIVED` soft-retracts the document (pulled from search, kept and recoverable); `ACTIVE` restores it. Omit to leave unchanged.
@@ -2223,7 +2300,7 @@ class AsyncRawDocumentsClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[DocumentTextResponse]:
         """
-        Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: retained for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -2450,6 +2527,17 @@ class AsyncRawDocumentsClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

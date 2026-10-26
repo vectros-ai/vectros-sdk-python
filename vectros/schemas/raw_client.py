@@ -152,7 +152,7 @@ class RawSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a partner user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
@@ -170,7 +170,7 @@ class RawSchemasClient:
             UI rendering hints keyed by field id.
 
         capabilities : typing.Optional[typing.Dict[str, bool]]
-            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false).
+            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false). `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
 
         index_mode : typing.Optional[SchemaRequestIndexMode]
             Default search-index mode for instances of this type — applies to records of this type and to documents bound to this schema, unless the individual record or document sets its own indexMode. HYBRID, SEMANTIC, and TEXT make content searchable; NONE is store-only (the data is persisted, retrievable, and usable for lookups, but not searchable). Omit for no default: a record with no indexMode of its own then defaults to NONE, and a document with no indexMode is rejected.
@@ -188,7 +188,7 @@ class RawSchemasClient:
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
-            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -255,6 +255,28 @@ class RawSchemasClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -373,7 +395,7 @@ class RawSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a partner user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -388,7 +410,7 @@ class RawSchemasClient:
             UI rendering hints keyed by field id.
 
         capabilities : typing.Optional[typing.Dict[str, bool]]
-            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false).
+            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false). `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
 
         index_mode : typing.Optional[SchemaRequestIndexMode]
             Default search-index mode for instances of this type — applies to records of this type and to documents bound to this schema, unless the individual record or document sets its own indexMode. HYBRID, SEMANTIC, and TEXT make content searchable; NONE is store-only (the data is persisted, retrievable, and usable for lookups, but not searchable). Omit for no default: a record with no indexMode of its own then defaults to NONE, and a document with no indexMode is rejected.
@@ -406,7 +428,7 @@ class RawSchemasClient:
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
-            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -523,7 +545,7 @@ class RawSchemasClient:
 
     def delete_schema(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> HttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first — and, for a schema declaring the `user` or `entity` surface, while any user or entity bound to it still exists. Requires the `schemas:d` scope.
 
         Parameters
         ----------
@@ -784,7 +806,7 @@ class AsyncRawSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a partner user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
@@ -802,7 +824,7 @@ class AsyncRawSchemasClient:
             UI rendering hints keyed by field id.
 
         capabilities : typing.Optional[typing.Dict[str, bool]]
-            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false).
+            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false). `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
 
         index_mode : typing.Optional[SchemaRequestIndexMode]
             Default search-index mode for instances of this type — applies to records of this type and to documents bound to this schema, unless the individual record or document sets its own indexMode. HYBRID, SEMANTIC, and TEXT make content searchable; NONE is store-only (the data is persisted, retrievable, and usable for lookups, but not searchable). Omit for no default: a record with no indexMode of its own then defaults to NONE, and a document with no indexMode is rejected.
@@ -820,7 +842,7 @@ class AsyncRawSchemasClient:
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
-            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -887,6 +909,28 @@ class AsyncRawSchemasClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1005,7 +1049,7 @@ class AsyncRawSchemasClient:
             Human-readable display name for this type, shown in UIs.
 
         allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a partner user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -1020,7 +1064,7 @@ class AsyncRawSchemasClient:
             UI rendering hints keyed by field id.
 
         capabilities : typing.Optional[typing.Dict[str, bool]]
-            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false).
+            Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false). `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
 
         index_mode : typing.Optional[SchemaRequestIndexMode]
             Default search-index mode for instances of this type — applies to records of this type and to documents bound to this schema, unless the individual record or document sets its own indexMode. HYBRID, SEMANTIC, and TEXT make content searchable; NONE is store-only (the data is persisted, retrievable, and usable for lookups, but not searchable). Omit for no default: a record with no indexMode of its own then defaults to NONE, and a document with no indexMode is rejected.
@@ -1038,7 +1082,7 @@ class AsyncRawSchemasClient:
             The schema's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. Optional — omit for an account-wide shared schema. When supplied, this is the schema's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it). Filter lists by these values with `?scope=`.
 
         based_on : typing.Optional[str]
-            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.
+            The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1157,7 +1201,7 @@ class AsyncRawSchemasClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+        Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first — and, for a schema declaring the `user` or `entity` surface, while any user or entity bound to it still exists. Requires the `schemas:d` scope.
 
         Parameters
         ----------

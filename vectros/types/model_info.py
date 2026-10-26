@@ -12,7 +12,7 @@ from .region_pricing import RegionPricing
 
 class ModelInfo(UniversalBaseModel):
     """
-    The models in the platform catalog.
+    One model in the catalog.
     """
 
     id: str = pydantic.Field()
@@ -27,7 +27,7 @@ class ModelInfo(UniversalBaseModel):
 
     provider: str = pydantic.Field()
     """
-    Name of the model vendor (for example, Anthropic or AWS), suitable for display in a model picker.
+    Name of the model vendor (for example Anthropic, Amazon or Meta), suitable for display in a model picker.
     """
 
     context_window: typing_extensions.Annotated[

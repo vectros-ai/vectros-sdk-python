@@ -13,7 +13,7 @@ from .export_request_response_status import ExportRequestResponseStatus
 
 class ExportRequestResponse(UniversalBaseModel):
     """
-    Job handle and result for an asynchronous data-export request. While the job runs this carries its status; once it completes it also carries a short-lived presigned download URL and a manifest describing the exported payload.
+    Reserved shape; the operation answers 501. Job handle and result for an asynchronous data-export request. While the job runs this carries its status; once it completes it also carries a short-lived presigned download URL and a manifest describing the exported payload.
     """
 
     export_job_id: typing_extensions.Annotated[

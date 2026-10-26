@@ -71,6 +71,22 @@ class RagSearchResult(UniversalBaseModel):
     A display-ready snippet with the matched query terms emphasized — suitable for search-result UIs.
     """
 
+    source_type: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="sourceType"),
+        pydantic.Field(
+            alias="sourceType",
+            description="Whether the result is a document (`PartnerDocument`) or a record (`GenericRecord`).",
+        ),
+    ] = None
+    type_name: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="typeName"),
+        pydantic.Field(
+            alias="typeName",
+            description="The name of the schema type the matched item is bound to: the record type of a record, or the schema type of a document that has a schema. Null for a document ingested without a schema.",
+        ),
+    ] = None
     metadata: typing.Optional[typing.Dict[str, typing.Any]] = pydantic.Field(default=None)
     """
     Metadata you supplied on the source document, such as its title, folder id, or custom tags.

@@ -55,7 +55,7 @@ class TriggerRuleRequest(UniversalBaseModel):
         FieldMetadata(alias="principalId"),
         pydantic.Field(
             alias="principalId",
-            description="The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not partner-authored directly in the normal flow, but accepted here so the loader can set it explicitly).",
+            description="The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not normally authored by hand, but accepted here so the loader can set it explicitly).",
         ),
     ] = None
     provisioned_by: typing_extensions.Annotated[

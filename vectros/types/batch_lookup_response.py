@@ -9,7 +9,7 @@ from .batch_lookup_result import BatchLookupResult
 
 class BatchLookupResponse(UniversalBaseModel):
     """
-    The result of a batch lookup: one result group per lookup you submitted. Returned with HTTP 200 even when some lookups did not resolve, so inspect each result's status.
+    Reserved shape: the result of a batch lookup, one result group per lookup you submitted, which the endpoint would return with HTTP 200 even when some lookups did not resolve. The endpoint currently answers 501.
     """
 
     results: typing.Optional[typing.List[BatchLookupResult]] = pydantic.Field(default=None)

@@ -56,7 +56,7 @@ class SchemaRequest(UniversalBaseModel):
     ] = None
     capabilities: typing.Optional[typing.Dict[str, bool]] = pydantic.Field(default=None)
     """
-    Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false).
+    Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; setting it false stops recording the trail but never affects your record or document data itself. `readAccessLog` (default false; opt-in) controls accounting-of-disclosures logging: when true, each governed read of this schema's records writes a retained, subject-enumerable access record. The effective value resolves in order: this schema flag, then your context's default, then the platform default (false). `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
     """
 
     index_mode: typing_extensions.Annotated[
@@ -80,7 +80,7 @@ class SchemaRequest(UniversalBaseModel):
         FieldMetadata(alias="allowedSurfaces"),
         pydantic.Field(
             alias="allowedSurfaces",
-            description="Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a partner user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.",
+            description="Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.",
         ),
     ]
     active: typing.Optional[bool] = pydantic.Field(default=None)
@@ -106,7 +106,7 @@ class SchemaRequest(UniversalBaseModel):
         FieldMetadata(alias="basedOn"),
         pydantic.Field(
             alias="basedOn",
-            description='The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name\'s shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a variant of a variant is not yet supported. Immutable once set. Every same-named schema in a context is provably related through this chain — see the recordType-shadowing design doc.',
+            description='The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name\'s shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.',
         ),
     ] = None
 

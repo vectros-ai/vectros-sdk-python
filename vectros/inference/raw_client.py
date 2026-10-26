@@ -21,6 +21,7 @@ from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
 from ..errors.not_found_error import NotFoundError
 from ..errors.payment_required_error import PaymentRequiredError
+from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..errors.unauthorized_error import UnauthorizedError
 from ..types.chat_message import ChatMessage
@@ -29,6 +30,9 @@ from ..types.document_ask_stream_event import DocumentAskStreamEvent
 from ..types.models_response import ModelsResponse
 from ..types.rag_search import RagSearch
 from ..types.rag_stream_event import RagStreamEvent
+from .types.chat_request_reasoning import ChatRequestReasoning
+from .types.document_ask_request_reasoning import DocumentAskRequestReasoning
+from .types.rag_request_reasoning import RagRequestReasoning
 from pydantic import ValidationError
 
 # this is used as the default value for optional parameters
@@ -43,7 +47,7 @@ class RawInferenceClient:
         self, *, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[ModelsResponse]:
         """
-        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the exact credit rates charged per 1K input and output tokens. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
+        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, and `longContext` for prompts over its threshold. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
 
         Parameters
         ----------
@@ -90,10 +94,11 @@ class RawInferenceClient:
         top_p: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[ChatRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[HttpResponse[typing.Iterator[ChatStreamEvent]]]:
         """
-        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. Token cost is debited from your pre-paid inference balance (in cents), and a small per-call flat fee is debited from your monthly platform credit allowance. Requires the `inference:r` scope.
+        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A small per-call flat fee is charged to your monthly credit allowance, except when the call fails on the server side. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -118,13 +123,16 @@ class RawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[ChatRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.Iterator[HttpResponse[typing.Iterator[ChatStreamEvent]]]
-            Server-Sent Events stream of `content_delta` chunks, ending with `done` or, if the call fails after the stream opens, `error`.
+            Server-Sent Events stream of `content_delta` chunks (preceded by `reasoning_delta` chunks when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), ending with `done` or, if the call fails after the stream opens, `error`.
         """
         with self._client_wrapper.httpx_client.stream(
             "v1/chat",
@@ -139,6 +147,7 @@ class RawInferenceClient:
                 "topP": top_p,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -255,6 +264,17 @@ class RawInferenceClient:
                                 ),
                             ),
                         )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
                     _response_json = _response.json()
                 except JSONDecodeError:
                     raise ApiError(
@@ -283,6 +303,7 @@ class RawInferenceClient:
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[DocumentAskRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[HttpResponse[typing.Iterator[DocumentAskStreamEvent]]]:
         """
@@ -313,13 +334,16 @@ class RawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[DocumentAskRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.Iterator[HttpResponse[typing.Iterator[DocumentAskStreamEvent]]]
-            Server-Sent Events stream in this order: a `document_context` event, one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
+            Server-Sent Events stream in this order: a `document_context` event, optional `reasoning_delta` chunks (when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
         """
         with self._client_wrapper.httpx_client.stream(
             f"v1/documents/{encode_path_param(id)}/ask",
@@ -332,6 +356,7 @@ class RawInferenceClient:
                 "temperature": temperature,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -459,6 +484,17 @@ class RawInferenceClient:
                                 ),
                             ),
                         )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
                     _response_json = _response.json()
                 except JSONDecodeError:
                     raise ApiError(
@@ -487,6 +523,7 @@ class RawInferenceClient:
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[RagRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[HttpResponse[typing.Iterator[RagStreamEvent]]]:
         """
@@ -517,13 +554,16 @@ class RawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[RagRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.Iterator[HttpResponse[typing.Iterator[RagStreamEvent]]]
-            Server-Sent Events stream in this order: a `search_results` event, an optional `truncation_warning`, one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
+            Server-Sent Events stream in this order: a `search_results` event, an optional `truncation_warning`, optional `reasoning_delta` chunks (when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
         """
         with self._client_wrapper.httpx_client.stream(
             "v1/rag",
@@ -539,6 +579,7 @@ class RawInferenceClient:
                 "temperature": temperature,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -666,6 +707,17 @@ class RawInferenceClient:
                                 ),
                             ),
                         )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
                     _response_json = _response.json()
                 except JSONDecodeError:
                     raise ApiError(
@@ -691,7 +743,7 @@ class AsyncRawInferenceClient:
         self, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[ModelsResponse]:
         """
-        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the exact credit rates charged per 1K input and output tokens. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
+        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, and `longContext` for prompts over its threshold. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
 
         Parameters
         ----------
@@ -738,10 +790,11 @@ class AsyncRawInferenceClient:
         top_p: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[ChatRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[ChatStreamEvent]]]:
         """
-        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. Token cost is debited from your pre-paid inference balance (in cents), and a small per-call flat fee is debited from your monthly platform credit allowance. Requires the `inference:r` scope.
+        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A small per-call flat fee is charged to your monthly credit allowance, except when the call fails on the server side. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -766,13 +819,16 @@ class AsyncRawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[ChatRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[ChatStreamEvent]]]
-            Server-Sent Events stream of `content_delta` chunks, ending with `done` or, if the call fails after the stream opens, `error`.
+            Server-Sent Events stream of `content_delta` chunks (preceded by `reasoning_delta` chunks when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), ending with `done` or, if the call fails after the stream opens, `error`.
         """
         async with self._client_wrapper.httpx_client.stream(
             "v1/chat",
@@ -787,6 +843,7 @@ class AsyncRawInferenceClient:
                 "topP": top_p,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -903,6 +960,17 @@ class AsyncRawInferenceClient:
                                 ),
                             ),
                         )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
                     _response_json = _response.json()
                 except JSONDecodeError:
                     raise ApiError(
@@ -931,6 +999,7 @@ class AsyncRawInferenceClient:
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[DocumentAskRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[DocumentAskStreamEvent]]]:
         """
@@ -961,13 +1030,16 @@ class AsyncRawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[DocumentAskRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[DocumentAskStreamEvent]]]
-            Server-Sent Events stream in this order: a `document_context` event, one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
+            Server-Sent Events stream in this order: a `document_context` event, optional `reasoning_delta` chunks (when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
         """
         async with self._client_wrapper.httpx_client.stream(
             f"v1/documents/{encode_path_param(id)}/ask",
@@ -980,6 +1052,7 @@ class AsyncRawInferenceClient:
                 "temperature": temperature,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -1107,6 +1180,17 @@ class AsyncRawInferenceClient:
                                 ),
                             ),
                         )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
                     _response_json = _response.json()
                 except JSONDecodeError:
                     raise ApiError(
@@ -1135,6 +1219,7 @@ class AsyncRawInferenceClient:
         temperature: typing.Optional[float] = OMIT,
         allow_global_region: typing.Optional[bool] = OMIT,
         provider_alias: typing.Optional[str] = OMIT,
+        reasoning: typing.Optional[RagRequestReasoning] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[RagStreamEvent]]]:
         """
@@ -1165,13 +1250,16 @@ class AsyncRawInferenceClient:
         provider_alias : typing.Optional[str]
             Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
 
+        reasoning : typing.Optional[RagRequestReasoning]
+            Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
         Yields
         ------
         typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[RagStreamEvent]]]
-            Server-Sent Events stream in this order: a `search_results` event, an optional `truncation_warning`, one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
+            Server-Sent Events stream in this order: a `search_results` event, an optional `truncation_warning`, optional `reasoning_delta` chunks (when the request sets `reasoning` to `stream`, for a platform-hosted model that reasons; a `providerAlias` request ignores `reasoning`), one or more `content_delta` chunks, then `done`; an `error` event ends the stream instead if the call fails after it opens.
         """
         async with self._client_wrapper.httpx_client.stream(
             "v1/rag",
@@ -1187,6 +1275,7 @@ class AsyncRawInferenceClient:
                 "temperature": temperature,
                 "allowGlobalRegion": allow_global_region,
                 "providerAlias": provider_alias,
+                "reasoning": reasoning,
             },
             headers={
                 "content-type": "application/json",
@@ -1305,6 +1394,17 @@ class AsyncRawInferenceClient:
                         )
                     if _response.status_code == 500:
                         raise InternalServerError(
+                            headers=dict(_response.headers),
+                            body=typing.cast(
+                                typing.Any,
+                                parse_obj_as(
+                                    type_=typing.Any,  # type: ignore
+                                    object_=_response.json(),
+                                ),
+                            ),
+                        )
+                    if _response.status_code == 503:
+                        raise ServiceUnavailableError(
                             headers=dict(_response.headers),
                             body=typing.cast(
                                 typing.Any,

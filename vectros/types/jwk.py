@@ -8,7 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class Jwk(UniversalBaseModel):
     """
-    A single JSON Web Key entry. Currently an EC key on the P-256 curve.
+    A single JSON Web Key entry: an EC key on the P-256 curve.
     """
 
     kty: typing.Optional[str] = pydantic.Field(default=None)

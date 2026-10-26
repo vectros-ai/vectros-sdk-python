@@ -14,7 +14,7 @@ class JwksResponse(UniversalBaseModel):
 
     keys: typing.Optional[typing.List[Jwk]] = pydantic.Field(default=None)
     """
-    The set of JSON Web Keys. Today this contains a single P-256 EC public key; the array can hold more than one key during a rotation.
+    The set of JSON Web Keys. It contains a single P-256 EC public key.
     """
 
     if IS_PYDANTIC_V2:

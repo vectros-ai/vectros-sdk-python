@@ -137,12 +137,12 @@ class ComplianceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ExportRequestResponse:
         """
-        Submits an asynchronous job to export your account's data, or a single end-subject's data, across the requested contexts. The request returns 202 with an `exportJobId`; poll `GET /v1/admin/export/{id}` until the job completes to obtain a short-lived presigned download URL and a manifest describing the payload. Requires a root API key — a scoped credential is rejected with 403.
+        Reserved: with a root API key this operation answers `501` and starts no job. The request and response shapes are published so that integrations can be written against them: a request names the contexts, or a single end-subject, to export, and the response carries an `exportJobId` that `GET /v1/admin/export/{id}` reports on. Requires a root API key — a scoped credential is rejected with 403.
 
         Parameters
         ----------
         scope : typing.Optional[ExportRequestScope]
-            What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request). Additional scopes may be added in the future.
+            What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request).
 
         subject_type : typing.Optional[str]
             The kind of subject to export: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined. Required only when `scope` is `subject`.
@@ -157,7 +157,7 @@ class ComplianceClient:
             The contexts to export. Omit or leave empty to export all of your contexts. Each listed context is exported and reported separately in the manifest.
 
         format : typing.Optional[ExportRequestFormat]
-            Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is currently the only supported format; more may be added in the future. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
+            Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is the only supported format. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
 
         include_audit_history : typing.Optional[bool]
             Whether to also include the audit and version-history trail of the exported data, not just the current live rows. Defaults to false (live data only). Set true to also export the retained version history. This governs only the audit data — the live records are always included.
@@ -168,7 +168,7 @@ class ComplianceClient:
         Returns
         -------
         ExportRequestResponse
-            Export job accepted. The body carries the job id and initial status; poll the GET endpoint for the result.
+            Reserved response shape: the operation answers 501 and accepts no job. The body would carry the job id and initial status.
 
         Examples
         --------
@@ -194,7 +194,7 @@ class ComplianceClient:
 
     def get_export(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> ExportRequestResponse:
         """
-        Polls an export job by id. While the job is still running this returns its status only; once it completes, the response also includes a short-lived presigned download URL and a manifest (format version and per-context counts). Requires a root API key.
+        Reserved: with a root API key this operation answers `501`. Its response shape is the one the export operation above refers to: the job status, and a short-lived presigned download URL and a manifest (format version and per-context counts) for a completed job. Requires a root API key.
 
         Parameters
         ----------
@@ -207,7 +207,7 @@ class ComplianceClient:
         Returns
         -------
         ExportRequestResponse
-            The current status of the export job, plus the download URL and manifest once it has completed.
+            Reserved response shape: the operation answers 501 instead. It would carry the current status of the export job, plus the download URL and manifest once it has completed.
 
         Examples
         --------
@@ -363,12 +363,12 @@ class AsyncComplianceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ExportRequestResponse:
         """
-        Submits an asynchronous job to export your account's data, or a single end-subject's data, across the requested contexts. The request returns 202 with an `exportJobId`; poll `GET /v1/admin/export/{id}` until the job completes to obtain a short-lived presigned download URL and a manifest describing the payload. Requires a root API key — a scoped credential is rejected with 403.
+        Reserved: with a root API key this operation answers `501` and starts no job. The request and response shapes are published so that integrations can be written against them: a request names the contexts, or a single end-subject, to export, and the response carries an `exportJobId` that `GET /v1/admin/export/{id}` reports on. Requires a root API key — a scoped credential is rejected with 403.
 
         Parameters
         ----------
         scope : typing.Optional[ExportRequestScope]
-            What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request). Additional scopes may be added in the future.
+            What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request).
 
         subject_type : typing.Optional[str]
             The kind of subject to export: `user` for a person, or an ownership namespace such as `org` or `client` — including a custom namespace you have defined. Required only when `scope` is `subject`.
@@ -383,7 +383,7 @@ class AsyncComplianceClient:
             The contexts to export. Omit or leave empty to export all of your contexts. Each listed context is exported and reported separately in the manifest.
 
         format : typing.Optional[ExportRequestFormat]
-            Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is currently the only supported format; more may be added in the future. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
+            Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is the only supported format. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
 
         include_audit_history : typing.Optional[bool]
             Whether to also include the audit and version-history trail of the exported data, not just the current live rows. Defaults to false (live data only). Set true to also export the retained version history. This governs only the audit data — the live records are always included.
@@ -394,7 +394,7 @@ class AsyncComplianceClient:
         Returns
         -------
         ExportRequestResponse
-            Export job accepted. The body carries the job id and initial status; poll the GET endpoint for the result.
+            Reserved response shape: the operation answers 501 and accepts no job. The body would carry the job id and initial status.
 
         Examples
         --------
@@ -430,7 +430,7 @@ class AsyncComplianceClient:
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> ExportRequestResponse:
         """
-        Polls an export job by id. While the job is still running this returns its status only; once it completes, the response also includes a short-lived presigned download URL and a manifest (format version and per-context counts). Requires a root API key.
+        Reserved: with a root API key this operation answers `501`. Its response shape is the one the export operation above refers to: the job status, and a short-lived presigned download URL and a manifest (format version and per-context counts) for a completed job. Requires a root API key.
 
         Parameters
         ----------
@@ -443,7 +443,7 @@ class AsyncComplianceClient:
         Returns
         -------
         ExportRequestResponse
-            The current status of the export job, plus the download URL and manifest once it has completed.
+            Reserved response shape: the operation answers 501 instead. It would carry the current status of the export job, plus the download URL and manifest once it has completed.
 
         Examples
         --------

@@ -48,7 +48,7 @@ class SearchResult(UniversalBaseModel):
         FieldMetadata(alias="semanticScore"),
         pydantic.Field(
             alias="semanticScore",
-            description="The semantic (vector similarity) component of the score. Non-zero when the search mode is SEMANTIC or HYBRID.",
+            description="The semantic (vector similarity) component of the score. 0 when the match came from keyword search only.",
         ),
     ] = None
     chunk_text: typing_extensions.Annotated[

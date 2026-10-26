@@ -125,7 +125,7 @@ class RawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -137,7 +137,7 @@ class RawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -191,6 +191,28 @@ class RawFoldersClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -300,7 +322,7 @@ class RawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -312,7 +334,7 @@ class RawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -363,6 +385,17 @@ class RawFoldersClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -437,6 +470,17 @@ class RawFoldersClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -471,7 +515,7 @@ class RawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[FolderResponse]:
         """
-        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 
         Parameters
         ----------
@@ -484,7 +528,7 @@ class RawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -496,7 +540,7 @@ class RawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -764,7 +808,7 @@ class AsyncRawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -776,7 +820,7 @@ class AsyncRawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -830,6 +874,28 @@ class AsyncRawFoldersClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -939,7 +1005,7 @@ class AsyncRawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -951,7 +1017,7 @@ class AsyncRawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1002,6 +1068,17 @@ class AsyncRawFoldersClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1078,6 +1155,17 @@ class AsyncRawFoldersClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1112,7 +1200,7 @@ class AsyncRawFoldersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[FolderResponse]:
         """
-        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+        Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 
         Parameters
         ----------
@@ -1125,7 +1213,7 @@ class AsyncRawFoldersClient:
             Optional description of the folder's contents or purpose.
 
         parent_folder_id : typing.Optional[str]
-            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot currently be moved via the API.
+            ID of the parent folder to create this folder under, applied at creation only. Omit to create the folder under your context's default root folder. Ignored on update: a folder cannot be moved via the API.
 
         slug : typing.Optional[str]
             Optional stable slug for the folder, unique among its siblings under the same parent. Useful as an idempotency key so re-creating the same folder returns the existing one rather than a duplicate. Derived from the name when omitted. Must be lowercase letters, digits, and hyphens. Immutable once the folder is created.
@@ -1137,7 +1225,7 @@ class AsyncRawFoldersClient:
             The folder's scope ownership, as `namespace:value` entries (at most 2 namespaces) — for example `["org:6ba7b810-9dad-11d1-80b4-00c04fd430c8", "group:eng-team"]`. `org` and `client` are reserved namespace names, registered like any other; others are namespaces you registered yourself (lowercase, 2-32 chars). A `value` is 1-128 characters: a letter or digit first, then letters, digits, `_` or `-`. Resolve a namespace's UUID from your own identifier with `GET /v1/entities/{namespace}?externalId=`. When supplied, this is the folder's COMPLETE scope declaration: each entry must fall inside the `data_scope` of a single clause of your credential that also grants this write — your identity supplies the DEFAULT value when you state none, it does not limit which value you may state. An empty array creates a folder owned by the calling user alone (the private tier), and requires a credential whose identity carries a user. Omit the field to inherit the token's full identity — the default. On update, omit to leave ownership unchanged, or supply the complete new selection (`[]` clears it).
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token for updates. Pass the `version` you last read to make the update conditional — it is rejected with a 409 version conflict (and the stored folder is left untouched) if the folder changed since. Omit it to update whatever version is stored; an update that collides with another write to the same folder while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the folder; with `?upsert=true` on an existing folder it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.

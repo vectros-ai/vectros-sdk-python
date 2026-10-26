@@ -31,7 +31,7 @@ class StorageEntry(UniversalBaseModel):
         FieldMetadata(alias="estimatedCreditsMilli"),
         pydantic.Field(
             alias="estimatedCreditsMilli",
-            description="estimatedCredits in milli-credit precision (exact). Storage credits are computed in whole-credit units today (HUNDRED_MB granularity), so this currently equals estimatedCredits * 1000 — the field is exposed for future-proofing when sub-credit storage rates land.",
+            description="estimatedCredits in milli-credit precision (1 credit = 1000 milli-credits). Storage is priced in whole credits per 100 MB, so this equals estimatedCredits * 1000.",
         ),
     ] = None
 

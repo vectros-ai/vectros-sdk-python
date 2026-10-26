@@ -38,7 +38,7 @@ class DocumentRequest(UniversalBaseModel):
         FieldMetadata(alias="folderId"),
         pydantic.Field(
             alias="folderId",
-            description="ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot currently be cleared once set.",
+            description="ID of the folder to place this document in. On create, omit to use your account's default root folder. On update, omit to leave unchanged — this field cannot be cleared once set.",
         ),
     ] = None
     payload: typing.Optional[typing.Dict[str, typing.Any]] = pydantic.Field(default=None)
@@ -80,7 +80,7 @@ class DocumentRequest(UniversalBaseModel):
         FieldMetadata(alias="expectedVersion"),
         pydantic.Field(
             alias="expectedVersion",
-            description="Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit for last-write-wins (the default). Ignored on create.",
+            description="Optimistic-concurrency token. Pass the `version` you last read (from a GET or a prior write response) to make this update conditional — it is rejected with `409 VERSION_CONFLICT` if the document was modified since, leaving the stored document untouched. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the document; with `?upsert=true` on an existing document it makes the update conditional.",
         ),
     ] = None
     status: typing.Optional[DocumentRequestStatus] = pydantic.Field(default=None)

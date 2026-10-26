@@ -91,7 +91,7 @@ class RecordRequest(UniversalBaseModel):
         FieldMetadata(alias="expectedVersion"),
         pydantic.Field(
             alias="expectedVersion",
-            description="Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.",
+            description="Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.",
         ),
     ] = None
 

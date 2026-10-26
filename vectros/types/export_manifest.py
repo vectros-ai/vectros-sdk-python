@@ -24,7 +24,7 @@ class ExportManifest(UniversalBaseModel):
     ] = None
     format: typing.Optional[ExportManifestFormat] = pydantic.Field(default=None)
     """
-    Serialization format of the payload. NDJSON (newline-delimited JSON, one row per line) is currently the only supported format.
+    Serialization format of the payload. NDJSON (newline-delimited JSON, one row per line) is the only supported format.
     """
 
     size_bytes: typing_extensions.Annotated[

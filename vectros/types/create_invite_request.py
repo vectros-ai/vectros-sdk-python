@@ -41,10 +41,7 @@ class CreateInviteRequest(UniversalBaseModel):
     last_name: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="lastName"),
-        pydantic.Field(
-            alias="lastName",
-            description="Invitee's last name. Optional; accepted but not currently stored or returned.",
-        ),
+        pydantic.Field(alias="lastName", description="Invitee's last name. Optional; accepted and ignored."),
     ] = None
     accept_url: typing_extensions.Annotated[
         typing.Optional[str],
@@ -59,7 +56,7 @@ class CreateInviteRequest(UniversalBaseModel):
         FieldMetadata(alias="fromName"),
         pydantic.Field(
             alias="fromName",
-            description="Display name shown in the From header of the invitation email. Defaults to `Vectros`. Maximum 100 characters; must not contain newlines.",
+            description="Display name shown in the From header of the invitation email. When omitted, the app context's `companyName` is used, then its `name`. Maximum 100 characters; must not contain newlines.",
         ),
     ] = None
     ttl_seconds: typing_extensions.Annotated[

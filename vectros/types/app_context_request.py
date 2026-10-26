@@ -44,7 +44,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="meteringAxis"),
         pydantic.Field(
             alias="meteringAxis",
-            description="Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.",
+            description="Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.",
         ),
     ] = None
     principal_burst_limit: typing_extensions.Annotated[
@@ -52,7 +52,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="principalBurstLimit"),
         pydantic.Field(
             alias="principalBurstLimit",
-            description="Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.",
+            description="Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.",
         ),
     ] = None
     principal_usage_cap: typing_extensions.Annotated[
@@ -60,7 +60,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="principalUsageCap"),
         pydantic.Field(
             alias="principalUsageCap",
-            description="Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.",
+            description="Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.",
         ),
     ] = None
     read_access_log_default: typing_extensions.Annotated[

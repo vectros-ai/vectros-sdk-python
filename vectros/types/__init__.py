@@ -33,6 +33,7 @@ if typing.TYPE_CHECKING:
         ChatStreamEvent_ContentDelta,
         ChatStreamEvent_Done,
         ChatStreamEvent_Error,
+        ChatStreamEvent_ReasoningDelta,
     )
     from .content_delta_event import ContentDeltaEvent
     from .content_delta_event_event import ContentDeltaEventEvent
@@ -50,6 +51,7 @@ if typing.TYPE_CHECKING:
         DocumentAskStreamEvent_DocumentContext,
         DocumentAskStreamEvent_Done,
         DocumentAskStreamEvent_Error,
+        DocumentAskStreamEvent_ReasoningDelta,
     )
     from .document_context_event import DocumentContextEvent
     from .document_context_event_event import DocumentContextEventEvent
@@ -138,6 +140,7 @@ if typing.TYPE_CHECKING:
         RagStreamEvent_ContentDelta,
         RagStreamEvent_Done,
         RagStreamEvent_Error,
+        RagStreamEvent_ReasoningDelta,
         RagStreamEvent_SearchResults,
         RagStreamEvent_TruncationWarning,
     )
@@ -148,6 +151,8 @@ if typing.TYPE_CHECKING:
     from .read_access_subject import ReadAccessSubject
     from .read_calls import ReadCalls
     from .reads_section import ReadsSection
+    from .reasoning_delta_event import ReasoningDeltaEvent
+    from .reasoning_delta_event_event import ReasoningDeltaEventEvent
     from .record_lookup_page import RecordLookupPage
     from .record_page import RecordPage
     from .record_request import RecordRequest
@@ -252,6 +257,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ChatStreamEvent_ContentDelta": ".chat_stream_event",
     "ChatStreamEvent_Done": ".chat_stream_event",
     "ChatStreamEvent_Error": ".chat_stream_event",
+    "ChatStreamEvent_ReasoningDelta": ".chat_stream_event",
     "ContentDeltaEvent": ".content_delta_event",
     "ContentDeltaEventEvent": ".content_delta_event_event",
     "ContextDetail": ".context_detail",
@@ -267,6 +273,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DocumentAskStreamEvent_DocumentContext": ".document_ask_stream_event",
     "DocumentAskStreamEvent_Done": ".document_ask_stream_event",
     "DocumentAskStreamEvent_Error": ".document_ask_stream_event",
+    "DocumentAskStreamEvent_ReasoningDelta": ".document_ask_stream_event",
     "DocumentContextEvent": ".document_context_event",
     "DocumentContextEventEvent": ".document_context_event_event",
     "DocumentDownloadResponse": ".document_download_response",
@@ -353,6 +360,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RagStreamEvent_ContentDelta": ".rag_stream_event",
     "RagStreamEvent_Done": ".rag_stream_event",
     "RagStreamEvent_Error": ".rag_stream_event",
+    "RagStreamEvent_ReasoningDelta": ".rag_stream_event",
     "RagStreamEvent_SearchResults": ".rag_stream_event",
     "RagStreamEvent_TruncationWarning": ".rag_stream_event",
     "ReadAccessLogPage": ".read_access_log_page",
@@ -362,6 +370,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ReadAccessSubject": ".read_access_subject",
     "ReadCalls": ".read_calls",
     "ReadsSection": ".reads_section",
+    "ReasoningDeltaEvent": ".reasoning_delta_event",
+    "ReasoningDeltaEventEvent": ".reasoning_delta_event_event",
     "RecordLookupPage": ".record_lookup_page",
     "RecordPage": ".record_page",
     "RecordRequest": ".record_request",
@@ -490,6 +500,7 @@ __all__ = [
     "ChatStreamEvent_ContentDelta",
     "ChatStreamEvent_Done",
     "ChatStreamEvent_Error",
+    "ChatStreamEvent_ReasoningDelta",
     "ContentDeltaEvent",
     "ContentDeltaEventEvent",
     "ContextDetail",
@@ -505,6 +516,7 @@ __all__ = [
     "DocumentAskStreamEvent_DocumentContext",
     "DocumentAskStreamEvent_Done",
     "DocumentAskStreamEvent_Error",
+    "DocumentAskStreamEvent_ReasoningDelta",
     "DocumentContextEvent",
     "DocumentContextEventEvent",
     "DocumentDownloadResponse",
@@ -591,6 +603,7 @@ __all__ = [
     "RagStreamEvent_ContentDelta",
     "RagStreamEvent_Done",
     "RagStreamEvent_Error",
+    "RagStreamEvent_ReasoningDelta",
     "RagStreamEvent_SearchResults",
     "RagStreamEvent_TruncationWarning",
     "ReadAccessLogPage",
@@ -600,6 +613,8 @@ __all__ = [
     "ReadAccessSubject",
     "ReadCalls",
     "ReadsSection",
+    "ReasoningDeltaEvent",
+    "ReasoningDeltaEventEvent",
     "RecordLookupPage",
     "RecordPage",
     "RecordRequest",

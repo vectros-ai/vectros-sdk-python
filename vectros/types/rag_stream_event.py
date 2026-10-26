@@ -12,6 +12,7 @@ from .content_delta_event_event import ContentDeltaEventEvent
 from .done_event_event import DoneEventEvent
 from .error_event_event import ErrorEventEvent
 from .rag_search_result import RagSearchResult
+from .reasoning_delta_event_event import ReasoningDeltaEventEvent
 from .search_results_event_event import SearchResultsEventEvent
 from .truncation_warning_event_event import TruncationWarningEventEvent
 from .truncation_warning_event_reason import TruncationWarningEventReason
@@ -19,7 +20,7 @@ from .truncation_warning_event_reason import TruncationWarningEventReason
 
 class RagStreamEvent_SearchResults(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["search_results"] = "search_results"
@@ -49,7 +50,7 @@ class RagStreamEvent_SearchResults(UniversalBaseModel):
 
 class RagStreamEvent_TruncationWarning(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["truncation_warning"] = "truncation_warning"
@@ -78,9 +79,28 @@ class RagStreamEvent_TruncationWarning(UniversalBaseModel):
             extra = pydantic.Extra.allow
 
 
+class RagStreamEvent_ReasoningDelta(UniversalBaseModel):
+    """
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
+    """
+
+    type: typing.Literal["reasoning_delta"] = "reasoning_delta"
+    event: ReasoningDeltaEventEvent
+    delta: str
+
+    if IS_PYDANTIC_V2:
+        model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
+    else:
+
+        class Config:
+            frozen = True
+            smart_union = True
+            extra = pydantic.Extra.allow
+
+
 class RagStreamEvent_ContentDelta(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["content_delta"] = "content_delta"
@@ -99,7 +119,7 @@ class RagStreamEvent_ContentDelta(UniversalBaseModel):
 
 class RagStreamEvent_Done(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["done"] = "done"
@@ -136,7 +156,7 @@ class RagStreamEvent_Done(UniversalBaseModel):
 
 class RagStreamEvent_Error(UniversalBaseModel):
     """
-    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. None follows the terminal `done` or `error` event.
+    A single Server-Sent Event from `POST /v1/rag`. The `type` field discriminates which event type this is (the `event` field carries the same value for backward compatibility). The stream may also carry Server-Sent Events comment lines (a line that starts with a colon, such as `: keepalive`): one as the stream opens and then about every 15 seconds while the model is working. A stream parser you write yourself must skip them. No comment line follows the terminal `done` or `error` event.
     """
 
     type: typing.Literal["error"] = "error"
@@ -158,6 +178,7 @@ RagStreamEvent = typing_extensions.Annotated[
     typing.Union[
         RagStreamEvent_SearchResults,
         RagStreamEvent_TruncationWarning,
+        RagStreamEvent_ReasoningDelta,
         RagStreamEvent_ContentDelta,
         RagStreamEvent_Done,
         RagStreamEvent_Error,

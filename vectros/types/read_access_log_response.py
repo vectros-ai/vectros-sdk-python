@@ -88,10 +88,7 @@ class ReadAccessLogResponse(UniversalBaseModel):
     recipient_ref: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="recipientRef"),
-        pydantic.Field(
-            alias="recipientRef",
-            description="Reserved for future use — not yet populated, so this is currently always null. When implemented, it will record the basis for the access (e.g. treatment, payment, operations, or an external disclosure).",
-        ),
+        pydantic.Field(alias="recipientRef", description="Not populated: the value is null for every row."),
     ] = None
     destination_alias: typing_extensions.Annotated[
         typing.Optional[str],

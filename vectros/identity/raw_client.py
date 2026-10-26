@@ -259,6 +259,28 @@ class RawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -452,6 +474,17 @@ class RawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -513,6 +546,17 @@ class RawIdentityClient:
                 return HttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -922,6 +966,17 @@ class RawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -991,6 +1046,17 @@ class RawIdentityClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1095,7 +1161,7 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[NamespaceResponse]:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
@@ -1351,7 +1417,7 @@ class RawIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -1520,7 +1586,7 @@ class RawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[UserResponse]:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 
         Parameters
         ----------
@@ -1549,7 +1615,7 @@ class RawIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -2188,6 +2254,28 @@ class AsyncRawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -2381,6 +2469,17 @@ class AsyncRawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -2442,6 +2541,17 @@ class AsyncRawIdentityClient:
                 return AsyncHttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -2851,6 +2961,17 @@ class AsyncRawIdentityClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -2920,6 +3041,17 @@ class AsyncRawIdentityClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3024,7 +3156,7 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[NamespaceResponse]:
         """
-        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
+        Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 
         Parameters
         ----------
@@ -3280,7 +3412,7 @@ class AsyncRawIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.
@@ -3449,7 +3581,7 @@ class AsyncRawIdentityClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[UserResponse]:
         """
-        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
+        Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 
         Parameters
         ----------
@@ -3478,7 +3610,7 @@ class AsyncRawIdentityClient:
             The raw invite token from the invitation email link. Required to activate a pending invitation (moving the user from PENDING to ACTIVE); ignored otherwise. The token's signature is verified server-side.
 
         external_subject : typing.Optional[str]
-            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
+            The user's identifier in your own authentication system (for example, a Cognito sub or Auth0 user ID). Required to activate a pending invitation; ignored on subsequent updates. Treat it as immutable once the user is activated. **This is NOT an authentication binding, and setting it here does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either. Those are granted only by the invitee authenticating themselves (accepting the emailed invitation link, or redeeming `inviteToken` directly at the token-exchange endpoint with their own credential). A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. It is stored exactly as you send it, with no normalization — it does NOT automatically match or deduplicate against an identity that later authenticates via token exchange, which computes its own internal value from the verified credential rather than reading this field. Use `externalId` (above) for your own correlation/bookkeeping needs; treat this field as informational unless you have a specific, verified reason to set it.
 
         email_verified_attestation : typing.Optional[bool]
             Your attestation that the invitee's email was verified by your authentication system before this call. Must be `true` to activate a pending invitation. Vectros cannot inspect your authentication system, so asserting this accurately is your responsibility.

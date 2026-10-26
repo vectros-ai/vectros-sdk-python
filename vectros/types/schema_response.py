@@ -61,7 +61,7 @@ class SchemaResponse(UniversalBaseModel):
     ] = None
     capabilities: typing.Optional[typing.Dict[str, bool]] = pydantic.Field(default=None)
     """
-    Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; it never affects the records themselves. `readAccessLog` (default false) controls accounting-of-disclosures logging for reads of this type's records.
+    Feature flags for this schema. `auditHistory` (default true) controls whether a change-history (version) trail is kept for this type's data; it never affects the records themselves. `readAccessLog` (default false) controls accounting-of-disclosures logging for reads of this type's records. `ttlEligible` (default false) lets records of this type carry `expiresAt`. `triggersEnabled` (default false) lets trigger rules fire on this type.
     """
 
     storage_profile: typing_extensions.Annotated[

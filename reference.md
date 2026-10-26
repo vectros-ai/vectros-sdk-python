@@ -302,7 +302,7 @@ client.auth.list_scoped_keys()
 <dl>
 <dd>
 
-Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
+Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile or the user additionally stops credentials already bound to it, within about five minutes. A `PENDING` user is fine.
 </dd>
 </dl>
 </dd>
@@ -653,7 +653,7 @@ client.auth.get_admin_logs(
 <dl>
 <dd>
 
-**limit:** `typing.Optional[int]` — Maximum number of log entries to return per page (1–500; defaults to 200).
+**limit:** `typing.Optional[int]` — Maximum number of log entries to return (1–500; defaults to 200). There is no cursor. A credential confined to one app context sees only that context's entries.
     
 </dd>
 </dl>
@@ -1531,7 +1531,7 @@ client.auth.get_app_context(
 <dl>
 <dd>
 
-Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 </dd>
 </dl>
 </dd>
@@ -2452,7 +2452,7 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
-Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact support, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The support path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 </dd>
 </dl>
 </dd>
@@ -2602,7 +2602,7 @@ client.auth.list_issuers()
 <dl>
 <dd>
 
-Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 </dd>
 </dl>
 </dd>
@@ -2702,7 +2702,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-**userinfo_uri:** `typing.Optional[str]` — The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
+**userinfo_uri:** `typing.Optional[str]` — The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first login (no fallback is attempted). Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
     
 </dd>
 </dl>
@@ -2726,7 +2726,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-**restricted_to_domain:** `typing.Optional[str]` — Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
+**restricted_to_domain:** `typing.Optional[str]` — Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your account, proven in the developer portal by your account owner (POST /developer/domains, then /verify — not reachable with an API key; the owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
     
 </dd>
 </dl>
@@ -3404,7 +3404,7 @@ client.auth.exchange_token(
 <dl>
 <dd>
 
-**invite_token:** `typing.Optional[str]` — The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+**invite_token:** `typing.Optional[str]` — The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the invite-email link flow), never generated by this endpoint.
     
 </dd>
 </dl>
@@ -3416,7 +3416,7 @@ client.auth.exchange_token(
 
 Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
 
-This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+`signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
     
 </dd>
 </dl>
@@ -3997,7 +3997,7 @@ client.documents.patch_document(
 <dl>
 <dd>
 
-**expected_version:** `typing.Optional[int]` — Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit for last-write-wins.
+**expected_version:** `typing.Optional[int]` — Optimistic-concurrency token. Pass the `version` you last read to make this update conditional — rejected with `409 VERSION_CONFLICT` if the document changed since. Omit it to update whatever version is stored; an update that collides with another write to the same document while it is being applied is still rejected with `409 VERSION_CONFLICT`.
     
 </dd>
 </dl>
@@ -4452,7 +4452,7 @@ client.documents.get_document_download_url(
 <dl>
 <dd>
 
-Returns the document's full text body when it is retained: always available for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
+Returns the document's full text body when it is retained: retained for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -5846,7 +5846,7 @@ client.identity.list_namespaces()
 <dl>
 <dd>
 
-Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary partner-grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
+Registers a new scope namespace and declares whether its values resolve to identity entities (`entityBacked`). Also requires `specificityRank`, an explicit, account-unique position in the specificity order used to break recordType schema-resolution ties. Requires a root API key or one of the CLI bootstrap's two provisioning capabilities — never an ordinary grantable scope. A bootstrap credential's registration is confined to its own app context UNLESS it additionally holds the tenant-wide namespace-provisioning capability and `contextId` is omitted, in which case it may register a TENANT-WIDE namespace (visible to every context). `org` and `client` are reserved names, registered the same way as any other namespace.
 </dd>
 </dl>
 </dd>
@@ -6228,7 +6228,7 @@ client.identity.get_user(
 <dl>
 <dd>
 
-Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
+Updates mutable fields on an existing user (such as email, status, payload, or schema binding). The `type` field is immutable after creation, and `email` cannot be changed while an invitation to that user is still outstanding — revoke the invitation, or invite the new address instead. This endpoint also activates an invited user: a PUT that moves a PENDING user to ACTIVE and carries `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true` completes the invitation. **`externalSubject` set this way is NOT an authentication binding and does not enable sign-in anywhere** — not the Vectros DevPortal/Admin App/web apps, and not `/v1/auth/token/exchange` either; both are granted only by the invitee authenticating themselves. A subject stored through `PUT /v1/users/{id}` does not make the person a member of your account: it is ignored for the tenant claims in sign-in tokens, the developer portal's memberships list and tenant switching, and an ownership transfer. To give such a person access, delete the user and invite them again; accepting the invitation binds the subject and counts it. If the invitee needs dev-portal/web-app access, send them the invitation link and let them accept it directly. If the invitee needs to sign in via token exchange, have them redeem `inviteToken` themselves at `/v1/auth/token/exchange` with their own credential — Vectros verifies it there and computes its own value for this field from the verified credential. The value you send here is stored exactly as-is, with no normalization, and does NOT automatically match or deduplicate against what a later token-exchange sign-in computes for the same real-world identity. Call this endpoint directly only if you run your own backend and want Vectros to record which of your own users a given account corresponds to — treat this field as informational for that purpose, not as a way to pre-authorize sign-in. Requires the `users:u` scope.
 </dd>
 </dl>
 </dd>
@@ -6792,7 +6792,7 @@ client.compliance.get_erasure_request(
 <dl>
 <dd>
 
-Submits an asynchronous job to export your account's data, or a single end-subject's data, across the requested contexts. The request returns 202 with an `exportJobId`; poll `GET /v1/admin/export/{id}` until the job completes to obtain a short-lived presigned download URL and a manifest describing the payload. Requires a root API key — a scoped credential is rejected with 403.
+Reserved: with a root API key this operation answers `501` and starts no job. The request and response shapes are published so that integrations can be written against them: a request names the contexts, or a single end-subject, to export, and the response carries an `exportJobId` that `GET /v1/admin/export/{id}` reports on. Requires a root API key — a scoped credential is rejected with 403.
 </dd>
 </dl>
 </dd>
@@ -6830,7 +6830,7 @@ client.compliance.create_export()
 <dl>
 <dd>
 
-**scope:** `typing.Optional[ExportRequestScope]` — What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request). Additional scopes may be added in the future.
+**scope:** `typing.Optional[ExportRequestScope]` — What to export. `tenant` (the default) exports all of your account's data across the requested contexts; `subject` exports a single end-subject's data (for example, to satisfy a one-person data-portability request).
     
 </dd>
 </dl>
@@ -6870,7 +6870,7 @@ client.compliance.create_export()
 <dl>
 <dd>
 
-**format:** `typing.Optional[ExportRequestFormat]` — Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is currently the only supported format; more may be added in the future. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
+**format:** `typing.Optional[ExportRequestFormat]` — Serialization format of the export payload. NDJSON (newline-delimited JSON, one row per line) is the only supported format. The manifest carries a `formatVersion` so you can parse the payload in a forward-compatible way.
     
 </dd>
 </dl>
@@ -6910,7 +6910,7 @@ client.compliance.create_export()
 <dl>
 <dd>
 
-Polls an export job by id. While the job is still running this returns its status only; once it completes, the response also includes a short-lived presigned download URL and a manifest (format version and per-context counts). Requires a root API key.
+Reserved: with a root API key this operation answers `501`. Its response shape is the one the export operation above refers to: the job status, and a short-lived presigned download URL and a manifest (format version and per-context counts) for a completed job. Requires a root API key.
 </dd>
 </dl>
 </dd>
@@ -7395,7 +7395,7 @@ client.folders.delete_folder(
 <dl>
 <dd>
 
-Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported in this release (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
+Partially updates a folder using an RFC 7386 JSON Merge Patch. The `name`, `description`, and ownership fields (`userId`, `scopes`) are applied when present and left unchanged when omitted; sending any of these as null is rejected, because clearing a field is not supported (omit it instead). `slug` and `parentFolderId` are immutable — a folder cannot be re-slugged or moved via the API — and the request is rejected if either is present. Pass `expectedVersion` for optimistic concurrency (you get a 409 if the folder changed since you last read it). Requires the `folders:u` scope.
 </dd>
 </dl>
 </dd>
@@ -7557,7 +7557,7 @@ client.folders.get_folder_versions(
 <dl>
 <dd>
 
-Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the exact credit rates charged per 1K input and output tokens. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
+Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, and `longContext` for prompts over its threshold. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
 </dd>
 </dl>
 </dd>
@@ -7619,7 +7619,7 @@ client.inference.list_inference_models()
 <dl>
 <dd>
 
-Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. Token cost is debited from your pre-paid inference balance (in cents), and a small per-call flat fee is debited from your monthly platform credit allowance. Requires the `inference:r` scope.
+Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A small per-call flat fee is charged to your monthly credit allowance, except when the call fails on the server side. Requires the `inference:r` scope.
 </dd>
 </dl>
 </dd>
@@ -7713,6 +7713,14 @@ client.inference.chat_inference(
 <dd>
 
 **provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**reasoning:** `typing.Optional[ChatRequestReasoning]` — Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
     
 </dd>
 </dl>
@@ -7849,6 +7857,14 @@ client.inference.document_ask(
 <dl>
 <dd>
 
+**reasoning:** `typing.Optional[DocumentAskRequestReasoning]` — Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
     
 </dd>
@@ -7977,6 +7993,14 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
+**reasoning:** `typing.Optional[RagRequestReasoning]` — Whether to receive the model's reasoning. `omit` (the default) leaves the stream exactly as it was: reasoning is not sent. `stream` sends it as `reasoning_delta` events ahead of the `content_delta` events of the answer, for a model that reasons; a model that does not reason sends none. Reasoning counts against `maxTokens` and is billed as output whether or not you receive it, and `done` is unchanged. Vectros does not log or store the reasoning. The reasoning can quote your documents or messages, so treat it as you treat the answer. Applies to platform-hosted models; a request routed through `providerAlias` ignores it.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
     
 </dd>
@@ -8072,7 +8096,7 @@ client.records.batch_get_records()
 <dl>
 <dd>
 
-Reserved endpoint for batch lookup and reference resolution. The published response shape correlates results to each input and carries a per-item status envelope. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+Reserved endpoint for batch lookup and reference resolution. With the `records:r` scope it answers 501 (not implemented). The published response shape correlates results to each input and carries a per-item status envelope. Requires the `records:r` scope.
 </dd>
 </dl>
 </dd>
@@ -8142,7 +8166,7 @@ client.records.batch_lookup_records()
 <dl>
 <dd>
 
-Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
 `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
 
@@ -8698,7 +8722,7 @@ client.records.delete_record(
 <dl>
 <dd>
 
-Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 </dd>
 </dl>
 </dd>
@@ -9675,7 +9699,7 @@ client.schemas.update_schema(
 <dl>
 <dd>
 
-Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first. Requires the `schemas:d` scope.
+Permanently deletes a record schema. The request is refused with 409 if records of this type still exist — delete those records first, since every record must reference a live schema. The same applies to documents bound to this schema (for a schema declaring the `document` surface) — delete those documents first. A lineage base (a schema other schemas declare `basedOn`) also cannot be deleted while any such variant still exists — delete the variant schema(s) first. It is likewise refused while any trigger rule fires off this schema — delete those trigger rules first — and, for a schema declaring the `user` or `entity` surface, while any user or entity bound to it still exists. Requires the `schemas:d` scope.
 </dd>
 </dl>
 </dd>
@@ -9828,7 +9852,7 @@ client.schemas.get_schema_versions(
 <dl>
 <dd>
 
-Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body does not until the platform's repair lands — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
+Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
 
 **Permission.** Requires the `scripts:x` scope — the permission to *execute* — separate from the `scripts:c` permission to push scripts. Bare `scripts:x` grants every script in the context; `scripts:x:<name>` grants exactly that script name, every version of it. Execution discloses no source, so `scripts:r` is not needed. Inside the script, every read and write is enforced by your credential's data scopes exactly as the equivalent REST call would be — `scripts:x` alone can read and write nothing.
 
@@ -10447,7 +10471,7 @@ client.search.content(
 <dl>
 <dd>
 
-**min_similarity:** `typing.Optional[float]` — The minimum semantic similarity score a result must have to be included, on a scale of 0.0 to 1.0. Results scoring below this threshold are dropped. Applies when the mode is SEMANTIC or HYBRID.
+**min_similarity:** `typing.Optional[float]` — The minimum semantic similarity score a result must have to be included, on a scale of 0.0 to 1.0. Results scoring below this threshold are dropped. Applies when the mode is SEMANTIC or HYBRID. Defaults to 0.15 when omitted.
     
 </dd>
 </dl>
@@ -10455,7 +10479,7 @@ client.search.content(
 <dl>
 <dd>
 
-**min_text_relevance:** `typing.Optional[float]` — A relative relevance floor for the keyword leg, given as a fraction from 0 to 1 of the TOP result's score — results scoring below (top score × this value) are dropped. Keyword scores are unbounded and depend on the query, so this is a relative cutoff rather than an absolute score: for example, 0.5 keeps only results at least half as relevant as the best hit. Applies when the mode is TEXT or HYBRID. Omit it (or use a value of 0 or less) to keep all keyword matches.
+**min_text_relevance:** `typing.Optional[float]` — A relative relevance floor for the keyword leg, given as a fraction from 0 to 1 of the TOP result's score — results scoring below (top score × this value) are dropped. Keyword scores are unbounded and depend on the query, so this is a relative cutoff rather than an absolute score: for example, 0.5 keeps only results at least half as relevant as the best hit. Applies when the mode is HYBRID. Defaults to 0.3 when omitted; send 0 to keep all keyword matches.
     
 </dd>
 </dl>
@@ -10471,7 +10495,7 @@ client.search.content(
 <dl>
 <dd>
 
-**unique_documents:** `typing.Optional[bool]` — When true, returns at most one chunk per source item, so a single document or record cannot appear more than once in the results.
+**unique_documents:** `typing.Optional[bool]` — When true, returns at most one chunk per source item, so a single document or record cannot appear more than once in the results. Defaults to true.
     
 </dd>
 </dl>

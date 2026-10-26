@@ -8,12 +8,12 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class SelfSignupPolicy(UniversalBaseModel):
     """
-    Configured self-service signup policies, if any. Absent (not an empty list) when self-signup is not configured for this issuer.
+    One self-service signup entry: a `signup_type` and the `role_id` a new caller is bound to.
     """
 
     signup_type: str = pydantic.Field()
     """
-    The plain slug the frontend and the blueprint agree on to select this policy entry (e.g. 'practitioner', 'client'). Same grammar as a role id (lowercase letter first, then a-z 0-9 -, 3-31 chars). Caller-supplied at exchange time via the request's signup_type field; omitted on the request means 'the sole entry', valid only when this list has exactly one.
+    The plain slug your frontend sends to select this policy entry (e.g. 'practitioner', 'client'). Same grammar as a role id (lowercase letter first, then a-z 0-9 -, 3-31 chars). Caller-supplied at exchange time via the request's signup_type field; omitted on the request means 'the sole entry', valid only when this list has exactly one.
     """
 
     role_id: str = pydantic.Field()

@@ -11,7 +11,7 @@ from .storage_entry import StorageEntry
 
 class ReadAccessSection(UniversalBaseModel):
     """
-    PHI read-access logging metering. Two lines, because read-access bills BOTH the retained storage AND the per-read write (unlike audit history's storage-only line — an audited write is already billed; a read is not).
+    PHI read-access logging metering. `storageBytes` is the retained read-access-log storage, billed at the audit rate. `rows` counts logged reads and is reported for information; logged-read writes are not currently charged.
     """
 
     storage_bytes: typing_extensions.Annotated[
@@ -19,15 +19,13 @@ class ReadAccessSection(UniversalBaseModel):
     ] = None
     rows: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Logged-read write/operation count this period (one per emitted access record). Recovers the additional per-read write cost. Credits are 0 until this rate is set.
+    Number of logged reads (one per emitted access record) this period. Not currently charged.
     """
 
     row_credits: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="rowCredits"),
-        pydantic.Field(
-            alias="rowCredits", description="Credits for the logged-read writes this period (0 until this rate is set)."
-        ),
+        pydantic.Field(alias="rowCredits", description="Currently 0: logged-read writes are not charged."),
     ] = None
 
     if IS_PYDANTIC_V2:

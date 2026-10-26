@@ -29,7 +29,7 @@ class RegionPricing(UniversalBaseModel):
         FieldMetadata(alias="globalAvailable"),
         pydantic.Field(
             alias="globalAvailable",
-            description="Whether this model can be served from a non-US region when you opt into global data residency.",
+            description="Whether the model is available when you opt into global data residency. A model that is offered only in US regions is still served from there.",
         ),
     ]
 

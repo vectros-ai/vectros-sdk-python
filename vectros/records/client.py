@@ -82,7 +82,7 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchLookupResponse:
         """
-        Reserved endpoint for batch lookup and reference resolution. The published response shape correlates results to each input and carries a per-item status envelope. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+        Reserved endpoint for batch lookup and reference resolution. With the `records:r` scope it answers 501 (not implemented). The published response shape correlates results to each input and carries a per-item status envelope. Requires the `records:r` scope.
 
         Parameters
         ----------
@@ -95,7 +95,7 @@ class RecordsClient:
         Returns
         -------
         BatchLookupResponse
-            Per-input lookup result groups. This is the reserved response shape; the endpoint does not yet return it.
+            Per-input lookup result groups. This is the reserved response shape; the endpoint answers 501 instead.
 
         Examples
         --------
@@ -120,7 +120,7 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchWriteResponse:
         """
-        Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+        Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
         `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
 
@@ -302,7 +302,7 @@ class RecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -437,7 +437,7 @@ class RecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -526,7 +526,7 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
         """
-        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 
         Parameters
         ----------
@@ -564,7 +564,7 @@ class RecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -963,7 +963,7 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchLookupResponse:
         """
-        Reserved endpoint for batch lookup and reference resolution. The published response shape correlates results to each input and carries a per-item status envelope. It currently returns 501 (not implemented). The documented 200 response schema is the stable shape this endpoint will use once available. Requires the `records:r` scope.
+        Reserved endpoint for batch lookup and reference resolution. With the `records:r` scope it answers 501 (not implemented). The published response shape correlates results to each input and carries a per-item status envelope. Requires the `records:r` scope.
 
         Parameters
         ----------
@@ -976,7 +976,7 @@ class AsyncRecordsClient:
         Returns
         -------
         BatchLookupResponse
-            Per-input lookup result groups. This is the reserved response shape; the endpoint does not yet return it.
+            Per-input lookup result groups. This is the reserved response shape; the endpoint answers 501 instead.
 
         Examples
         --------
@@ -1009,7 +1009,7 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> BatchWriteResponse:
         """
-        Writes up to 50 records (or 50 with `atomicity: all_or_nothing`) in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
+        Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
         `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
 
@@ -1207,7 +1207,7 @@ class AsyncRecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1358,7 +1358,7 @@ class AsyncRecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1463,7 +1463,7 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordResponse:
         """
-        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported in this release — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
+        Partially updates a record using an RFC 7386 JSON Merge Patch. The `payload` object is deep-merged into the existing payload: keys you send overwrite (recursing into nested objects), a key set to null is deleted, and keys you omit are left unchanged — so you can change a single field without re-sending the rest (unlike the full-replacement PUT). Top-level fields (`status`, `folderId`, `userId`, `scopes`) are set when present and left unchanged when omitted; sending a top-level field as null is rejected (clearing a top-level field is not supported — omit it instead). `typeName`, `schemaId`, `externalId`, and `indexMode` are immutable and rejected if present. The merged result is validated against the schema. Pass `expectedVersion` to make the patch conditional (optimistic concurrency, 409 on conflict). Requires the `records:u:<type>` scope.
 
         Parameters
         ----------
@@ -1501,7 +1501,7 @@ class AsyncRecordsClient:
             Optional absolute expiry, as an ISO-8601 UTC timestamp. When set, the record is automatically deleted at (or shortly after) this time — removed from search and storage, the same as an explicit delete. Requires the schema to opt in with `capabilities.ttlEligible: true` (else the request is rejected). Must be at least 10 minutes in the future. Omit to leave the record's expiry unchanged; records have no expiry by default.
 
         expected_version : typing.Optional[int]
-            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it for last-write-wins (the default). Ignored on create.
+            Optimistic-concurrency token. Pass the `version` you last read (from a fetch or a prior write response) to make this update conditional — it is rejected with 409 VERSION_CONFLICT if the record was modified since, leaving the stored record untouched. Omit it to update whatever version is stored; an update that collides with another write to the same record while it is being applied is still rejected with `409 VERSION_CONFLICT`. Ignored when the request creates the record; with `?upsert=true` on an existing record it makes the update conditional.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.

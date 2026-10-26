@@ -12,6 +12,7 @@ from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
 from ..core.serialization import convert_and_respect_annotation_metadata
 from ..errors.bad_request_error import BadRequestError
+from ..errors.conflict_error import ConflictError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.too_many_requests_error import TooManyRequestsError
@@ -213,7 +214,7 @@ class RawTriggersClient:
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
 
         principal_id : typing.Optional[str]
-            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not partner-authored directly in the normal flow, but accepted here so the loader can set it explicitly).
+            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not normally authored by hand, but accepted here so the loader can set it explicitly).
 
         provisioned_by : typing.Optional[str]
             The name of the blueprint that provisions this trigger. Set by `vectros bootstrap --blueprint` so that a later apply of the SAME blueprint can safely delete a trigger you have removed from it, and so that a trigger belonging to another blueprint — or hand-authored through this API — is never deleted by someone else's apply. Leave it unset for a trigger you manage yourself. Immutable once set: to move a trigger between blueprints, delete it and re-create it.
@@ -278,6 +279,28 @@ class RawTriggersClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -402,7 +425,7 @@ class RawTriggersClient:
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
 
         principal_id : typing.Optional[str]
-            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not partner-authored directly in the normal flow, but accepted here so the loader can set it explicitly).
+            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not normally authored by hand, but accepted here so the loader can set it explicitly).
 
         provisioned_by : typing.Optional[str]
             The name of the blueprint that provisions this trigger. Set by `vectros bootstrap --blueprint` so that a later apply of the SAME blueprint can safely delete a trigger you have removed from it, and so that a trigger belonging to another blueprint — or hand-authored through this API — is never deleted by someone else's apply. Leave it unset for a trigger you manage yourself. Immutable once set: to move a trigger between blueprints, delete it and re-create it.
@@ -484,6 +507,17 @@ class RawTriggersClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -529,6 +563,17 @@ class RawTriggersClient:
                 return HttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -745,7 +790,7 @@ class AsyncRawTriggersClient:
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
 
         principal_id : typing.Optional[str]
-            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not partner-authored directly in the normal flow, but accepted here so the loader can set it explicitly).
+            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not normally authored by hand, but accepted here so the loader can set it explicitly).
 
         provisioned_by : typing.Optional[str]
             The name of the blueprint that provisions this trigger. Set by `vectros bootstrap --blueprint` so that a later apply of the SAME blueprint can safely delete a trigger you have removed from it, and so that a trigger belonging to another blueprint — or hand-authored through this API — is never deleted by someone else's apply. Leave it unset for a trigger you manage yourself. Immutable once set: to move a trigger between blueprints, delete it and re-create it.
@@ -810,6 +855,28 @@ class AsyncRawTriggersClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -934,7 +1001,7 @@ class AsyncRawTriggersClient:
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
 
         principal_id : typing.Optional[str]
-            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not partner-authored directly in the normal flow, but accepted here so the loader can set it explicitly).
+            The TYPE_SERVICE principal id minted for this trigger (set by the CLI loader at blueprint-apply time; not normally authored by hand, but accepted here so the loader can set it explicitly).
 
         provisioned_by : typing.Optional[str]
             The name of the blueprint that provisions this trigger. Set by `vectros bootstrap --blueprint` so that a later apply of the SAME blueprint can safely delete a trigger you have removed from it, and so that a trigger belonging to another blueprint — or hand-authored through this API — is never deleted by someone else's apply. Leave it unset for a trigger you manage yourself. Immutable once set: to move a trigger between blueprints, delete it and re-create it.
@@ -1016,6 +1083,17 @@ class AsyncRawTriggersClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1063,6 +1141,17 @@ class AsyncRawTriggersClient:
                 return AsyncHttpResponse(response=_response, data=None)
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

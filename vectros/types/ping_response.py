@@ -60,7 +60,7 @@ class PingResponse(UniversalBaseModel):
         FieldMetadata(alias="allowedActions"),
         pydantic.Field(
             alias="allowedActions",
-            description="The actions this credential is allowed to perform. Present only when `principalType` is `scoped_key`.",
+            description="The action verbs granted across the credential's scope clauses, in `resource:ops` form. Not narrowed by data scope. Present only when `principalType` is `scoped_key`.",
         ),
     ] = None
     data_scope: typing_extensions.Annotated[

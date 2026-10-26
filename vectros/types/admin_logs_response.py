@@ -21,7 +21,7 @@ class AdminLogsResponse(UniversalBaseModel):
 
     truncated: bool = pydantic.Field()
     """
-    True if more matching rows exist than the requested limit. When true, narrow the time window or add a filter (resource/method/keyId) to see older entries.
+    True when the result filled the requested `limit`, so more matching rows may exist. When true, narrow the time window or add a filter (resource/method/keyId) to see older entries.
     """
 
     query_duration_ms: typing_extensions.Annotated[

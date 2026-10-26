@@ -13,6 +13,7 @@ from ..core.request_options import RequestOptions
 from ..core.serialization import convert_and_respect_annotation_metadata
 from ..errors.bad_request_error import BadRequestError
 from ..errors.conflict_error import ConflictError
+from ..errors.content_too_large_error import ContentTooLargeError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.internal_server_error import InternalServerError
 from ..errors.not_found_error import NotFoundError
@@ -291,7 +292,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile or the user additionally stops credentials already bound to it, within about five minutes. A `PENDING` user is fine.
 
         Parameters
         ----------
@@ -581,7 +582,7 @@ class RawAuthClient:
             If true, return only requests with a status of 400 or higher.
 
         limit : typing.Optional[int]
-            Maximum number of log entries to return per page (1–500; defaults to 200).
+            Maximum number of log entries to return (1–500; defaults to 200). There is no cursor. A credential confined to one app context sees only that context's entries.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -848,6 +849,17 @@ class RawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -969,13 +981,13 @@ class RawAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
 
         read_access_log_default : typing.Optional[bool]
             Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
@@ -1048,6 +1060,28 @@ class RawAuthClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1183,7 +1217,7 @@ class RawAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
@@ -1257,6 +1291,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1469,6 +1514,17 @@ class RawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -1650,7 +1706,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[AppContextResponse]:
         """
-        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -1669,13 +1725,13 @@ class RawAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
 
         read_access_log_default : typing.Optional[bool]
             Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
@@ -1734,6 +1790,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1945,7 +2012,7 @@ class RawAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -2002,6 +2069,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -2071,6 +2149,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -2534,6 +2623,17 @@ class RawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -2558,7 +2658,7 @@ class RawAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[None]:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact support, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The support path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -2715,7 +2815,7 @@ class RawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -2741,7 +2841,7 @@ class RawAuthClient:
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
 
         userinfo_uri : typing.Optional[str]
-            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first login (no fallback is attempted). Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
@@ -2750,7 +2850,7 @@ class RawAuthClient:
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
 
         restricted_to_domain : typing.Optional[str]
-            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your account, proven in the developer portal by your account owner (POST /developer/domains, then /verify — not reachable with an API key; the owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3206,13 +3306,13 @@ class RawAuthClient:
             Invitee's first name. Optional; used to personalize the invitation email greeting.
 
         last_name : typing.Optional[str]
-            Invitee's last name. Optional; accepted but not currently stored or returned.
+            Invitee's last name. Optional; accepted and ignored.
 
         accept_url : typing.Optional[str]
             Your landing page where the invitee accepts the invitation. Required when `sendEmail` is true. The invitation token is appended as a `t` query parameter. Must be an https URL with a domain-name host (IP-literal hosts are rejected).
 
         from_name : typing.Optional[str]
-            Display name shown in the From header of the invitation email. Defaults to `Vectros`. Maximum 100 characters; must not contain newlines.
+            Display name shown in the From header of the invitation email. When omitted, the app context's `companyName` is used, then its `name`. Maximum 100 characters; must not contain newlines.
 
         ttl_seconds : typing.Optional[int]
             How long the invitation token stays valid, in seconds. Defaults to 604800 (7 days). Must be between 3600 (1 hour) and 2592000 (30 days).
@@ -3352,13 +3452,13 @@ class RawAuthClient:
             Invitee's first name. Optional; used to personalize the invitation email greeting.
 
         last_name : typing.Optional[str]
-            Invitee's last name. Optional; accepted but not currently stored or returned.
+            Invitee's last name. Optional; accepted and ignored.
 
         accept_url : typing.Optional[str]
             Your landing page where the invitee accepts the invitation. Required when `sendEmail` is true. The invitation token is appended as a `t` query parameter. Must be an https URL with a domain-name host (IP-literal hosts are rejected).
 
         from_name : typing.Optional[str]
-            Display name shown in the From header of the invitation email. Defaults to `Vectros`. Maximum 100 characters; must not contain newlines.
+            Display name shown in the From header of the invitation email. When omitted, the app context's `companyName` is used, then its `name`. Maximum 100 characters; must not contain newlines.
 
         ttl_seconds : typing.Optional[int]
             How long the invitation token stays valid, in seconds. Defaults to 604800 (7 days). Must be between 3600 (1 hour) and 2592000 (30 days).
@@ -3427,6 +3527,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3596,12 +3707,12 @@ class RawAuthClient:
             Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
 
         invite_token : typing.Optional[str]
-            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the invite-email link flow), never generated by this endpoint.
 
         signup_type : typing.Optional[str]
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
 
-            This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+            `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
 
         context_id : typing.Optional[str]
             Selects which app context to target, for an issuer registered against more than one (each via its own `POST /v1/auth/issuers` row and a distinct `audience`). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit when your `subject_token`'s `aud` claim matches only one registered context (the common case, and unaffected by this field's addition — behavior is unchanged from before this field existed). When your token's `aud` claims could match MORE than one of your registered contexts, name the one you want; a mismatch (naming a context this issuer is not registered against) is refused identically to an unrecognized issuer — the response does not distinguish the two.
@@ -3677,6 +3788,17 @@ class RawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 413:
+                raise ContentTooLargeError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -3950,7 +4072,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScopedKeyResponse]:
         """
-        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile additionally stops credentials already bound to it, within about five minutes; suspending the user does not stop their existing keys at all. A `PENDING` user is fine.
+        Creates a scoped API key (an `ssk_*` secret) that inherits its permissions from an existing access profile in your account. The call is idempotent on the combination of tenant, context, user, and key name: re-issuing the same request returns the existing key WITHOUT re-disclosing its raw secret. The raw key is returned ONLY in this response — store it securely, as it cannot be retrieved again. Requires the `keys:c` scope. If you use a scoped credential, `keys:c` alone is not sufficient: because the minted key is durably bound to the profile you name, the profile's effective scopes may not exceed your own, and you may only mint against a profile whose `identityOverrides` values your own identity holds. Minting a key bound to your OWN principal needs nothing further; minting one bound to a DIFFERENT principal additionally requires the `delegate-mint` capability (`granted_capabilities`) on your credential — without it the request is refused. A root API key (`sk_`) is exempt from all three bounds. The profile you name must be `active` AND the user you name must not be `SUSPENDED`: either is refused with `409`, and no root exemption applies to that. Both refusals stop ISSUANCE only. Suspending the profile or the user additionally stops credentials already bound to it, within about five minutes. A `PENDING` user is fine.
 
         Parameters
         ----------
@@ -4240,7 +4362,7 @@ class AsyncRawAuthClient:
             If true, return only requests with a status of 400 or higher.
 
         limit : typing.Optional[int]
-            Maximum number of log entries to return per page (1–500; defaults to 200).
+            Maximum number of log entries to return (1–500; defaults to 200). There is no cursor. A credential confined to one app context sees only that context's entries.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -4507,6 +4629,17 @@ class AsyncRawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -4628,13 +4761,13 @@ class AsyncRawAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
 
         read_access_log_default : typing.Optional[bool]
             Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
@@ -4707,6 +4840,28 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 403:
                 raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -4842,7 +4997,7 @@ class AsyncRawAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
@@ -4916,6 +5071,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -5128,6 +5294,17 @@ class AsyncRawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -5309,7 +5486,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[AppContextResponse]:
         """
-        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for a partner with the corresponding account-level feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -5328,13 +5505,13 @@ class AsyncRawAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for a partner with the corresponding account-level feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for a partner with that feature enabled on their account. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for a partner with that feature enabled on their account.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
 
         read_access_log_default : typing.Optional[bool]
             Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
@@ -5393,6 +5570,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -5604,7 +5792,7 @@ class AsyncRawAuthClient:
             A human-readable display name for the role.
 
         scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability this release does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
@@ -5661,6 +5849,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -5730,6 +5929,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -6193,6 +6403,17 @@ class AsyncRawAuthClient:
                         ),
                     ),
                 )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
                     headers=dict(_response.headers),
@@ -6217,7 +6438,7 @@ class AsyncRawAuthClient:
         self, issuer_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[None]:
         """
-        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact your platform operator, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The operator path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
+        Deregisters a trusted third-party IdP issuer. Requires a root API key or the bootstrap's provisioning capability. A credential confined to one app context may only deregister an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may deregister any issuer. Refused if any user account was ever created or matched via this issuer (by a prior self-signup or accepted invite, through `POST /v1/auth/token/exchange`) — that access cannot be silently orphaned. This is unconditional on the affected users' `status`: suspending them first does not lift the refusal. **A bound registration cannot be replaced, self-service, within its own app context**: registering a replacement issuer under a different issuerId in the SAME context also fails, because the context's one-active-issuer claim is released only when THIS registration is deleted. Two real options: suspend this issuer (stops new exchanges immediately) and register a replacement under a DIFFERENT app context — note that targets a different context, so this context's existing users/roles/access profiles are not carried over; or contact support, who can force-release this registration so a replacement may be registered in the SAME context under a new issuerId. **The support path is not a lighter-weight alternative to the first — it PERMANENTLY RETIRES this issuerId and leaves every bound user unable to ever exchange through it again; it does not preserve continuity for them any better than registering under a different context does.** An issuer that has never been used for an exchange (no bound users yet) can always be deregistered.
 
         Parameters
         ----------
@@ -6374,7 +6595,7 @@ class AsyncRawAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[IssuerResponse]:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary partner-grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts today, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -6400,7 +6621,7 @@ class AsyncRawAuthClient:
             The claim in the IdP's token that carries the subject's email, used for first-login invite matching. Defaults to `email` if omitted.
 
         userinfo_uri : typing.Optional[str]
-            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first-login exactly as it does today. Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
+            The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first login (no fallback is attempted). Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
             Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
@@ -6409,7 +6630,7 @@ class AsyncRawAuthClient:
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
 
         restricted_to_domain : typing.Optional[str]
-            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your partner account, proven via the SEPARATE, OWNER-authenticated developer portal (POST /developer/domains, then /verify — a Cognito-OWNER-gated surface, not reachable with this same partner-API credential; your account owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
+            Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your account, proven in the developer portal by your account owner (POST /developer/domains, then /verify — not reachable with an API key; the owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -6865,13 +7086,13 @@ class AsyncRawAuthClient:
             Invitee's first name. Optional; used to personalize the invitation email greeting.
 
         last_name : typing.Optional[str]
-            Invitee's last name. Optional; accepted but not currently stored or returned.
+            Invitee's last name. Optional; accepted and ignored.
 
         accept_url : typing.Optional[str]
             Your landing page where the invitee accepts the invitation. Required when `sendEmail` is true. The invitation token is appended as a `t` query parameter. Must be an https URL with a domain-name host (IP-literal hosts are rejected).
 
         from_name : typing.Optional[str]
-            Display name shown in the From header of the invitation email. Defaults to `Vectros`. Maximum 100 characters; must not contain newlines.
+            Display name shown in the From header of the invitation email. When omitted, the app context's `companyName` is used, then its `name`. Maximum 100 characters; must not contain newlines.
 
         ttl_seconds : typing.Optional[int]
             How long the invitation token stays valid, in seconds. Defaults to 604800 (7 days). Must be between 3600 (1 hour) and 2592000 (30 days).
@@ -7011,13 +7232,13 @@ class AsyncRawAuthClient:
             Invitee's first name. Optional; used to personalize the invitation email greeting.
 
         last_name : typing.Optional[str]
-            Invitee's last name. Optional; accepted but not currently stored or returned.
+            Invitee's last name. Optional; accepted and ignored.
 
         accept_url : typing.Optional[str]
             Your landing page where the invitee accepts the invitation. Required when `sendEmail` is true. The invitation token is appended as a `t` query parameter. Must be an https URL with a domain-name host (IP-literal hosts are rejected).
 
         from_name : typing.Optional[str]
-            Display name shown in the From header of the invitation email. Defaults to `Vectros`. Maximum 100 characters; must not contain newlines.
+            Display name shown in the From header of the invitation email. When omitted, the app context's `companyName` is used, then its `name`. Maximum 100 characters; must not contain newlines.
 
         ttl_seconds : typing.Optional[int]
             How long the invitation token stays valid, in seconds. Defaults to 604800 (7 days). Must be between 3600 (1 hour) and 2592000 (30 days).
@@ -7086,6 +7307,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -7255,12 +7487,12 @@ class AsyncRawAuthClient:
             Accepted-and-ignored if present (this contract mints exactly one token shape). Optional.
 
         invite_token : typing.Optional[str]
-            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the same invite-email link flow as today), never generated by this endpoint.
+            The `inv_*` invitation token from a sub-user invite email, when this exchange is a first-time login for a subject with no existing Vectros identity yet. Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit for a subject that already has an active Vectros identity; required to complete first login for one that doesn't. Delivered to the end user out-of-band (the invite-email link flow), never generated by this endpoint.
 
         signup_type : typing.Optional[str]
             Selects which self-service signup policy to apply for a first-time login with NO invite token, when the registered issuer declares one or more `selfSignupPolicies` (`POST /v1/auth/issuers`). A plain client-supplied selector, not a value your identity provider needs to assert. Omit when the issuer has exactly one policy entry (the unambiguous default); required to pick among multiple. Ignored entirely if the caller already has an existing Vectros identity, presented an `invite_token`, or the issuer offers no self-signup policies at all.
 
-            This does NOT reopen the caller-supplied-scope concern named above: `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
+            `signup_type` never selects a privilege level, only WHICH pre-authored, already-open policy entry to bind to. Every `selfSignupPolicies` entry is, by construction, something you already decided ANY caller who can present a token from this issuer may have — self-service, no invite, is exactly that decision, so there is no privilege differential between entries for a caller to escalate into by naming a different one than your frontend intended. The platform independently enforces that this is actually true (no entry may ever resolve to an elevated role) regardless of what this field's value is. Because "any caller who can present a token from this issuer" is the real trust boundary, self-signup is only as narrow as your issuer's own audience — it is not a substitute for restricting who can obtain a token from your identity provider in the first place.
 
         context_id : typing.Optional[str]
             Selects which app context to target, for an issuer registered against more than one (each via its own `POST /v1/auth/issuers` row and a distinct `audience`). Not part of RFC 8693 — a Vectros-specific extension field, additive to the standard grant. Omit when your `subject_token`'s `aud` claim matches only one registered context (the common case, and unaffected by this field's addition — behavior is unchanged from before this field existed). When your token's `aud` claims could match MORE than one of your registered contexts, name the one you want; a mismatch (naming a context this issuer is not registered against) is refused identically to an unrecognized issuer — the response does not distinguish the two.
@@ -7336,6 +7568,17 @@ class AsyncRawAuthClient:
                 )
             if _response.status_code == 404:
                 raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 413:
+                raise ContentTooLargeError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
