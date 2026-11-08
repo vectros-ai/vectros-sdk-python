@@ -15,9 +15,9 @@ class DocumentRequest(UniversalBaseModel):
     Request body for creating or updating a text-ingested document. Update semantics (PUT): omitted fields are preserved — sending null does not clear a field; `payload` is replaced in full when supplied (not deep-merged); `indexMode` is fixed at creation and ignored on update; `text` is used only on the POST ingest path. Text-ingested documents always retain their body (retrievable via `GET /{id}/text`); the `storeText` retention flag applies only to file uploads (`POST /v1/documents/upload`).
     """
 
-    title: str = pydantic.Field()
+    title: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Human-readable document title
+    Human-readable document title. Required when creating; on update, omit it to keep the current title.
     """
 
     text: typing.Optional[str] = pydantic.Field(default=None)

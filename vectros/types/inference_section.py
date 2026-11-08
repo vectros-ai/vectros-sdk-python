@@ -15,11 +15,12 @@ class InferenceSection(UniversalBaseModel):
     Inference activity at the account level (includes pre-paid balance)
     """
 
-    balance_cents: typing_extensions.Annotated[
+    balance_cents_milli: typing_extensions.Annotated[
         typing.Optional[int],
-        FieldMetadata(alias="balanceCents"),
+        FieldMetadata(alias="balanceCentsMilli"),
         pydantic.Field(
-            alias="balanceCents", description="Pre-paid inference balance in cents (used to settle model token costs)"
+            alias="balanceCentsMilli",
+            description="Pre-paid inference balance in milli-cents (thousandths of a cent; 1 cent = 1000), used to settle model token costs. Token costs are charged to the nearest milli-cent, never rounded to whole cents.",
         ),
     ] = None
     endpoints: typing.Optional[InferenceEndpoints] = None

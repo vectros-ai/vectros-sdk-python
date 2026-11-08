@@ -47,7 +47,7 @@ class RawInferenceClient:
         self, *, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[ModelsResponse]:
         """
-        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, and `longContext` for prompts over its threshold. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
+        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, `longContext` for prompts over its threshold, and `cachePricing` for prompt-cache tokens on a model that has cache prices. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
 
         Parameters
         ----------
@@ -98,7 +98,7 @@ class RawInferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[HttpResponse[typing.Iterator[ChatStreamEvent]]]:
         """
-        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A small per-call flat fee is charged to your monthly credit allowance, except when the call fails on the server side. Requires the `inference:r` scope.
+        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A per-call platform fee is charged to your monthly credit allowance, except when the call fails on the server side: 0.2 credits for a call of up to 60 seconds, then 1 credit per 5 minutes of the call's duration. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -307,7 +307,7 @@ class RawInferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[HttpResponse[typing.Iterator[DocumentAskStreamEvent]]]:
         """
-        Loads a single document's extracted text, supplies it as context, and streams a model answer about it. The document must be fully indexed. If the document exceeds the 32K-token cap, the call returns 413 with no credits charged — use `POST /v1/rag` instead to answer over larger or multi-document collections. Requires the `inference:r` scope.
+        Loads a single document's extracted text, supplies it as context, and streams a model answer about it. The document must have finished processing and have text. If the document exceeds the 32,000-token input cap (estimated as the stored text's bytes divided by 4, about 128,000 bytes), the call returns 413 with no credits charged — use `POST /v1/rag` instead to answer over larger or multi-document collections. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -743,7 +743,7 @@ class AsyncRawInferenceClient:
         self, *, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[ModelsResponse]:
         """
-        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, and `longContext` for prompts over its threshold. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
+        Returns the whole platform model catalog, whatever your plan: `availableOn` names each model's plan tiers. Each entry also carries the context window and the credit rates per 1K input and output tokens: `regionPricing.base` for global-region requests, `regionPricing.us` for default requests, `longContext` for prompts over its threshold, and `cachePricing` for prompt-cache tokens on a model that has cache prices. A model reached through a `providerAlias` is not listed. Use this to populate model pickers and to validate a request before calling `/v1/chat`, `/v1/rag`, or `/v1/documents/{id}/ask`.
 
         Parameters
         ----------
@@ -794,7 +794,7 @@ class AsyncRawInferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[ChatStreamEvent]]]:
         """
-        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A small per-call flat fee is charged to your monthly credit allowance, except when the call fails on the server side. Requires the `inference:r` scope.
+        Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A per-call platform fee is charged to your monthly credit allowance, except when the call fails on the server side: 0.2 credits for a call of up to 60 seconds, then 1 credit per 5 minutes of the call's duration. Requires the `inference:r` scope.
 
         Parameters
         ----------
@@ -1003,7 +1003,7 @@ class AsyncRawInferenceClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[AsyncHttpResponse[typing.AsyncIterator[DocumentAskStreamEvent]]]:
         """
-        Loads a single document's extracted text, supplies it as context, and streams a model answer about it. The document must be fully indexed. If the document exceeds the 32K-token cap, the call returns 413 with no credits charged — use `POST /v1/rag` instead to answer over larger or multi-document collections. Requires the `inference:r` scope.
+        Loads a single document's extracted text, supplies it as context, and streams a model answer about it. The document must have finished processing and have text. If the document exceeds the 32,000-token input cap (estimated as the stored text's bytes divided by 4, about 128,000 bytes), the call returns 413 with no credits charged — use `POST /v1/rag` instead to answer over larger or multi-document collections. Requires the `inference:r` scope.
 
         Parameters
         ----------

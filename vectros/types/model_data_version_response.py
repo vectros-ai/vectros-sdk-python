@@ -6,13 +6,14 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .acting_via_response import ActingViaResponse
 from .model_changes import ModelChanges
 from .model_data_version_response_change_type import ModelDataVersionResponseChangeType
 
 
 class ModelDataVersionResponse(UniversalBaseModel):
     """
-    A single entry in a record's audit-trail version history. Returned by GET /v1/records/{id}/versions.
+    A single entry in the audit-trail version history of a record, document, entity, user, folder, schema, role or access profile. Returned by the `.../versions` routes of those resources.
     """
 
     id: typing.Optional[str] = pydantic.Field(default=None)
@@ -33,7 +34,7 @@ class ModelDataVersionResponse(UniversalBaseModel):
         FieldMetadata(alias="previousContent"),
         pydantic.Field(
             alias="previousContent",
-            description="A JSON-encoded snapshot of the record's full state immediately before this change. Deserialize it to inspect the previous payload, ownership, and other fields. Present on UPDATE and DELETE entries; null on CREATE.",
+            description="A JSON-encoded snapshot of the item's full state immediately before this change. Deserialize it to inspect the previous payload, ownership, and other fields. Present on UPDATE and DELETE entries; null on CREATE.",
         ),
     ] = None
     previous_version: typing_extensions.Annotated[
@@ -41,7 +42,7 @@ class ModelDataVersionResponse(UniversalBaseModel):
         FieldMetadata(alias="previousVersion"),
         pydantic.Field(
             alias="previousVersion",
-            description="The record's version number immediately before this change. Null on CREATE.",
+            description="The item's version number immediately before this change. Null on CREATE.",
         ),
     ] = None
     change_reason: typing_extensions.Annotated[
@@ -53,6 +54,9 @@ class ModelDataVersionResponse(UniversalBaseModel):
         typing.Optional[str],
         FieldMetadata(alias="changedBy"),
         pydantic.Field(alias="changedBy", description="Identifier of the user or API key that made the change."),
+    ] = None
+    acting_via: typing_extensions.Annotated[
+        typing.Optional[ActingViaResponse], FieldMetadata(alias="actingVia"), pydantic.Field(alias="actingVia")
     ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],

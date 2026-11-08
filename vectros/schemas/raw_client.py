@@ -64,7 +64,7 @@ class RawSchemasClient:
             Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` to resolve an account-wide identity schema, or `surface=entity` to resolve one from your own context plus the tenant-wide home (see the `surface` parameter). A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of schemas to return per page (1–100; defaults to 20).
@@ -123,10 +123,9 @@ class RawSchemasClient:
     def create_schema(
         self,
         *,
-        type_name: str,
-        display_name: str,
-        allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
         upsert: typing.Optional[bool] = None,
+        type_name: typing.Optional[str] = OMIT,
+        display_name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -134,6 +133,7 @@ class RawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -145,17 +145,14 @@ class RawSchemasClient:
 
         Parameters
         ----------
-        type_name : str
-            Unique type identifier for this schema. Immutable after creation.
-
-        display_name : str
-            Human-readable display name for this type, shown in UIs.
-
-        allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
-
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
+
+        type_name : typing.Optional[str]
+            Unique type identifier for this schema. Required when creating; immutable after creation, so it is ignored on update.
+
+        display_name : typing.Optional[str]
+            Human-readable display name for this type, shown in UIs. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -177,6 +174,9 @@ class RawSchemasClient:
 
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
+
+        allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         active : typing.Optional[bool]
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
@@ -364,9 +364,8 @@ class RawSchemasClient:
         self,
         id: str,
         *,
-        type_name: str,
-        display_name: str,
-        allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
+        type_name: typing.Optional[str] = OMIT,
+        display_name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -374,6 +373,7 @@ class RawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -388,14 +388,11 @@ class RawSchemasClient:
         id : str
             The id of the schema to update.
 
-        type_name : str
-            Unique type identifier for this schema. Immutable after creation.
+        type_name : typing.Optional[str]
+            Unique type identifier for this schema. Required when creating; immutable after creation, so it is ignored on update.
 
-        display_name : str
-            Human-readable display name for this type, shown in UIs.
-
-        allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+        display_name : typing.Optional[str]
+            Human-readable display name for this type, shown in UIs. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -417,6 +414,9 @@ class RawSchemasClient:
 
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
+
+        allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         active : typing.Optional[bool]
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
@@ -718,7 +718,7 @@ class AsyncRawSchemasClient:
             Resolve the single schema for this record type — the natural handle for a schema, and the direct alternative to remembering its opaque id. Returns a one-element page, or an empty page if no such schema exists. Resolved in the calling context for record and document types; combine with `surface=user` to resolve an account-wide identity schema, or `surface=entity` to resolve one from your own context plus the tenant-wide home (see the `surface` parameter). A type name may have several schemas in one context — a shared base, plus per-owner variants declared via `basedOn` — and resolution shadows by ownership: your own `userId`- or `scope`-owned variant wins if you have one, otherwise the shared base. For a scoped credential the owner is always your own token identity; `userId`/`scope` here only apply as an explicit owner selector for a root API key (a scoped credential's own identity always governs resolution, and a `scope` filter still narrows the result afterward regardless of credential type).
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of schemas to return per page (1–100; defaults to 20).
@@ -777,10 +777,9 @@ class AsyncRawSchemasClient:
     async def create_schema(
         self,
         *,
-        type_name: str,
-        display_name: str,
-        allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
         upsert: typing.Optional[bool] = None,
+        type_name: typing.Optional[str] = OMIT,
+        display_name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -788,6 +787,7 @@ class AsyncRawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -799,17 +799,14 @@ class AsyncRawSchemasClient:
 
         Parameters
         ----------
-        type_name : str
-            Unique type identifier for this schema. Immutable after creation.
-
-        display_name : str
-            Human-readable display name for this type, shown in UIs.
-
-        allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
-
         upsert : typing.Optional[bool]
             When `true`, if a schema with the same `typeName` already exists it is reconciled to the submitted shape (additive fields, lookups, renderHints, and `active` are applied) instead of being returned unchanged; `typeName` and migration-locked lookup attributes (`rangeEnabled`/`sortBy`/`sensitive`) cannot be changed and a request to do so is rejected. A re-applied upsert whose declared shape is unchanged is a no-op (no schema-version bump). Defaults to `false`. Requires the `schemas:u` scope.
+
+        type_name : typing.Optional[str]
+            Unique type identifier for this schema. Required when creating; immutable after creation, so it is ignored on update.
+
+        display_name : typing.Optional[str]
+            Human-readable display name for this type, shown in UIs. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -831,6 +828,9 @@ class AsyncRawSchemasClient:
 
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
+
+        allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         active : typing.Optional[bool]
             Whether this schema is active. An inactive schema rejects creation of new records of its type.
@@ -1018,9 +1018,8 @@ class AsyncRawSchemasClient:
         self,
         id: str,
         *,
-        type_name: str,
-        display_name: str,
-        allowed_surfaces: typing.Sequence[SchemaRequestAllowedSurfacesItem],
+        type_name: typing.Optional[str] = OMIT,
+        display_name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         fields: typing.Optional[typing.Sequence[FieldDef]] = OMIT,
         lookup_fields: typing.Optional[typing.Sequence[LookupDef]] = OMIT,
@@ -1028,6 +1027,7 @@ class AsyncRawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -1042,14 +1042,11 @@ class AsyncRawSchemasClient:
         id : str
             The id of the schema to update.
 
-        type_name : str
-            Unique type identifier for this schema. Immutable after creation.
+        type_name : typing.Optional[str]
+            Unique type identifier for this schema. Required when creating; immutable after creation, so it is ignored on update.
 
-        display_name : str
-            Human-readable display name for this type, shown in UIs.
-
-        allowed_surfaces : typing.Sequence[SchemaRequestAllowedSurfacesItem]
-            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
+        display_name : typing.Optional[str]
+            Human-readable display name for this type, shown in UIs. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional description of what this schema is for.
@@ -1071,6 +1068,9 @@ class AsyncRawSchemasClient:
 
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
+
+        allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
+            Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
         active : typing.Optional[bool]
             Whether this schema is active. An inactive schema rejects creation of new records of its type.

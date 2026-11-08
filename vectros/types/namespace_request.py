@@ -13,7 +13,7 @@ class NamespaceRequest(UniversalBaseModel):
     Request body for registering or updating a scope namespace. The `namespace` is set on registration and cannot be changed afterwards; PUT updates `entityBacked`, `defaultSchemaId`, `specificityRank`, and the membership fields — any field you omit keeps its stored value.
     """
 
-    namespace: str = pydantic.Field()
+    namespace: typing.Optional[str] = pydantic.Field(default=None)
     """
     The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
     """
@@ -35,13 +35,13 @@ class NamespaceRequest(UniversalBaseModel):
         ),
     ] = None
     specificity_rank: typing_extensions.Annotated[
-        int,
+        typing.Optional[int],
         FieldMetadata(alias="specificityRank"),
         pydantic.Field(
             alias="specificityRank",
             description="This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.",
         ),
-    ]
+    ] = None
     membership_record_type: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="membershipRecordType"),

@@ -3,7 +3,9 @@
 import typing
 
 import pydantic
+import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
+from ..core.serialization import FieldMetadata
 
 
 class DocumentTextResponse(UniversalBaseModel):
@@ -18,8 +20,29 @@ class DocumentTextResponse(UniversalBaseModel):
 
     text: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Full extracted or ingested text content of the document.
+    The document's extracted or ingested text: all of it, or the part that `offset` and `limit` selected.
     """
+
+    offset: typing.Optional[int] = pydantic.Field(default=None)
+    """
+    Where `text` starts in the whole text, in Unicode characters (code points). 0 unless you passed `offset`.
+    """
+
+    total_length: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="totalLength"),
+        pydantic.Field(
+            alias="totalLength", description="The length of the whole text, in Unicode characters (code points)."
+        ),
+    ] = None
+    next_offset: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="nextOffset"),
+        pydantic.Field(
+            alias="nextOffset",
+            description="Where the next part starts, in Unicode characters (code points): pass it as `offset` to read on. Absent when `text` reaches the end of the document's text.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

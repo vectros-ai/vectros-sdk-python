@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .acting_via_response import ActingViaResponse
 from .read_access_log_response_action import ReadAccessLogResponseAction
 from .read_access_subject import ReadAccessSubject
 
@@ -105,6 +106,9 @@ class ReadAccessLogResponse(UniversalBaseModel):
             alias="destinationHost",
             description="For a disclosure into a routed model call: the host of the endpoint address the call is sent to, as saved on the provider configuration when the call was made (host only, no path). Null for every other read.",
         ),
+    ] = None
+    acting_via: typing_extensions.Annotated[
+        typing.Optional[ActingViaResponse], FieldMetadata(alias="actingVia"), pydantic.Field(alias="actingVia")
     ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],

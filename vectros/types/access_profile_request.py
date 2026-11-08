@@ -16,13 +16,13 @@ class AccessProfileRequest(UniversalBaseModel):
     """
 
     principal_id: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="principalId"),
         pydantic.Field(
             alias="principalId",
             description="Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.",
         ),
-    ]
+    ] = None
     scopes: typing.Optional[typing.List[ScopeClause]] = pydantic.Field(default=None)
     """
     Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.

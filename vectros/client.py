@@ -9,6 +9,7 @@ from .core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from .core.logging import LogConfig, Logger
 
 if typing.TYPE_CHECKING:
+    from .agents.client import AgentsClient, AsyncAgentsClient
     from .auth.client import AsyncAuthClient, AuthClient
     from .compliance.client import AsyncComplianceClient, ComplianceClient
     from .documents.client import AsyncDocumentsClient, DocumentsClient
@@ -90,6 +91,7 @@ class VectrosApi:
             logging=logging,
         )
         self._auth: typing.Optional[AuthClient] = None
+        self._agents: typing.Optional[AgentsClient] = None
         self._documents: typing.Optional[DocumentsClient] = None
         self._identity: typing.Optional[IdentityClient] = None
         self._compliance: typing.Optional[ComplianceClient] = None
@@ -108,6 +110,14 @@ class VectrosApi:
 
             self._auth = AuthClient(client_wrapper=self._client_wrapper)
         return self._auth
+
+    @property
+    def agents(self):
+        if self._agents is None:
+            from .agents.client import AgentsClient  # noqa: E402
+
+            self._agents = AgentsClient(client_wrapper=self._client_wrapper)
+        return self._agents
 
     @property
     def documents(self):
@@ -279,6 +289,7 @@ class AsyncVectrosApi:
             logging=logging,
         )
         self._auth: typing.Optional[AsyncAuthClient] = None
+        self._agents: typing.Optional[AsyncAgentsClient] = None
         self._documents: typing.Optional[AsyncDocumentsClient] = None
         self._identity: typing.Optional[AsyncIdentityClient] = None
         self._compliance: typing.Optional[AsyncComplianceClient] = None
@@ -297,6 +308,14 @@ class AsyncVectrosApi:
 
             self._auth = AsyncAuthClient(client_wrapper=self._client_wrapper)
         return self._auth
+
+    @property
+    def agents(self):
+        if self._agents is None:
+            from .agents.client import AsyncAgentsClient  # noqa: E402
+
+            self._agents = AsyncAgentsClient(client_wrapper=self._client_wrapper)
+        return self._agents
 
     @property
     def documents(self):

@@ -15,16 +15,16 @@ class RoleRequest(UniversalBaseModel):
     """
 
     role_id: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="roleId"),
         pydantic.Field(
             alias="roleId",
             description="Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.",
         ),
-    ]
-    name: str = pydantic.Field()
+    ] = None
+    name: typing.Optional[str] = pydantic.Field(default=None)
     """
-    A human-readable display name for the role.
+    A human-readable display name for the role. Required when creating; on update, omit it to keep the current name.
     """
 
     description: typing.Optional[str] = pydantic.Field(default=None)
@@ -32,9 +32,9 @@ class RoleRequest(UniversalBaseModel):
     An optional free-text description of what the role grants.
     """
 
-    scopes: typing.List[ScopeClause] = pydantic.Field()
+    scopes: typing.Optional[typing.List[ScopeClause]] = pydantic.Field(default=None)
     """
-    The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+    The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists. Required when creating; on update, omit it to keep the current clauses (a list you send replaces them).
     """
 
     assumable: typing.Optional[typing.Dict[str, typing.Any]] = pydantic.Field(default=None)

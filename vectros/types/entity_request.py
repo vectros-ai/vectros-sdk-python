@@ -15,13 +15,13 @@ class EntityRequest(UniversalBaseModel):
     """
 
     external_id: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="externalId"),
         pydantic.Field(
             alias="externalId",
-            description="Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.",
+            description="Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first. Required when creating; on update, omit it to keep the current value.",
         ),
-    ]
+    ] = None
     name: typing.Optional[str] = pydantic.Field(default=None)
     """
     Human-readable name for the entity.

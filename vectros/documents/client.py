@@ -44,12 +44,13 @@ class DocumentsClient:
         user_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
+        type: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentPage:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId` or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`), owner (`userId` or `scope`) and/or type (`type`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. A page can hold fewer documents than `limit`, or none, while `nextCursor` is still set: keep paging until `nextCursor` is null. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -62,8 +63,11 @@ class DocumentsClient:
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
 
+        type : typing.Optional[str]
+            List only documents of this type: the record type of the schema the document is bound to (the `typeName` that `GET /v1/schemas` shows). Documents with no schema never match. Can be combined with the other filters. 1 to 64 letters, digits, `_` or `-`: anything else is a `400`, and an empty value means no filter. The filter applies to each page as it is read, so pages can be short or empty until the listing is exhausted; to find documents of a type across a large collection, `POST /v1/search` with `typeName` is indexed.
+
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of documents to return per page (1-100; defaults to 20).
@@ -88,6 +92,7 @@ class DocumentsClient:
             user_id="550e8400-e29b-41d4-a716-446655440000",
             scope="group:eng-team",
             folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+            type="investigation_report",
             start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
         )
         """
@@ -95,6 +100,7 @@ class DocumentsClient:
             user_id=user_id,
             scope=scope,
             folder_id=folder_id,
+            type=type,
             start_from=start_from,
             limit=limit,
             request_options=request_options,
@@ -104,10 +110,10 @@ class DocumentsClient:
     def ingest_document(
         self,
         *,
-        title: str,
         upsert: typing.Optional[bool] = None,
         allow_clear: typing.Optional[bool] = None,
         confirm_untyped: typing.Optional[bool] = None,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -125,9 +131,6 @@ class DocumentsClient:
 
         Parameters
         ----------
-        title : str
-            Human-readable document title
-
         upsert : typing.Optional[bool]
             When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
@@ -136,6 +139,9 @@ class DocumentsClient:
 
         confirm_untyped : typing.Optional[bool]
             Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
+
+        title : typing.Optional[str]
+            Human-readable document title. Required when creating; on update, omit it to keep the current title.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -183,15 +189,13 @@ class DocumentsClient:
             token="YOUR_TOKEN",
             base_url="https://yourhost.com/path/to/api",
         )
-        client.documents.ingest_document(
-            title="Patient Intake Form — Jane Doe",
-        )
+        client.documents.ingest_document()
         """
         _response = self._raw_client.ingest_document(
-            title=title,
             upsert=upsert,
             allow_clear=allow_clear,
             confirm_untyped=confirm_untyped,
+            title=title,
             text=text,
             index_mode=index_mode,
             folder_id=folder_id,
@@ -241,8 +245,8 @@ class DocumentsClient:
         self,
         id: str,
         *,
-        title: str,
         allow_clear: typing.Optional[bool] = None,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -262,11 +266,11 @@ class DocumentsClient:
         ----------
         id : str
 
-        title : str
-            Human-readable document title
-
         allow_clear : typing.Optional[bool]
             A `PUT` is a full replacement: if the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
+        title : typing.Optional[str]
+            Human-readable document title. Required when creating; on update, omit it to keep the current title.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -316,13 +320,12 @@ class DocumentsClient:
         )
         client.documents.update_document(
             id="id",
-            title="Patient Intake Form — Jane Doe",
         )
         """
         _response = self._raw_client.update_document(
             id,
-            title=title,
             allow_clear=allow_clear,
+            title=title,
             text=text,
             index_mode=index_mode,
             folder_id=folder_id,
@@ -499,7 +502,7 @@ class DocumentsClient:
             Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of documents to return per page (1-100; defaults to 20).
@@ -692,14 +695,25 @@ class DocumentsClient:
         return _response.data
 
     def get_document_text(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        id: str,
+        *,
+        offset: typing.Optional[int] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentTextResponse:
         """
-        Returns the document's full text body when it is retained: retained for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: always for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, extraction has not yet completed, or no text could be extracted from its file (see the document's `extraction`). To read a long text in parts, pass `limit` (and `offset` from the second part on): offsets and lengths count Unicode characters (code points), `totalLength` is the length of the whole text, and `nextOffset` is where the next part starts, absent once the end is reached. Requires the `documents:r` scope.
 
         Parameters
         ----------
         id : str
+
+        offset : typing.Optional[int]
+            Where the returned text starts, in Unicode characters (code points) from the start of the text. Defaults to 0. Pass the previous part's `nextOffset` to read on.
+
+        limit : typing.Optional[int]
+            The most characters (code points) to return. Omit it to return the text from `offset` to the end.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -707,7 +721,7 @@ class DocumentsClient:
         Returns
         -------
         DocumentTextResponse
-            The document's text body.
+            The document's text body, or the part of it that `offset` and `limit` select.
 
         Examples
         --------
@@ -721,7 +735,7 @@ class DocumentsClient:
             id="id",
         )
         """
-        _response = self._raw_client.get_document_text(id, request_options=request_options)
+        _response = self._raw_client.get_document_text(id, offset=offset, limit=limit, request_options=request_options)
         return _response.data
 
     def get_document_versions(
@@ -883,12 +897,13 @@ class AsyncDocumentsClient:
         user_id: typing.Optional[str] = None,
         scope: typing.Optional[str] = None,
         folder_id: typing.Optional[str] = None,
+        type: typing.Optional[str] = None,
         start_from: typing.Optional[str] = None,
         limit: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentPage:
         """
-        Returns a paginated list of your documents, optionally filtered by folder (`folderId`) and/or owner (`userId` or `scope`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. Requires the `documents:r` scope.
+        Returns a paginated list of your documents, optionally filtered by folder (`folderId`), owner (`userId` or `scope`) and/or type (`type`). The response is a `{data, nextCursor}` envelope; pass `nextCursor` back as `startFrom` to fetch the next page. A page can hold fewer documents than `limit`, or none, while `nextCursor` is still set: keep paging until `nextCursor` is null. Requires the `documents:r` scope.
 
         Parameters
         ----------
@@ -901,8 +916,11 @@ class AsyncDocumentsClient:
         folder_id : typing.Optional[str]
             List only documents in this folder (the Vectros folder ID). Can be combined with the owner filters.
 
+        type : typing.Optional[str]
+            List only documents of this type: the record type of the schema the document is bound to (the `typeName` that `GET /v1/schemas` shows). Documents with no schema never match. Can be combined with the other filters. 1 to 64 letters, digits, `_` or `-`: anything else is a `400`, and an empty value means no filter. The filter applies to each page as it is read, so pages can be short or empty until the listing is exhausted; to find documents of a type across a large collection, `POST /v1/search` with `typeName` is indexed.
+
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of documents to return per page (1-100; defaults to 20).
@@ -932,6 +950,7 @@ class AsyncDocumentsClient:
                 user_id="550e8400-e29b-41d4-a716-446655440000",
                 scope="group:eng-team",
                 folder_id="f47ac10b-58cc-4372-a567-0e02b2c3d479",
+                type="investigation_report",
                 start_from="b3BhcXVlLWN1cnNvci1mcm9tLXRoZS1wcmV2aW91cy1wYWdl",
             )
 
@@ -942,6 +961,7 @@ class AsyncDocumentsClient:
             user_id=user_id,
             scope=scope,
             folder_id=folder_id,
+            type=type,
             start_from=start_from,
             limit=limit,
             request_options=request_options,
@@ -951,10 +971,10 @@ class AsyncDocumentsClient:
     async def ingest_document(
         self,
         *,
-        title: str,
         upsert: typing.Optional[bool] = None,
         allow_clear: typing.Optional[bool] = None,
         confirm_untyped: typing.Optional[bool] = None,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -972,9 +992,6 @@ class AsyncDocumentsClient:
 
         Parameters
         ----------
-        title : str
-            Human-readable document title
-
         upsert : typing.Optional[bool]
             When `true`, if a document with the same `externalId` already exists its content is overwritten (the submitted `payload`, `title`, and — when supplied — `text` are applied and the version is bumped) instead of being returned unchanged; the immutable `externalId`, `schemaId`, `indexMode`, and ownership are never changed. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
@@ -983,6 +1000,9 @@ class AsyncDocumentsClient:
 
         confirm_untyped : typing.Optional[bool]
             Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
+
+        title : typing.Optional[str]
+            Human-readable document title. Required when creating; on update, omit it to keep the current title.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -1035,18 +1055,16 @@ class AsyncDocumentsClient:
 
 
         async def main() -> None:
-            await client.documents.ingest_document(
-                title="Patient Intake Form — Jane Doe",
-            )
+            await client.documents.ingest_document()
 
 
         asyncio.run(main())
         """
         _response = await self._raw_client.ingest_document(
-            title=title,
             upsert=upsert,
             allow_clear=allow_clear,
             confirm_untyped=confirm_untyped,
+            title=title,
             text=text,
             index_mode=index_mode,
             folder_id=folder_id,
@@ -1106,8 +1124,8 @@ class AsyncDocumentsClient:
         self,
         id: str,
         *,
-        title: str,
         allow_clear: typing.Optional[bool] = None,
+        title: typing.Optional[str] = OMIT,
         text: typing.Optional[str] = OMIT,
         index_mode: typing.Optional[DocumentRequestIndexMode] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1127,11 +1145,11 @@ class AsyncDocumentsClient:
         ----------
         id : str
 
-        title : str
-            Human-readable document title
-
         allow_clear : typing.Optional[bool]
             A `PUT` is a full replacement: if the submitted request omits (or sends as null) a stored field that a list or lookup response returns only as an indexed projection (a large document whose payload is stored externally), the update is rejected unless you set `allowClear=true` to confirm that clearing those fields is intended. Use PATCH to update without clearing omitted fields. Defaults to `false`.
+
+        title : typing.Optional[str]
+            Human-readable document title. Required when creating; on update, omit it to keep the current title.
 
         text : typing.Optional[str]
             Raw text content to ingest. Required when creating a document via the text-ingest path. On update, supply it to replace the stored text; omit it to leave the existing text unchanged.
@@ -1186,7 +1204,6 @@ class AsyncDocumentsClient:
         async def main() -> None:
             await client.documents.update_document(
                 id="id",
-                title="Patient Intake Form — Jane Doe",
             )
 
 
@@ -1194,8 +1211,8 @@ class AsyncDocumentsClient:
         """
         _response = await self._raw_client.update_document(
             id,
-            title=title,
             allow_clear=allow_clear,
+            title=title,
             text=text,
             index_mode=index_mode,
             folder_id=folder_id,
@@ -1388,7 +1405,7 @@ class AsyncDocumentsClient:
             Inclusive upper bound on the lookup field's sort key, narrowing a `value` match to documents at or before this point. Use with `value`; combine with `sortFrom`.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of documents to return per page (1-100; defaults to 20).
@@ -1605,14 +1622,25 @@ class AsyncDocumentsClient:
         return _response.data
 
     async def get_document_text(
-        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+        self,
+        id: str,
+        *,
+        offset: typing.Optional[int] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
     ) -> DocumentTextResponse:
         """
-        Returns the document's full text body when it is retained: retained for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, or extraction has not yet completed. Requires the `documents:r` scope.
+        Returns the document's full text body when it is retained: always for text-ingested documents, and for file-uploaded documents unless they were uploaded with `storeText=false` (which discards the extracted text once indexing completes — the original file remains available via `GET /v1/documents/{id}/download`). Returns 404 when the document does not exist, its text was not retained, extraction has not yet completed, or no text could be extracted from its file (see the document's `extraction`). To read a long text in parts, pass `limit` (and `offset` from the second part on): offsets and lengths count Unicode characters (code points), `totalLength` is the length of the whole text, and `nextOffset` is where the next part starts, absent once the end is reached. Requires the `documents:r` scope.
 
         Parameters
         ----------
         id : str
+
+        offset : typing.Optional[int]
+            Where the returned text starts, in Unicode characters (code points) from the start of the text. Defaults to 0. Pass the previous part's `nextOffset` to read on.
+
+        limit : typing.Optional[int]
+            The most characters (code points) to return. Omit it to return the text from `offset` to the end.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1620,7 +1648,7 @@ class AsyncDocumentsClient:
         Returns
         -------
         DocumentTextResponse
-            The document's text body.
+            The document's text body, or the part of it that `offset` and `limit` select.
 
         Examples
         --------
@@ -1642,7 +1670,9 @@ class AsyncDocumentsClient:
 
         asyncio.run(main())
         """
-        _response = await self._raw_client.get_document_text(id, request_options=request_options)
+        _response = await self._raw_client.get_document_text(
+            id, offset=offset, limit=limit, request_options=request_options
+        )
         return _response.data
 
     async def get_document_versions(

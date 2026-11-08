@@ -100,7 +100,7 @@ class IdentityClient:
             Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum entities per page (1-100; defaults to 20).
@@ -150,9 +150,9 @@ class IdentityClient:
         self,
         namespace: str,
         *,
-        external_id: str,
         upsert: typing.Optional[bool] = None,
         context_id: typing.Optional[str] = None,
+        external_id: typing.Optional[str] = OMIT,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -168,14 +168,14 @@ class IdentityClient:
         namespace : str
             The entity namespace.
 
-        external_id : str
-            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
-
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
 
         context_id : typing.Optional[str]
             Which app context owns the new entity. **Required when the namespace is context-placed** and omitted otherwise: a tenant-placed namespace's entities are shared by every context, so supplying one is rejected. A context-confined credential may only name its own context. An entity's context is fixed at creation and cannot be changed afterwards.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first. Required when creating; on update, omit it to keep the current value.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -211,14 +211,13 @@ class IdentityClient:
         client.identity.create_entity(
             namespace="team",
             context_id="myapp",
-            external_id="team_eng_platform",
         )
         """
         _response = self._raw_client.create_entity(
             namespace,
-            external_id=external_id,
             upsert=upsert,
             context_id=context_id,
+            external_id=external_id,
             name=name,
             status=status,
             payload=payload,
@@ -280,8 +279,8 @@ class IdentityClient:
         namespace: str,
         id: str,
         *,
-        external_id: str,
         context_id: typing.Optional[str] = None,
+        external_id: typing.Optional[str] = OMIT,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -299,11 +298,11 @@ class IdentityClient:
 
         id : str
 
-        external_id : str
-            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
-
         context_id : typing.Optional[str]
             Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first. Required when creating; on update, omit it to keep the current value.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -340,14 +339,13 @@ class IdentityClient:
             namespace="team",
             id="id",
             context_id="myapp",
-            external_id="team_eng_platform",
         )
         """
         _response = self._raw_client.update_entity(
             namespace,
             id,
-            external_id=external_id,
             context_id=context_id,
+            external_id=external_id,
             name=name,
             status=status,
             payload=payload,
@@ -595,11 +593,11 @@ class IdentityClient:
         self,
         namespace_: str,
         *,
-        namespace: str,
-        specificity_rank: int,
         context_id: typing.Optional[str] = None,
+        namespace: typing.Optional[str] = OMIT,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        specificity_rank: typing.Optional[int] = OMIT,
         membership_record_type: typing.Optional[str] = OMIT,
         membership_target_field: typing.Optional[str] = OMIT,
         membership_context_id: typing.Optional[str] = OMIT,
@@ -615,20 +613,20 @@ class IdentityClient:
         namespace_ : str
             The namespace name.
 
-        namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
-
-        specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
-
         context_id : typing.Optional[str]
             The app context that owns this registration. Omit for the tenant-wide registration.
+
+        namespace : typing.Optional[str]
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        specificity_rank : typing.Optional[int]
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         membership_record_type : typing.Optional[str]
             Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
@@ -663,17 +661,15 @@ class IdentityClient:
         )
         client.identity.update_namespace(
             namespace_="team",
-            namespace="team",
-            specificity_rank=1500,
         )
         """
         _response = self._raw_client.update_namespace(
             namespace_,
-            namespace=namespace,
-            specificity_rank=specificity_rank,
             context_id=context_id,
+            namespace=namespace,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
+            specificity_rank=specificity_rank,
             membership_record_type=membership_record_type,
             membership_target_field=membership_target_field,
             membership_context_id=membership_context_id,
@@ -771,11 +767,11 @@ class IdentityClient:
     def register_namespace(
         self,
         *,
-        namespace: str,
-        specificity_rank: int,
         context_id: typing.Optional[str] = None,
+        namespace: typing.Optional[str] = OMIT,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        specificity_rank: typing.Optional[int] = OMIT,
         membership_record_type: typing.Optional[str] = OMIT,
         membership_target_field: typing.Optional[str] = OMIT,
         membership_context_id: typing.Optional[str] = OMIT,
@@ -788,20 +784,20 @@ class IdentityClient:
 
         Parameters
         ----------
-        namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
-
-        specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
-
         context_id : typing.Optional[str]
             The app context to own this registration. Omit for a TENANT-WIDE registration visible to every context.
+
+        namespace : typing.Optional[str]
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        specificity_rank : typing.Optional[int]
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         membership_record_type : typing.Optional[str]
             Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
@@ -834,17 +830,14 @@ class IdentityClient:
             token="YOUR_TOKEN",
             base_url="https://yourhost.com/path/to/api",
         )
-        client.identity.register_namespace(
-            namespace="team",
-            specificity_rank=1500,
-        )
+        client.identity.register_namespace()
         """
         _response = self._raw_client.register_namespace(
-            namespace=namespace,
-            specificity_rank=specificity_rank,
             context_id=context_id,
+            namespace=namespace,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
+            specificity_rank=specificity_rank,
             membership_record_type=membership_record_type,
             membership_target_field=membership_target_field,
             membership_context_id=membership_context_id,
@@ -878,7 +871,7 @@ class IdentityClient:
             Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of users to return per page (1–100; defaults to 20).
@@ -947,8 +940,8 @@ class IdentityClient:
     def create_user(
         self,
         *,
-        external_id: str,
         upsert: typing.Optional[bool] = None,
+        external_id: typing.Optional[str] = OMIT,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -964,17 +957,17 @@ class IdentityClient:
 
         Parameters
         ----------
-        external_id : str
-            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
-
         upsert : typing.Optional[bool]
             When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, `email` cannot be changed while an invitation to that user is still outstanding, and a user whose invitation has not been accepted cannot be set to `ACTIVE`. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate. Required when creating; on update, omit it to keep the current value.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. The account owner's user can never be set to `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -1010,13 +1003,11 @@ class IdentityClient:
             token="YOUR_TOKEN",
             base_url="https://yourhost.com/path/to/api",
         )
-        client.identity.create_user(
-            external_id="usr_12345",
-        )
+        client.identity.create_user()
         """
         _response = self._raw_client.create_user(
-            external_id=external_id,
             upsert=upsert,
+            external_id=external_id,
             email=email,
             status=status,
             type=type,
@@ -1065,7 +1056,7 @@ class IdentityClient:
         self,
         id: str,
         *,
-        external_id: str,
+        external_id: typing.Optional[str] = OMIT,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -1084,14 +1075,14 @@ class IdentityClient:
         id : str
             The Vectros-assigned UUID of the user.
 
-        external_id : str
-            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
+        external_id : typing.Optional[str]
+            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate. Required when creating; on update, omit it to keep the current value.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. The account owner's user can never be set to `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -1129,7 +1120,6 @@ class IdentityClient:
         )
         client.identity.update_user(
             id="550e8400-e29b-41d4-a716-446655440000",
-            external_id="usr_12345",
         )
         """
         _response = self._raw_client.update_user(
@@ -1421,7 +1411,7 @@ class AsyncIdentityClient:
             Sort direction by the field's value for a `type`/`field` lookup: `asc` (ascending, the default) or `desc`. Lookup mode only — listing by namespace, `userId`, `scope`, or `externalId` does not take a sort direction and rejects this parameter.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum entities per page (1-100; defaults to 20).
@@ -1479,9 +1469,9 @@ class AsyncIdentityClient:
         self,
         namespace: str,
         *,
-        external_id: str,
         upsert: typing.Optional[bool] = None,
         context_id: typing.Optional[str] = None,
+        external_id: typing.Optional[str] = OMIT,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -1497,14 +1487,14 @@ class AsyncIdentityClient:
         namespace : str
             The entity namespace.
 
-        external_id : str
-            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
-
         upsert : typing.Optional[bool]
             When `true`, overwrite an existing entity's mutable fields instead of returning it unchanged. Requires the `entities:u:<namespace>` scope in addition to `entities:c:<namespace>`.
 
         context_id : typing.Optional[str]
             Which app context owns the new entity. **Required when the namespace is context-placed** and omitted otherwise: a tenant-placed namespace's entities are shared by every context, so supplying one is rejected. A context-confined credential may only name its own context. An entity's context is fixed at creation and cannot be changed afterwards.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first. Required when creating; on update, omit it to keep the current value.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -1545,7 +1535,6 @@ class AsyncIdentityClient:
             await client.identity.create_entity(
                 namespace="team",
                 context_id="myapp",
-                external_id="team_eng_platform",
             )
 
 
@@ -1553,9 +1542,9 @@ class AsyncIdentityClient:
         """
         _response = await self._raw_client.create_entity(
             namespace,
-            external_id=external_id,
             upsert=upsert,
             context_id=context_id,
+            external_id=external_id,
             name=name,
             status=status,
             payload=payload,
@@ -1627,8 +1616,8 @@ class AsyncIdentityClient:
         namespace: str,
         id: str,
         *,
-        external_id: str,
         context_id: typing.Optional[str] = None,
+        external_id: typing.Optional[str] = OMIT,
         name: typing.Optional[str] = OMIT,
         status: typing.Optional[EntityRequestStatus] = OMIT,
         payload: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
@@ -1646,11 +1635,11 @@ class AsyncIdentityClient:
 
         id : str
 
-        external_id : str
-            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first.
-
         context_id : typing.Optional[str]
             Which app context to read from. **Required when the namespace is context-placed** and rejected otherwise: a tenant-placed namespace's entities are shared by every context, so there is nothing to name. A context-placed namespace's entities belong to exactly one context and are invisible from the others — the same `externalId` may name a different entity in each. A context-confined credential may only name its own context.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this entity, unique within its namespace and app context. Used for idempotent create: if an entity with this `externalId` already exists there, it is returned instead of creating a duplicate. A namespace registered to one app context is a separate space from a tenant-wide namespace of the same name, so the same `externalId` may legitimately exist in both. On update you may supply a different value to re-point the entity, but it must still be unused in that space — moving onto an `externalId` another entity holds is rejected with `400`. Two entities therefore cannot swap identifiers directly; move one to a temporary value first. Required when creating; on update, omit it to keep the current value.
 
         name : typing.Optional[str]
             Human-readable name for the entity.
@@ -1692,7 +1681,6 @@ class AsyncIdentityClient:
                 namespace="team",
                 id="id",
                 context_id="myapp",
-                external_id="team_eng_platform",
             )
 
 
@@ -1701,8 +1689,8 @@ class AsyncIdentityClient:
         _response = await self._raw_client.update_entity(
             namespace,
             id,
-            external_id=external_id,
             context_id=context_id,
+            external_id=external_id,
             name=name,
             status=status,
             payload=payload,
@@ -1984,11 +1972,11 @@ class AsyncIdentityClient:
         self,
         namespace_: str,
         *,
-        namespace: str,
-        specificity_rank: int,
         context_id: typing.Optional[str] = None,
+        namespace: typing.Optional[str] = OMIT,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        specificity_rank: typing.Optional[int] = OMIT,
         membership_record_type: typing.Optional[str] = OMIT,
         membership_target_field: typing.Optional[str] = OMIT,
         membership_context_id: typing.Optional[str] = OMIT,
@@ -2004,20 +1992,20 @@ class AsyncIdentityClient:
         namespace_ : str
             The namespace name.
 
-        namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
-
-        specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
-
         context_id : typing.Optional[str]
             The app context that owns this registration. Omit for the tenant-wide registration.
+
+        namespace : typing.Optional[str]
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        specificity_rank : typing.Optional[int]
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         membership_record_type : typing.Optional[str]
             Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
@@ -2057,8 +2045,6 @@ class AsyncIdentityClient:
         async def main() -> None:
             await client.identity.update_namespace(
                 namespace_="team",
-                namespace="team",
-                specificity_rank=1500,
             )
 
 
@@ -2066,11 +2052,11 @@ class AsyncIdentityClient:
         """
         _response = await self._raw_client.update_namespace(
             namespace_,
-            namespace=namespace,
-            specificity_rank=specificity_rank,
             context_id=context_id,
+            namespace=namespace,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
+            specificity_rank=specificity_rank,
             membership_record_type=membership_record_type,
             membership_target_field=membership_target_field,
             membership_context_id=membership_context_id,
@@ -2186,11 +2172,11 @@ class AsyncIdentityClient:
     async def register_namespace(
         self,
         *,
-        namespace: str,
-        specificity_rank: int,
         context_id: typing.Optional[str] = None,
+        namespace: typing.Optional[str] = OMIT,
         entity_backed: typing.Optional[bool] = OMIT,
         default_schema_id: typing.Optional[str] = OMIT,
+        specificity_rank: typing.Optional[int] = OMIT,
         membership_record_type: typing.Optional[str] = OMIT,
         membership_target_field: typing.Optional[str] = OMIT,
         membership_context_id: typing.Optional[str] = OMIT,
@@ -2203,20 +2189,20 @@ class AsyncIdentityClient:
 
         Parameters
         ----------
-        namespace : str
-            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
-
-        specificity_rank : int
-            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
-
         context_id : typing.Optional[str]
             The app context to own this registration. Omit for a TENANT-WIDE registration visible to every context.
+
+        namespace : typing.Optional[str]
+            The namespace to register: 2-32 characters, a lowercase letter first, then lowercase letters, digits, `_` or `-`. `org` and `client` are reserved names, registered the same way as any other namespace. Deleting any namespace — these two included — is refused while entities still reference it. Required on registration; on update it must match the path and is otherwise ignored (the namespace is immutable).
 
         entity_backed : typing.Optional[bool]
             When `true`, every `scope:<namespace>` value in this namespace must resolve to an existing identity entity of the same account and namespace (create entities via `POST /v1/entities/{namespace}`), and the namespace gains the full identity-entity surface — list its entities, look them up by schema field, and filter other resources by them as a parent. When `false` (the default), values in this namespace are free-form strings validated by grammar only.
 
         default_schema_id : typing.Optional[str]
             Optional ID of a record schema (created via `POST /v1/schemas`) bound as the default governing schema for entities created in this namespace. Must belong to your account.
+
+        specificity_rank : typing.Optional[int]
+            This namespace's position in your account's specificity order, used to break a tie when a caller holds two scope dimensions at once during recordType schema resolution — the higher-ranked (more specific) dimension's schema wins. Required on registration (no default); must be an integer between 0 and 1000000, and unique across every namespace in your account — including `org` and `client`, once registered (`org`=1000, `client`=2000). Optional on update — omit to leave it unchanged.
 
         membership_record_type : typing.Optional[str]
             Optional. The record type holding this namespace's MEMBERSHIP grants — the records that say which values of this namespace a given user belongs to. Supply it together with `membershipTargetField` and `membershipContextId`, or omit all three. Declaring it grants nobody anything on its own: a credential receives membership-derived access only if its own role or access profile asks for it by naming `${{ member.scope.<namespace> }}` in `data_scope`.
@@ -2254,20 +2240,17 @@ class AsyncIdentityClient:
 
 
         async def main() -> None:
-            await client.identity.register_namespace(
-                namespace="team",
-                specificity_rank=1500,
-            )
+            await client.identity.register_namespace()
 
 
         asyncio.run(main())
         """
         _response = await self._raw_client.register_namespace(
-            namespace=namespace,
-            specificity_rank=specificity_rank,
             context_id=context_id,
+            namespace=namespace,
             entity_backed=entity_backed,
             default_schema_id=default_schema_id,
+            specificity_rank=specificity_rank,
             membership_record_type=membership_record_type,
             membership_target_field=membership_target_field,
             membership_context_id=membership_context_id,
@@ -2301,7 +2284,7 @@ class AsyncIdentityClient:
             Look up a single user by your own `externalId`. Returns a one-element list, or an empty list if no match. Cannot be combined with the `type`/`field`/`value` lookup parameters.
 
         start_from : typing.Optional[str]
-            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging: a cursor is valid only for the exact query that returned it, and reusing one against a different query is rejected with a 400.
+            Pagination cursor. Pass the `nextCursor` returned by the previous page to fetch the next page; omit it for the first page. The cursor is **opaque** — echo it back unchanged, and do not parse it or construct one. Keep every other query parameter identical while paging. A cursor is checked against the part of the query that decides where the listing reads, so reusing it with, for example, a different folder or owner is refused with a 400; not every change to the other parameters is detected, though, and a cursor reused after one returns pages that match neither query.
 
         limit : typing.Optional[int]
             Maximum number of users to return per page (1–100; defaults to 20).
@@ -2378,8 +2361,8 @@ class AsyncIdentityClient:
     async def create_user(
         self,
         *,
-        external_id: str,
         upsert: typing.Optional[bool] = None,
+        external_id: typing.Optional[str] = OMIT,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -2395,17 +2378,17 @@ class AsyncIdentityClient:
 
         Parameters
         ----------
-        external_id : str
-            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
-
         upsert : typing.Optional[bool]
             When `true`, if a user with the same `externalId` already exists its mutable fields (email, status, payload, schemaId) are updated to the submitted values instead of being returned unchanged; the immutable `externalId` and `type` are never changed, `email` cannot be changed while an invitation to that user is still outstanding, and a user whose invitation has not been accepted cannot be set to `ACTIVE`. Defaults to `false`. Requires the `users:u` scope in addition to `users:c`. A context-confined credential attempting to overwrite a user outside its own app context receives the uniform `400` ("already exists") rather than the overwrite.
+
+        external_id : typing.Optional[str]
+            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate. Required when creating; on update, omit it to keep the current value.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. The account owner's user can never be set to `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -2446,16 +2429,14 @@ class AsyncIdentityClient:
 
 
         async def main() -> None:
-            await client.identity.create_user(
-                external_id="usr_12345",
-            )
+            await client.identity.create_user()
 
 
         asyncio.run(main())
         """
         _response = await self._raw_client.create_user(
-            external_id=external_id,
             upsert=upsert,
+            external_id=external_id,
             email=email,
             status=status,
             type=type,
@@ -2512,7 +2493,7 @@ class AsyncIdentityClient:
         self,
         id: str,
         *,
-        external_id: str,
+        external_id: typing.Optional[str] = OMIT,
         email: typing.Optional[str] = OMIT,
         status: typing.Optional[UserRequestStatus] = OMIT,
         type: typing.Optional[UserRequestType] = OMIT,
@@ -2531,14 +2512,14 @@ class AsyncIdentityClient:
         id : str
             The Vectros-assigned UUID of the user.
 
-        external_id : str
-            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.
+        external_id : typing.Optional[str]
+            Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate. Required when creating; on update, omit it to keep the current value.
 
         email : typing.Optional[str]
             The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
 
         status : typing.Optional[UserRequestStatus]
-            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+            The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. The account owner's user can never be set to `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
 
         type : typing.Optional[UserRequestType]
             The kind of user. `HUMAN` (the default) is a real person; `SERVICE` is a bot, agent, scheduled job, or other named integration with no specific person behind it. Service users may omit `email`. The type is immutable after creation — to change it, create a new user.
@@ -2581,7 +2562,6 @@ class AsyncIdentityClient:
         async def main() -> None:
             await client.identity.update_user(
                 id="550e8400-e29b-41d4-a716-446655440000",
-                external_id="usr_12345",
             )
 
 

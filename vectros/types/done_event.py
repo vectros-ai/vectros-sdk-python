@@ -24,7 +24,7 @@ class DoneEvent(UniversalBaseModel):
         FieldMetadata(alias="inputTokens"),
         pydantic.Field(
             alias="inputTokens",
-            description="Total input tokens consumed by the model, including the system prompt and all messages.",
+            description="Input tokens other than prompt-cache tokens, including the system prompt and all messages. Cache tokens are reported separately in `cacheReadTokens` and `cacheCreateTokens`.",
         ),
     ]
     output_tokens: typing_extensions.Annotated[
@@ -42,15 +42,15 @@ class DoneEvent(UniversalBaseModel):
         FieldMetadata(alias="platformCreditsCharged"),
         pydantic.Field(
             alias="platformCreditsCharged",
-            description="Credits debited from your monthly plan allowance for this call's per-call platform overhead. One credit equals one cent.",
+            description="Credits debited from your monthly plan allowance for this call's platform fee: 0.2 credits for a call of up to 60 seconds, then 1 credit per 5 minutes of the call's duration, so a longer call is charged more. One credit equals one cent.",
         ),
     ]
-    inference_balance_cents_charged: typing_extensions.Annotated[
+    inference_balance_cents_charged_milli: typing_extensions.Annotated[
         int,
-        FieldMetadata(alias="inferenceBalanceCentsCharged"),
+        FieldMetadata(alias="inferenceBalanceCentsChargedMilli"),
         pydantic.Field(
-            alias="inferenceBalanceCentsCharged",
-            description="Cents of model token cost for this call. Settled against your pre-paid inference balance (or added to your period usage on usage billing); 0 for a call routed through `providerAlias`.",
+            alias="inferenceBalanceCentsChargedMilli",
+            description="Model token cost charged for this call, in milli-cents (thousandths of a cent; 1 cent = 1000). Rounded to the nearest milli-cent, never to whole cents. Settled against your pre-paid inference balance (or added to your period usage on usage billing); 0 for a call routed through `providerAlias`.",
         ),
     ]
     cache_read_tokens: typing_extensions.Annotated[
@@ -58,7 +58,7 @@ class DoneEvent(UniversalBaseModel):
         FieldMetadata(alias="cacheReadTokens"),
         pydantic.Field(
             alias="cacheReadTokens",
-            description="Number of input tokens served from the prompt cache. Present only when the call reports a non-zero count.",
+            description="Number of input tokens served from the prompt cache. Present only when the call reports a non-zero count. On a model with `cachePricing` (`GET /v1/models`), charged at its cache read rate and included in `inferenceBalanceCentsChargedMilli`; on a model without it, not charged on its own. Not charged on a call routed through `providerAlias`.",
         ),
     ] = None
     cache_create_tokens: typing_extensions.Annotated[
@@ -66,7 +66,7 @@ class DoneEvent(UniversalBaseModel):
         FieldMetadata(alias="cacheCreateTokens"),
         pydantic.Field(
             alias="cacheCreateTokens",
-            description="Number of input tokens written to the prompt cache. Present only when the call reports a non-zero count.",
+            description="Number of input tokens written to the prompt cache. Present only when the call reports a non-zero count. On a model with `cachePricing` (`GET /v1/models`), charged at its cache write rate for the cache lifetime used and included in `inferenceBalanceCentsChargedMilli`; on a model without it, not charged on its own. Not charged on a call routed through `providerAlias`.",
         ),
     ] = None
 

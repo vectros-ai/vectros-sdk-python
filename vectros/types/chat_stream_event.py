@@ -69,8 +69,10 @@ class ChatStreamEvent_Done(UniversalBaseModel):
     platform_credits_charged: typing_extensions.Annotated[
         float, FieldMetadata(alias="platformCreditsCharged"), pydantic.Field(alias="platformCreditsCharged")
     ]
-    inference_balance_cents_charged: typing_extensions.Annotated[
-        int, FieldMetadata(alias="inferenceBalanceCentsCharged"), pydantic.Field(alias="inferenceBalanceCentsCharged")
+    inference_balance_cents_charged_milli: typing_extensions.Annotated[
+        int,
+        FieldMetadata(alias="inferenceBalanceCentsChargedMilli"),
+        pydantic.Field(alias="inferenceBalanceCentsChargedMilli"),
     ]
     cache_read_tokens: typing_extensions.Annotated[
         typing.Optional[int], FieldMetadata(alias="cacheReadTokens"), pydantic.Field(alias="cacheReadTokens")

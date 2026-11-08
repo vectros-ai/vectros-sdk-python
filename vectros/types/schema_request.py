@@ -20,17 +20,21 @@ class SchemaRequest(UniversalBaseModel):
     """
 
     type_name: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="typeName"),
         pydantic.Field(
-            alias="typeName", description="Unique type identifier for this schema. Immutable after creation."
+            alias="typeName",
+            description="Unique type identifier for this schema. Required when creating; immutable after creation, so it is ignored on update.",
         ),
-    ]
+    ] = None
     display_name: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="displayName"),
-        pydantic.Field(alias="displayName", description="Human-readable display name for this type, shown in UIs."),
-    ]
+        pydantic.Field(
+            alias="displayName",
+            description="Human-readable display name for this type, shown in UIs. Required when creating; on update, omit it to keep the current name.",
+        ),
+    ] = None
     description: typing.Optional[str] = pydantic.Field(default=None)
     """
     Optional description of what this schema is for.
@@ -76,13 +80,13 @@ class SchemaRequest(UniversalBaseModel):
         ),
     ] = None
     allowed_surfaces: typing_extensions.Annotated[
-        typing.List[SchemaRequestAllowedSurfacesItem],
+        typing.Optional[typing.List[SchemaRequestAllowedSurfacesItem]],
         FieldMetadata(alias="allowedSurfaces"),
         pydantic.Field(
             alias="allowedSurfaces",
-            description="Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required and must be non-empty. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.",
+            description="Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.",
         ),
-    ]
+    ] = None
     active: typing.Optional[bool] = pydantic.Field(default=None)
     """
     Whether this schema is active. An inactive schema rejects creation of new records of its type.

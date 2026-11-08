@@ -11,7 +11,14 @@ if typing.TYPE_CHECKING:
     from .access_profile_request_status import AccessProfileRequestStatus
     from .access_profile_response import AccessProfileResponse
     from .access_profile_spec import AccessProfileSpec
+    from .acting_via_response import ActingViaResponse
     from .admin_logs_response import AdminLogsResponse
+    from .agent_budget import AgentBudget
+    from .agent_definition_request import AgentDefinitionRequest
+    from .agent_limits import AgentLimits
+    from .agent_page import AgentPage
+    from .agent_response import AgentResponse
+    from .agent_tool_entry import AgentToolEntry
     from .app_context_page import AppContextPage
     from .app_context_request import AppContextRequest
     from .app_context_response import AppContextResponse
@@ -25,6 +32,8 @@ if typing.TYPE_CHECKING:
     from .batch_write_response import BatchWriteResponse
     from .batch_write_result import BatchWriteResult
     from .batch_write_result_status import BatchWriteResultStatus
+    from .cache_pricing import CachePricing
+    from .cache_rates import CacheRates
     from .changed_field import ChangedField
     from .chat_message import ChatMessage
     from .chat_message_role import ChatMessageRole
@@ -56,6 +65,8 @@ if typing.TYPE_CHECKING:
     from .document_context_event import DocumentContextEvent
     from .document_context_event_event import DocumentContextEventEvent
     from .document_download_response import DocumentDownloadResponse
+    from .document_extraction import DocumentExtraction
+    from .document_extraction_outcome import DocumentExtractionOutcome
     from .document_ingest import DocumentIngest
     from .document_lookup_page import DocumentLookupPage
     from .document_page import DocumentPage
@@ -172,6 +183,29 @@ if typing.TYPE_CHECKING:
     from .role_page import RolePage
     from .role_request import RoleRequest
     from .role_response import RoleResponse
+    from .run import Run
+    from .run_budget import RunBudget
+    from .run_cancelled_event import RunCancelledEvent
+    from .run_completed_event import RunCompletedEvent
+    from .run_error_body import RunErrorBody
+    from .run_failed_event import RunFailedEvent
+    from .run_input import RunInput
+    from .run_message_completed_event import RunMessageCompletedEvent
+    from .run_message_delta_event import RunMessageDeltaEvent
+    from .run_started_event import RunStartedEvent
+    from .run_stream_event import (
+        RunStreamEvent,
+        RunStreamEvent_MessageCompleted,
+        RunStreamEvent_MessageDelta,
+        RunStreamEvent_RunCancelled,
+        RunStreamEvent_RunCompleted,
+        RunStreamEvent_RunFailed,
+        RunStreamEvent_RunStarted,
+        RunStreamEvent_ToolCompleted,
+    )
+    from .run_tool_call import RunToolCall
+    from .run_tool_completed_event import RunToolCompletedEvent
+    from .run_usage import RunUsage
     from .scalar import Scalar
     from .schema_page import SchemaPage
     from .schema_request import SchemaRequest
@@ -236,7 +270,14 @@ _dynamic_imports: typing.Dict[str, str] = {
     "AccessProfileRequestStatus": ".access_profile_request_status",
     "AccessProfileResponse": ".access_profile_response",
     "AccessProfileSpec": ".access_profile_spec",
+    "ActingViaResponse": ".acting_via_response",
     "AdminLogsResponse": ".admin_logs_response",
+    "AgentBudget": ".agent_budget",
+    "AgentDefinitionRequest": ".agent_definition_request",
+    "AgentLimits": ".agent_limits",
+    "AgentPage": ".agent_page",
+    "AgentResponse": ".agent_response",
+    "AgentToolEntry": ".agent_tool_entry",
     "AppContextPage": ".app_context_page",
     "AppContextRequest": ".app_context_request",
     "AppContextResponse": ".app_context_response",
@@ -250,6 +291,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "BatchWriteResponse": ".batch_write_response",
     "BatchWriteResult": ".batch_write_result",
     "BatchWriteResultStatus": ".batch_write_result_status",
+    "CachePricing": ".cache_pricing",
+    "CacheRates": ".cache_rates",
     "ChangedField": ".changed_field",
     "ChatMessage": ".chat_message",
     "ChatMessageRole": ".chat_message_role",
@@ -277,6 +320,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DocumentContextEvent": ".document_context_event",
     "DocumentContextEventEvent": ".document_context_event_event",
     "DocumentDownloadResponse": ".document_download_response",
+    "DocumentExtraction": ".document_extraction",
+    "DocumentExtractionOutcome": ".document_extraction_outcome",
     "DocumentIngest": ".document_ingest",
     "DocumentLookupPage": ".document_lookup_page",
     "DocumentPage": ".document_page",
@@ -391,6 +436,27 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RolePage": ".role_page",
     "RoleRequest": ".role_request",
     "RoleResponse": ".role_response",
+    "Run": ".run",
+    "RunBudget": ".run_budget",
+    "RunCancelledEvent": ".run_cancelled_event",
+    "RunCompletedEvent": ".run_completed_event",
+    "RunErrorBody": ".run_error_body",
+    "RunFailedEvent": ".run_failed_event",
+    "RunInput": ".run_input",
+    "RunMessageCompletedEvent": ".run_message_completed_event",
+    "RunMessageDeltaEvent": ".run_message_delta_event",
+    "RunStartedEvent": ".run_started_event",
+    "RunStreamEvent": ".run_stream_event",
+    "RunStreamEvent_MessageCompleted": ".run_stream_event",
+    "RunStreamEvent_MessageDelta": ".run_stream_event",
+    "RunStreamEvent_RunCancelled": ".run_stream_event",
+    "RunStreamEvent_RunCompleted": ".run_stream_event",
+    "RunStreamEvent_RunFailed": ".run_stream_event",
+    "RunStreamEvent_RunStarted": ".run_stream_event",
+    "RunStreamEvent_ToolCompleted": ".run_stream_event",
+    "RunToolCall": ".run_tool_call",
+    "RunToolCompletedEvent": ".run_tool_completed_event",
+    "RunUsage": ".run_usage",
     "Scalar": ".scalar",
     "SchemaPage": ".schema_page",
     "SchemaRequest": ".schema_request",
@@ -479,7 +545,14 @@ __all__ = [
     "AccessProfileRequestStatus",
     "AccessProfileResponse",
     "AccessProfileSpec",
+    "ActingViaResponse",
     "AdminLogsResponse",
+    "AgentBudget",
+    "AgentDefinitionRequest",
+    "AgentLimits",
+    "AgentPage",
+    "AgentResponse",
+    "AgentToolEntry",
     "AppContextPage",
     "AppContextRequest",
     "AppContextResponse",
@@ -493,6 +566,8 @@ __all__ = [
     "BatchWriteResponse",
     "BatchWriteResult",
     "BatchWriteResultStatus",
+    "CachePricing",
+    "CacheRates",
     "ChangedField",
     "ChatMessage",
     "ChatMessageRole",
@@ -520,6 +595,8 @@ __all__ = [
     "DocumentContextEvent",
     "DocumentContextEventEvent",
     "DocumentDownloadResponse",
+    "DocumentExtraction",
+    "DocumentExtractionOutcome",
     "DocumentIngest",
     "DocumentLookupPage",
     "DocumentPage",
@@ -634,6 +711,27 @@ __all__ = [
     "RolePage",
     "RoleRequest",
     "RoleResponse",
+    "Run",
+    "RunBudget",
+    "RunCancelledEvent",
+    "RunCompletedEvent",
+    "RunErrorBody",
+    "RunFailedEvent",
+    "RunInput",
+    "RunMessageCompletedEvent",
+    "RunMessageDeltaEvent",
+    "RunStartedEvent",
+    "RunStreamEvent",
+    "RunStreamEvent_MessageCompleted",
+    "RunStreamEvent_MessageDelta",
+    "RunStreamEvent_RunCancelled",
+    "RunStreamEvent_RunCompleted",
+    "RunStreamEvent_RunFailed",
+    "RunStreamEvent_RunStarted",
+    "RunStreamEvent_ToolCompleted",
+    "RunToolCall",
+    "RunToolCompletedEvent",
+    "RunUsage",
     "Scalar",
     "SchemaPage",
     "SchemaRequest",

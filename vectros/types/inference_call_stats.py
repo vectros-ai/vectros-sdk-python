@@ -21,12 +21,31 @@ class InferenceCallStats(UniversalBaseModel):
     input_tokens: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="inputTokens"),
-        pydantic.Field(alias="inputTokens", description="Total input tokens consumed across all calls"),
+        pydantic.Field(
+            alias="inputTokens",
+            description="Input tokens other than prompt-cache tokens, across all calls. Cache tokens are counted separately in `cacheReadTokens` and `cacheCreateTokens`.",
+        ),
     ] = None
     output_tokens: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="outputTokens"),
         pydantic.Field(alias="outputTokens", description="Total output tokens generated across all calls"),
+    ] = None
+    cache_read_tokens: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="cacheReadTokens"),
+        pydantic.Field(
+            alias="cacheReadTokens",
+            description="Input tokens served from the prompt cache across all calls. 0 when no call read the cache.",
+        ),
+    ] = None
+    cache_create_tokens: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="cacheCreateTokens"),
+        pydantic.Field(
+            alias="cacheCreateTokens",
+            description="Input tokens written to the prompt cache across all calls, whatever the cache lifetime. 0 when no call wrote to the cache.",
+        ),
     ] = None
 
     if IS_PYDANTIC_V2:

@@ -174,10 +174,10 @@ class RawTriggersClient:
     def create_trigger(
         self,
         *,
-        name: str,
-        firing_source: FiringSourceRequest,
-        script_ref: ScriptRefRequest,
         upsert: typing.Optional[bool] = None,
+        name: typing.Optional[str] = OMIT,
+        firing_source: typing.Optional[FiringSourceRequest] = OMIT,
+        script_ref: typing.Optional[ScriptRefRequest] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         manifest: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -187,19 +187,19 @@ class RawTriggersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[TriggerRuleResponse]:
         """
-        Declares a new trigger rule, or (with `?upsert=true`) reconciles an existing one of the same name to the submitted shape. Once declared, the rule fires: a record write on the named schema dispatches the referenced script, which runs asynchronously under this rule's own grant. Because that grant is executed, a scoped credential may not declare a trigger whose grant exceeds its own — such a request is rejected with a `403`, and a `roleIds` entry that does not resolve in this context with a `400`. Requires the `triggers:c` scope (also `triggers:u` when `?upsert=true` matches an existing row).
+        Declares a new trigger rule, or (with `?upsert=true`) reconciles an existing one of the same name to the submitted shape. Once declared, the rule fires: a record write on the named schema dispatches the referenced script, which runs asynchronously under this rule's own grant. Because that grant is executed, a scoped credential may not declare a trigger whose grant exceeds its own — such a request is rejected with a `403`, and a `roleIds` entry that does not resolve in this context with a `400`. Requires the `triggers:c` scope (also `triggers:u` when `?upsert=true` matches an existing row). `name`, `firingSource`, `scriptRef`, `fields` and exactly one of `scopes` or `roleIds` are required when declaring a rule.
 
         Parameters
         ----------
-        name : str
-            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Immutable once created; ignored on update.
-
-        firing_source : FiringSourceRequest
-
-        script_ref : ScriptRefRequest
-
         upsert : typing.Optional[bool]
             When `true`, if a trigger rule with the same `name` already exists it is reconciled to the submitted shape instead of being returned unchanged. Defaults to `false`. Requires the `triggers:u` scope in addition to `triggers:c`.
+
+        name : typing.Optional[str]
+            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required when declaring a rule. Immutable once created; ignored on update.
+
+        firing_source : typing.Optional[FiringSourceRequest]
+
+        script_ref : typing.Optional[ScriptRefRequest]
 
         role_ids : typing.Optional[typing.Sequence[str]]
             Role composition — the trigger's principal is granted each named role's clauses, concatenated in the order listed. Mutually exclusive with 'scopes'; provide exactly one.
@@ -208,7 +208,7 @@ class RawTriggersClient:
             Inline scope clauses granted to this trigger's principal — the same shape a role's own clause list carries. Mutually exclusive with 'roleIds'; provide exactly one.
 
         manifest : typing.Optional[typing.Sequence[str]]
-            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry names one of the three host-object namespaces and one of its verbs — 'records.<verb>' and 'documents.<verb>' each offer create/get/update/delete/query/lookup, and 'folders.<verb>' offers create/get/update/delete/query (folders have no lookup). An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
+            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry is '<namespace>.<verb>': 'records.' and 'entities.' offer create/get/update/delete/query/lookup; 'documents.' offers the same six plus 'text'; 'folders.' offers create/get/update/delete/query; 'search.' offers 'content'. An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
 
         fields : typing.Optional[typing.Sequence[str]]
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
@@ -387,9 +387,9 @@ class RawTriggersClient:
         self,
         id: str,
         *,
-        name: str,
-        firing_source: FiringSourceRequest,
-        script_ref: ScriptRefRequest,
+        name: typing.Optional[str] = OMIT,
+        firing_source: typing.Optional[FiringSourceRequest] = OMIT,
+        script_ref: typing.Optional[ScriptRefRequest] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         manifest: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -405,12 +405,12 @@ class RawTriggersClient:
         ----------
         id : str
 
-        name : str
-            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Immutable once created; ignored on update.
+        name : typing.Optional[str]
+            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required when declaring a rule. Immutable once created; ignored on update.
 
-        firing_source : FiringSourceRequest
+        firing_source : typing.Optional[FiringSourceRequest]
 
-        script_ref : ScriptRefRequest
+        script_ref : typing.Optional[ScriptRefRequest]
 
         role_ids : typing.Optional[typing.Sequence[str]]
             Role composition — the trigger's principal is granted each named role's clauses, concatenated in the order listed. Mutually exclusive with 'scopes'; provide exactly one.
@@ -419,7 +419,7 @@ class RawTriggersClient:
             Inline scope clauses granted to this trigger's principal — the same shape a role's own clause list carries. Mutually exclusive with 'roleIds'; provide exactly one.
 
         manifest : typing.Optional[typing.Sequence[str]]
-            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry names one of the three host-object namespaces and one of its verbs — 'records.<verb>' and 'documents.<verb>' each offer create/get/update/delete/query/lookup, and 'folders.<verb>' offers create/get/update/delete/query (folders have no lookup). An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
+            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry is '<namespace>.<verb>': 'records.' and 'entities.' offer create/get/update/delete/query/lookup; 'documents.' offers the same six plus 'text'; 'folders.' offers create/get/update/delete/query; 'search.' offers 'content'. An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
 
         fields : typing.Optional[typing.Sequence[str]]
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
@@ -750,10 +750,10 @@ class AsyncRawTriggersClient:
     async def create_trigger(
         self,
         *,
-        name: str,
-        firing_source: FiringSourceRequest,
-        script_ref: ScriptRefRequest,
         upsert: typing.Optional[bool] = None,
+        name: typing.Optional[str] = OMIT,
+        firing_source: typing.Optional[FiringSourceRequest] = OMIT,
+        script_ref: typing.Optional[ScriptRefRequest] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         manifest: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -763,19 +763,19 @@ class AsyncRawTriggersClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[TriggerRuleResponse]:
         """
-        Declares a new trigger rule, or (with `?upsert=true`) reconciles an existing one of the same name to the submitted shape. Once declared, the rule fires: a record write on the named schema dispatches the referenced script, which runs asynchronously under this rule's own grant. Because that grant is executed, a scoped credential may not declare a trigger whose grant exceeds its own — such a request is rejected with a `403`, and a `roleIds` entry that does not resolve in this context with a `400`. Requires the `triggers:c` scope (also `triggers:u` when `?upsert=true` matches an existing row).
+        Declares a new trigger rule, or (with `?upsert=true`) reconciles an existing one of the same name to the submitted shape. Once declared, the rule fires: a record write on the named schema dispatches the referenced script, which runs asynchronously under this rule's own grant. Because that grant is executed, a scoped credential may not declare a trigger whose grant exceeds its own — such a request is rejected with a `403`, and a `roleIds` entry that does not resolve in this context with a `400`. Requires the `triggers:c` scope (also `triggers:u` when `?upsert=true` matches an existing row). `name`, `firingSource`, `scriptRef`, `fields` and exactly one of `scopes` or `roleIds` are required when declaring a rule.
 
         Parameters
         ----------
-        name : str
-            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Immutable once created; ignored on update.
-
-        firing_source : FiringSourceRequest
-
-        script_ref : ScriptRefRequest
-
         upsert : typing.Optional[bool]
             When `true`, if a trigger rule with the same `name` already exists it is reconciled to the submitted shape instead of being returned unchanged. Defaults to `false`. Requires the `triggers:u` scope in addition to `triggers:c`.
+
+        name : typing.Optional[str]
+            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required when declaring a rule. Immutable once created; ignored on update.
+
+        firing_source : typing.Optional[FiringSourceRequest]
+
+        script_ref : typing.Optional[ScriptRefRequest]
 
         role_ids : typing.Optional[typing.Sequence[str]]
             Role composition — the trigger's principal is granted each named role's clauses, concatenated in the order listed. Mutually exclusive with 'scopes'; provide exactly one.
@@ -784,7 +784,7 @@ class AsyncRawTriggersClient:
             Inline scope clauses granted to this trigger's principal — the same shape a role's own clause list carries. Mutually exclusive with 'roleIds'; provide exactly one.
 
         manifest : typing.Optional[typing.Sequence[str]]
-            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry names one of the three host-object namespaces and one of its verbs — 'records.<verb>' and 'documents.<verb>' each offer create/get/update/delete/query/lookup, and 'folders.<verb>' offers create/get/update/delete/query (folders have no lookup). An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
+            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry is '<namespace>.<verb>': 'records.' and 'entities.' offer create/get/update/delete/query/lookup; 'documents.' offers the same six plus 'text'; 'folders.' offers create/get/update/delete/query; 'search.' offers 'content'. An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
 
         fields : typing.Optional[typing.Sequence[str]]
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.
@@ -963,9 +963,9 @@ class AsyncRawTriggersClient:
         self,
         id: str,
         *,
-        name: str,
-        firing_source: FiringSourceRequest,
-        script_ref: ScriptRefRequest,
+        name: typing.Optional[str] = OMIT,
+        firing_source: typing.Optional[FiringSourceRequest] = OMIT,
+        script_ref: typing.Optional[ScriptRefRequest] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         manifest: typing.Optional[typing.Sequence[str]] = OMIT,
@@ -981,12 +981,12 @@ class AsyncRawTriggersClient:
         ----------
         id : str
 
-        name : str
-            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Immutable once created; ignored on update.
+        name : typing.Optional[str]
+            Your own identifier for the trigger rule, unique within your app context. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required when declaring a rule. Immutable once created; ignored on update.
 
-        firing_source : FiringSourceRequest
+        firing_source : typing.Optional[FiringSourceRequest]
 
-        script_ref : ScriptRefRequest
+        script_ref : typing.Optional[ScriptRefRequest]
 
         role_ids : typing.Optional[typing.Sequence[str]]
             Role composition — the trigger's principal is granted each named role's clauses, concatenated in the order listed. Mutually exclusive with 'scopes'; provide exactly one.
@@ -995,7 +995,7 @@ class AsyncRawTriggersClient:
             Inline scope clauses granted to this trigger's principal — the same shape a role's own clause list carries. Mutually exclusive with 'roleIds'; provide exactly one.
 
         manifest : typing.Optional[typing.Sequence[str]]
-            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry names one of the three host-object namespaces and one of its verbs — 'records.<verb>' and 'documents.<verb>' each offer create/get/update/delete/query/lookup, and 'folders.<verb>' offers create/get/update/delete/query (folders have no lookup). An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
+            Optional operation manifest: the host-object verbs this trigger's script may call (e.g. 'records.update'), narrowing its grant further for this usage only. ENFORCED at execution: a verb outside the manifest is refused even when the grant would allow it. An entry is '<namespace>.<verb>': 'records.' and 'entities.' offer create/get/update/delete/query/lookup; 'documents.' offers the same six plus 'text'; 'folders.' offers create/get/update/delete/query; 'search.' offers 'content'. An unrecognized entry is rejected with a 400 listing the recognized set. On CREATE, omitting this field (or sending an empty list) means no manifest (the full grant applies). On UPDATE (PUT), omitting this field leaves the trigger's EXISTING manifest unchanged — it does NOT clear it; send an explicit empty list ([]) to remove a manifest restriction and return to the full grant.
 
         fields : typing.Optional[typing.Sequence[str]]
             REQUIRED on create: the record fields this rule projects into its script's `input.record` — and, on an UPDATE firing, `input.previous` (the same fields from the row before the write). On a DELETE firing `input.record` carries these fields from the deleted row, which is the only way a script can see anything of it. Send an empty list to project nothing beyond the record's identity (`input.recordId`). Every entry must name a field the schema keeps INLINE — declared `inline: true`, `filterable`, or as a lookup field — and not `sensitive`; anything else is rejected with a 400 listing the projectable fields, and a schema update that would un-inline a field a rule still projects is refused. A field the record does not carry is simply absent (`undefined`), never null. Together, `record` and `previous` are limited to 224 KB serialised; a firing whose projected input exceeds that is not run and is recorded as an `INPUT_TOO_LARGE` failure naming the size. A rule that declares fields must be able to READ every record it fires on: its grant must hold a records:r clause covering the schema's type (a grant with no read at all is rejected), and that clause may not carry a literal data_scope constraint (a `${{ input.userId }}` / `${{ input.scope.<namespace>}}` placeholder is fine — it is the firing record's own value), or the rule is rejected with a 400; and if at execution the rule's grant cannot read the firing record, `record` and `previous` are delivered as empty objects. On UPDATE (PUT), omitting this field leaves the trigger's existing declaration unchanged.

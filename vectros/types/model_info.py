@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .cache_pricing import CachePricing
 from .long_context_pricing import LongContextPricing
 from .region_pricing import RegionPricing
 
@@ -64,6 +65,9 @@ class ModelInfo(UniversalBaseModel):
     ]
     long_context: typing_extensions.Annotated[
         typing.Optional[LongContextPricing], FieldMetadata(alias="longContext"), pydantic.Field(alias="longContext")
+    ] = None
+    cache_pricing: typing_extensions.Annotated[
+        typing.Optional[CachePricing], FieldMetadata(alias="cachePricing"), pydantic.Field(alias="cachePricing")
     ] = None
 
     if IS_PYDANTIC_V2:

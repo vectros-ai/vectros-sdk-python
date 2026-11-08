@@ -16,13 +16,13 @@ class UserRequest(UniversalBaseModel):
     """
 
     external_id: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="externalId"),
         pydantic.Field(
             alias="externalId",
-            description="Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate.",
+            description="Your own unique identifier for this user. Drives idempotent upsert: if a user with this `externalId` already exists, it is returned instead of creating a duplicate. Required when creating; on update, omit it to keep the current value.",
         ),
-    ]
+    ] = None
     email: typing.Optional[str] = pydantic.Field(default=None)
     """
     The user's email address. Used for display and notifications only; it is not used for authentication to the Vectros API.
@@ -30,7 +30,7 @@ class UserRequest(UniversalBaseModel):
 
     status: typing.Optional[UserRequestStatus] = pydantic.Field(default=None)
     """
-    The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
+    The user's lifecycle status. `ACTIVE` users can be used normally; `SUSPENDED` users are retained and cannot be issued new credentials, and any credentials they already hold stop working shortly after (already-issued scoped API keys stop authenticating within minutes; already-issued tokens run out their remaining lifetime and cannot be renewed). `PENDING` is a server-managed state for invitations awaiting acceptance and cannot be set on this endpoint: send only `ACTIVE` or `SUSPENDED`. The account owner's user can never be set to `SUSPENDED`. (A pending user becomes `ACTIVE` by sending status=ACTIVE together with `inviteToken`, `externalSubject`, and `emailVerifiedAttestation=true`.)
     """
 
     type: typing.Optional[UserRequestType] = pydantic.Field(default=None)

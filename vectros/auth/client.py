@@ -463,8 +463,8 @@ class AuthClient:
         self,
         context_id: str,
         *,
-        principal_id: str,
         upsert: typing.Optional[bool] = None,
+        principal_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
@@ -480,11 +480,11 @@ class AuthClient:
         ----------
         context_id : str
 
-        principal_id : str
-            Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
-
         upsert : typing.Optional[bool]
             When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
+
+        principal_id : typing.Optional[str]
+            Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
             Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
@@ -524,13 +524,12 @@ class AuthClient:
         )
         client.auth.create_access_profile(
             context_id="contextId",
-            principal_id="usr_6ba7b810-9dad-11d1-80b4-00c04fd430c8",
         )
         """
         _response = self._raw_client.create_access_profile(
             context_id,
-            principal_id=principal_id,
             upsert=upsert,
+            principal_id=principal_id,
             scopes=scopes,
             role_ids=role_ids,
             role_id=role_id,
@@ -585,9 +584,9 @@ class AuthClient:
     def create_app_context(
         self,
         *,
-        context_id: str,
-        name: str,
         upsert: typing.Optional[bool] = None,
+        context_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
@@ -602,14 +601,14 @@ class AuthClient:
 
         Parameters
         ----------
-        context_id : str
-            Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
-
-        name : str
-            Human-readable display name for this app context. Required.
-
         upsert : typing.Optional[bool]
             When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+
+        context_id : typing.Optional[str]
+            Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
+
+        name : typing.Optional[str]
+            Human-readable display name for this app context. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -648,15 +647,12 @@ class AuthClient:
             token="YOUR_TOKEN",
             base_url="https://yourhost.com/path/to/api",
         )
-        client.auth.create_app_context(
-            context_id="myapp",
-            name="My Internal App",
-        )
+        client.auth.create_app_context()
         """
         _response = self._raw_client.create_app_context(
+            upsert=upsert,
             context_id=context_id,
             name=name,
-            upsert=upsert,
             description=description,
             company_name=company_name,
             metering_axis=metering_axis,
@@ -719,11 +715,11 @@ class AuthClient:
         self,
         context_id: str,
         *,
-        role_id: str,
-        name: str,
-        scopes: typing.Sequence[ScopeClause],
         upsert: typing.Optional[bool] = None,
+        role_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
@@ -734,20 +730,20 @@ class AuthClient:
         ----------
         context_id : str
 
-        role_id : str
-            Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
-
-        name : str
-            A human-readable display name for the role.
-
-        scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
-
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
+        role_id : typing.Optional[str]
+            Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
+
+        name : typing.Optional[str]
+            A human-readable display name for the role. Required when creating; on update, omit it to keep the current name.
+
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        scopes : typing.Optional[typing.Sequence[ScopeClause]]
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists. Required when creating; on update, omit it to keep the current clauses (a list you send replaces them).
 
         assumable : typing.Optional[typing.Dict[str, typing.Any]]
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
@@ -762,7 +758,7 @@ class AuthClient:
 
         Examples
         --------
-        from vectros import ScopeClause, VectrosApi
+        from vectros import VectrosApi
 
         client = VectrosApi(
             token="YOUR_TOKEN",
@@ -770,22 +766,15 @@ class AuthClient:
         )
         client.auth.create_role(
             context_id="contextId",
-            role_id="engineering-member",
-            name="Engineering Team Member",
-            scopes=[
-                ScopeClause(
-                    allowed_actions=["records:cru", "search:r"],
-                )
-            ],
         )
         """
         _response = self._raw_client.create_role(
             context_id,
+            upsert=upsert,
             role_id=role_id,
             name=name,
-            scopes=scopes,
-            upsert=upsert,
             description=description,
+            scopes=scopes,
             assumable=assumable,
             request_options=request_options,
         )
@@ -832,7 +821,7 @@ class AuthClient:
         context_id: str,
         principal_id_: str,
         *,
-        principal_id: str,
+        principal_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
@@ -850,7 +839,7 @@ class AuthClient:
 
         principal_id_ : str
 
-        principal_id : str
+        principal_id : typing.Optional[str]
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
@@ -892,7 +881,6 @@ class AuthClient:
         client.auth.update_access_profile(
             context_id="contextId",
             principal_id_="principalId",
-            principal_id="usr_6ba7b810-9dad-11d1-80b4-00c04fd430c8",
         )
         """
         _response = self._raw_client.update_access_profile(
@@ -982,8 +970,8 @@ class AuthClient:
         self,
         context_id_: str,
         *,
-        context_id: str,
-        name: str,
+        context_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
@@ -1000,11 +988,11 @@ class AuthClient:
         ----------
         context_id_ : str
 
-        context_id : str
+        context_id : typing.Optional[str]
             Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
 
-        name : str
-            Human-readable display name for this app context. Required.
+        name : typing.Optional[str]
+            Human-readable display name for this app context. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -1045,8 +1033,6 @@ class AuthClient:
         )
         client.auth.update_app_context(
             context_id_="contextId",
-            context_id="myapp",
-            name="My Internal App",
         )
         """
         _response = self._raw_client.update_app_context(
@@ -1144,10 +1130,10 @@ class AuthClient:
         context_id: str,
         role_id_: str,
         *,
-        role_id: str,
-        name: str,
-        scopes: typing.Sequence[ScopeClause],
+        role_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
@@ -1160,17 +1146,17 @@ class AuthClient:
 
         role_id_ : str
 
-        role_id : str
+        role_id : typing.Optional[str]
             Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
 
-        name : str
-            A human-readable display name for the role.
-
-        scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+        name : typing.Optional[str]
+            A human-readable display name for the role. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        scopes : typing.Optional[typing.Sequence[ScopeClause]]
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists. Required when creating; on update, omit it to keep the current clauses (a list you send replaces them).
 
         assumable : typing.Optional[typing.Dict[str, typing.Any]]
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
@@ -1185,7 +1171,7 @@ class AuthClient:
 
         Examples
         --------
-        from vectros import ScopeClause, VectrosApi
+        from vectros import VectrosApi
 
         client = VectrosApi(
             token="YOUR_TOKEN",
@@ -1194,13 +1180,6 @@ class AuthClient:
         client.auth.update_role(
             context_id="contextId",
             role_id_="roleId",
-            role_id="engineering-member",
-            name="Engineering Team Member",
-            scopes=[
-                ScopeClause(
-                    allowed_actions=["records:cru", "search:r"],
-                )
-            ],
         )
         """
         _response = self._raw_client.update_role(
@@ -1208,8 +1187,8 @@ class AuthClient:
             role_id_,
             role_id=role_id,
             name=name,
-            scopes=scopes,
             description=description,
+            scopes=scopes,
             assumable=assumable,
             request_options=request_options,
         )
@@ -2623,8 +2602,8 @@ class AsyncAuthClient:
         self,
         context_id: str,
         *,
-        principal_id: str,
         upsert: typing.Optional[bool] = None,
+        principal_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
@@ -2640,11 +2619,11 @@ class AsyncAuthClient:
         ----------
         context_id : str
 
-        principal_id : str
-            Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
-
         upsert : typing.Optional[bool]
             When `true`, if a profile with the same `principalId` already exists its grant source (`scopes` or `roleId`), `identityOverrides`, and `status` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
+
+        principal_id : typing.Optional[str]
+            Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
             Inline scope clauses to grant the principal. Provide exactly one of `scopes` or `roleIds` — setting both, or neither, returns a 400.
@@ -2689,7 +2668,6 @@ class AsyncAuthClient:
         async def main() -> None:
             await client.auth.create_access_profile(
                 context_id="contextId",
-                principal_id="usr_6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             )
 
 
@@ -2697,8 +2675,8 @@ class AsyncAuthClient:
         """
         _response = await self._raw_client.create_access_profile(
             context_id,
-            principal_id=principal_id,
             upsert=upsert,
+            principal_id=principal_id,
             scopes=scopes,
             role_ids=role_ids,
             role_id=role_id,
@@ -2761,9 +2739,9 @@ class AsyncAuthClient:
     async def create_app_context(
         self,
         *,
-        context_id: str,
-        name: str,
         upsert: typing.Optional[bool] = None,
+        context_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
@@ -2778,14 +2756,14 @@ class AsyncAuthClient:
 
         Parameters
         ----------
-        context_id : str
-            Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
-
-        name : str
-            Human-readable display name for this app context. Required.
-
         upsert : typing.Optional[bool]
             When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+
+        context_id : typing.Optional[str]
+            Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
+
+        name : typing.Optional[str]
+            Human-readable display name for this app context. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -2829,18 +2807,15 @@ class AsyncAuthClient:
 
 
         async def main() -> None:
-            await client.auth.create_app_context(
-                context_id="myapp",
-                name="My Internal App",
-            )
+            await client.auth.create_app_context()
 
 
         asyncio.run(main())
         """
         _response = await self._raw_client.create_app_context(
+            upsert=upsert,
             context_id=context_id,
             name=name,
-            upsert=upsert,
             description=description,
             company_name=company_name,
             metering_axis=metering_axis,
@@ -2911,11 +2886,11 @@ class AsyncAuthClient:
         self,
         context_id: str,
         *,
-        role_id: str,
-        name: str,
-        scopes: typing.Sequence[ScopeClause],
         upsert: typing.Optional[bool] = None,
+        role_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
@@ -2926,20 +2901,20 @@ class AsyncAuthClient:
         ----------
         context_id : str
 
-        role_id : str
-            Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
-
-        name : str
-            A human-readable display name for the role.
-
-        scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
-
         upsert : typing.Optional[bool]
             When `true`, if a role with the same `roleId` already exists its `name`, `description`, and `scopes` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `profiles:u` scope in addition to `profiles:c`.
 
+        role_id : typing.Optional[str]
+            Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
+
+        name : typing.Optional[str]
+            A human-readable display name for the role. Required when creating; on update, omit it to keep the current name.
+
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        scopes : typing.Optional[typing.Sequence[ScopeClause]]
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists. Required when creating; on update, omit it to keep the current clauses (a list you send replaces them).
 
         assumable : typing.Optional[typing.Dict[str, typing.Any]]
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
@@ -2956,7 +2931,7 @@ class AsyncAuthClient:
         --------
         import asyncio
 
-        from vectros import AsyncVectrosApi, ScopeClause
+        from vectros import AsyncVectrosApi
 
         client = AsyncVectrosApi(
             token="YOUR_TOKEN",
@@ -2967,13 +2942,6 @@ class AsyncAuthClient:
         async def main() -> None:
             await client.auth.create_role(
                 context_id="contextId",
-                role_id="engineering-member",
-                name="Engineering Team Member",
-                scopes=[
-                    ScopeClause(
-                        allowed_actions=["records:cru", "search:r"],
-                    )
-                ],
             )
 
 
@@ -2981,11 +2949,11 @@ class AsyncAuthClient:
         """
         _response = await self._raw_client.create_role(
             context_id,
+            upsert=upsert,
             role_id=role_id,
             name=name,
-            scopes=scopes,
-            upsert=upsert,
             description=description,
+            scopes=scopes,
             assumable=assumable,
             request_options=request_options,
         )
@@ -3040,7 +3008,7 @@ class AsyncAuthClient:
         context_id: str,
         principal_id_: str,
         *,
-        principal_id: str,
+        principal_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         role_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         role_id: typing.Optional[str] = OMIT,
@@ -3058,7 +3026,7 @@ class AsyncAuthClient:
 
         principal_id_ : str
 
-        principal_id : str
+        principal_id : typing.Optional[str]
             Principal this profile applies to. Must start with `usr_` (an authenticated user — the suffix is the user id) or `key_` (a scoped API key acting as its own principal — the suffix is the key id). The suffix may contain only letters, digits, underscores, and hyphens. Required when creating (POST); ignored when updating (PUT), where it is taken from the path.
 
         scopes : typing.Optional[typing.Sequence[ScopeClause]]
@@ -3105,7 +3073,6 @@ class AsyncAuthClient:
             await client.auth.update_access_profile(
                 context_id="contextId",
                 principal_id_="principalId",
-                principal_id="usr_6ba7b810-9dad-11d1-80b4-00c04fd430c8",
             )
 
 
@@ -3216,8 +3183,8 @@ class AsyncAuthClient:
         self,
         context_id_: str,
         *,
-        context_id: str,
-        name: str,
+        context_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
         company_name: typing.Optional[str] = OMIT,
         metering_axis: typing.Optional[str] = OMIT,
@@ -3234,11 +3201,11 @@ class AsyncAuthClient:
         ----------
         context_id_ : str
 
-        context_id : str
+        context_id : typing.Optional[str]
             Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
 
-        name : str
-            Human-readable display name for this app context. Required.
+        name : typing.Optional[str]
+            Human-readable display name for this app context. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             Optional free-text description of what this app context is for.
@@ -3284,8 +3251,6 @@ class AsyncAuthClient:
         async def main() -> None:
             await client.auth.update_app_context(
                 context_id_="contextId",
-                context_id="myapp",
-                name="My Internal App",
             )
 
 
@@ -3404,10 +3369,10 @@ class AsyncAuthClient:
         context_id: str,
         role_id_: str,
         *,
-        role_id: str,
-        name: str,
-        scopes: typing.Sequence[ScopeClause],
+        role_id: typing.Optional[str] = OMIT,
+        name: typing.Optional[str] = OMIT,
         description: typing.Optional[str] = OMIT,
+        scopes: typing.Optional[typing.Sequence[ScopeClause]] = OMIT,
         assumable: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RoleResponse:
@@ -3420,17 +3385,17 @@ class AsyncAuthClient:
 
         role_id_ : str
 
-        role_id : str
+        role_id : typing.Optional[str]
             Your own identifier for the role. Must be 3 to 31 characters, starting with a lowercase letter and containing only lowercase letters, digits, and dashes (the same rules as a context ID). Required when creating a role; ignored when updating, since the role ID is taken from the URL path.
 
-        name : str
-            A human-readable display name for the role.
-
-        scopes : typing.Sequence[ScopeClause]
-            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists.
+        name : typing.Optional[str]
+            A human-readable display name for the role. Required when creating; on update, omit it to keep the current name.
 
         description : typing.Optional[str]
             An optional free-text description of what the role grants.
+
+        scopes : typing.Optional[typing.Sequence[ScopeClause]]
+            The role's permissions, as one or more scope clauses. Each clause has `allowed_actions` (a list of permitted verbs), `data_scope` (an attribute filter that restricts which records the actions apply to), and an optional `granted_capabilities` list. An action is permitted if any clause allows that action and that clause's data scope matches the target record — with one caveat worth knowing before you use `granted_capabilities`: a clause naming a capability the API does not recognize is denied ENTIRELY, so its `allowed_actions` stop applying too. To include records whose ownership field is null (account-level shared records), add `null` to the allowed values for that field. One exception applies when creating an identity entity: the entity's own-namespace dimension (`scope:<namespace>`) takes the value of the ID the server is about to generate, so no clause written beforehand could name it, and that one dimension is exempt from the match on `POST /v1/entities/{namespace}`. It is matched normally on every read, update, and delete — so a clause whose data scope names only that dimension does not restrict what you may create, and an entity created under one may fall outside it once it exists. Required when creating; on update, omit it to keep the current clauses (a list you send replaces them).
 
         assumable : typing.Optional[typing.Dict[str, typing.Any]]
             The `POST /v1/auth/token/assume` entitlement grant: which values, per `scope:<namespace>`, a holder of THIS role may assume via `/assume`. Role-level (unlike `data_scope`, which is per-clause) — this is a deliberately separate question from what `scopes` permits reading or writing; holding broad `data_scope` reach in a namespace does NOT by itself grant assuming any value in it. The principal (`userId`) can never be named — it is never assumable. Each value list accepts a plain literal, `${{ under.self.userId }}`, or `${{ member.scope.<namespace>[:level] }}` — never `${{ under.self.scope.<namespace> }}` (it resolves against the caller's CURRENT value for a namespace `/assume` can itself change, so what it admitted would depend on what was last assumed; that form stays valid in `data_scope`, where it's re-derived per write), a bare `${{ self.<dim> }}`, or `${{ any }}`, all rejected at authoring time. Omitting the field grants no assumption of anything, the safe default.
@@ -3447,7 +3412,7 @@ class AsyncAuthClient:
         --------
         import asyncio
 
-        from vectros import AsyncVectrosApi, ScopeClause
+        from vectros import AsyncVectrosApi
 
         client = AsyncVectrosApi(
             token="YOUR_TOKEN",
@@ -3459,13 +3424,6 @@ class AsyncAuthClient:
             await client.auth.update_role(
                 context_id="contextId",
                 role_id_="roleId",
-                role_id="engineering-member",
-                name="Engineering Team Member",
-                scopes=[
-                    ScopeClause(
-                        allowed_actions=["records:cru", "search:r"],
-                    )
-                ],
             )
 
 
@@ -3476,8 +3434,8 @@ class AsyncAuthClient:
             role_id_,
             role_id=role_id,
             name=name,
-            scopes=scopes,
             description=description,
+            scopes=scopes,
             assumable=assumable,
             request_options=request_options,
         )

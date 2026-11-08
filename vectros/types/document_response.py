@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .document_extraction import DocumentExtraction
 from .document_response_index_mode import DocumentResponseIndexMode
 from .document_response_index_status import DocumentResponseIndexStatus
 from .document_response_status import DocumentResponseStatus
@@ -50,12 +51,13 @@ class DocumentResponse(UniversalBaseModel):
         FieldMetadata(alias="indexStatus"),
         pydantic.Field(
             alias="indexStatus",
-            description="Processing status of the document (system-managed, read-only). PENDING_UPLOAD, UPLOADED, EXTRACTING, and PENDING_INDEX are in-flight states; INDEXED means indexing is complete and the document is searchable. Keyword (TEXT) matching is immediate the moment a document is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a document you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed document that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a document semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the document) has no such fallback. SKIPPED means extraction produced no indexable text so there was nothing to index — the document is stored and retrievable, just not searchable (not an error); STORED means it is store-only (indexMode=NONE) — persisted and retrievable but by design not searchable; FAILED means processing failed.",
+            description="Processing status of the document (system-managed, read-only). PENDING_UPLOAD, UPLOADED, EXTRACTING, and PENDING_INDEX are in-flight states; INDEXED means indexing is complete and the document is searchable. Keyword (TEXT) matching is immediate the moment a document is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a document you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed document that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a document semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the document) has no such fallback. SKIPPED means there was no indexable text, so there was nothing to index — the document is stored and retrievable, just not searchable (not an error). For a file document, `extraction` says why its file yielded no text; STORED means it is store-only (indexMode=NONE) — persisted and retrievable but by design not searchable; FAILED means processing failed.",
         ),
     ] = None
     index_failure: typing_extensions.Annotated[
         typing.Optional[IndexFailure], FieldMetadata(alias="indexFailure"), pydantic.Field(alias="indexFailure")
     ] = None
+    extraction: typing.Optional[DocumentExtraction] = None
     index_mode: typing_extensions.Annotated[
         typing.Optional[DocumentResponseIndexMode],
         FieldMetadata(alias="indexMode"),
@@ -117,7 +119,10 @@ class DocumentResponse(UniversalBaseModel):
     text_bytes: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="textBytes"),
-        pydantic.Field(alias="textBytes", description="Size of the extracted text, in bytes."),
+        pydantic.Field(
+            alias="textBytes",
+            description="Size of the stored text, in bytes (UTF-8). Absent when the document has no stored text, and for file documents extracted before this field was recorded for files.",
+        ),
     ] = None
     user_id: typing_extensions.Annotated[
         typing.Optional[str],

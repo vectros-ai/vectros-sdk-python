@@ -13,9 +13,9 @@ class FolderRequest(UniversalBaseModel):
     Request body for creating or updating a folder. On update (PUT or PATCH), omitted fields are preserved — a null does not clear a field. `parentFolderId` is honored only at creation and ignored on update, because a folder cannot be moved via the API.
     """
 
-    name: str = pydantic.Field()
+    name: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Human-readable display name of the folder. Required.
+    Human-readable display name of the folder. Required when creating; on update, omit it to keep the current name.
     """
 
     description: typing.Optional[str] = pydantic.Field(default=None)

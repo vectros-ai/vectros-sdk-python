@@ -21,7 +21,7 @@ class RegionPricing(UniversalBaseModel):
         FieldMetadata(alias="regionPremiumFactor"),
         pydantic.Field(
             alias="regionPremiumFactor",
-            description="Premium multiplier applied to the US rate (1.0 or greater). A value of 1.0 means the US and base rates are equal — no premium.",
+            description="Multiplier that turns the base rate into the US rate (1.0 or greater). A value of 1.0 means the US and base rates are equal — no premium.",
         ),
     ]
     global_available: typing_extensions.Annotated[

@@ -14,16 +14,16 @@ class AppContextRequest(UniversalBaseModel):
     """
 
     context_id: typing_extensions.Annotated[
-        str,
+        typing.Optional[str],
         FieldMetadata(alias="contextId"),
         pydantic.Field(
             alias="contextId",
             description="Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.",
         ),
-    ]
-    name: str = pydantic.Field()
+    ] = None
+    name: typing.Optional[str] = pydantic.Field(default=None)
     """
-    Human-readable display name for this app context. Required.
+    Human-readable display name for this app context. Required when creating; on update, omit it to keep the current name.
     """
 
     description: typing.Optional[str] = pydantic.Field(default=None)
