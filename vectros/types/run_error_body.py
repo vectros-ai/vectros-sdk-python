@@ -38,6 +38,20 @@ class RunErrorBody(UniversalBaseModel):
     With `IDEMPOTENCY_IN_PROGRESS`: that run's status.
     """
 
+    period: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    With `AGENT_BUDGET_EXHAUSTED`: the capped period with no room (when several are full, the one that resets last). With `BUDGET_EXCEEDS_PERIOD_CAP`: the period whose cap the budget exceeds. Today `HOUR`, `DAY`, `WEEK` or `MONTH`; other values may be added.
+    """
+
+    resets_at: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="resetsAt"),
+        pydantic.Field(
+            alias="resetsAt",
+            description="With `AGENT_BUDGET_EXHAUSTED`: when that period resets (ISO-8601, at UTC-05:00).",
+        ),
+    ] = None
+
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2
     else:

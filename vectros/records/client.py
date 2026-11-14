@@ -9,6 +9,7 @@ from ..types.batch_lookup_input import BatchLookupInput
 from ..types.batch_lookup_response import BatchLookupResponse
 from ..types.batch_write_response import BatchWriteResponse
 from ..types.model_data_version_page import ModelDataVersionPage
+from ..types.public_view_copy_response import PublicViewCopyResponse
 from ..types.record_lookup_page import RecordLookupPage
 from ..types.record_page import RecordPage
 from ..types.record_request import RecordRequest
@@ -821,6 +822,39 @@ class RecordsClient:
             include_payload=include_payload,
             request_options=request_options,
         )
+        return _response.data
+
+    def get_record_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> PublicViewCopyResponse:
+        """
+        For a record whose type has a `publicView` in `projection` mode: what the public sees of it, which is the fields the type lists, as last copied from the record. `published` is false when the record is not public now. Requires the `records:r:<type>` scope, with ownership checked as for reading the record.
+
+        Parameters
+        ----------
+        id : str
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicViewCopyResponse
+            The record's public copy, or `published: false`.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.records.get_record_public_view(
+            id="id",
+        )
+        """
+        _response = self._raw_client.get_record_public_view(id, request_options=request_options)
         return _response.data
 
     def get_record_tombstone(
@@ -1782,6 +1816,47 @@ class AsyncRecordsClient:
             include_payload=include_payload,
             request_options=request_options,
         )
+        return _response.data
+
+    async def get_record_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> PublicViewCopyResponse:
+        """
+        For a record whose type has a `publicView` in `projection` mode: what the public sees of it, which is the fields the type lists, as last copied from the record. `published` is false when the record is not public now. Requires the `records:r:<type>` scope, with ownership checked as for reading the record.
+
+        Parameters
+        ----------
+        id : str
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicViewCopyResponse
+            The record's public copy, or `published: false`.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.records.get_record_public_view(
+                id="id",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.get_record_public_view(id, request_options=request_options)
         return _response.data
 
     async def get_record_tombstone(

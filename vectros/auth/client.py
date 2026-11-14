@@ -18,7 +18,10 @@ from ..types.jwks_response import JwksResponse
 from ..types.mint_token_response import MintTokenResponse
 from ..types.model_data_version_page import ModelDataVersionPage
 from ..types.ping_response import PingResponse
+from ..types.public_app_key_page import PublicAppKeyPage
+from ..types.public_app_key_response import PublicAppKeyResponse
 from ..types.read_access_log_page import ReadAccessLogPage
+from ..types.revoked_public_app_keys import RevokedPublicAppKeys
 from ..types.role_page import RolePage
 from ..types.role_response import RoleResponse
 from ..types.scope_clause import ScopeClause
@@ -30,6 +33,7 @@ from ..types.token_assume_response import TokenAssumeResponse
 from ..types.token_exchange_response import TokenExchangeResponse
 from ..types.usage_report_response import UsageReportResponse
 from .raw_client import AsyncRawAuthClient, RawAuthClient
+from .types.create_public_app_key_request_key_class import CreatePublicAppKeyRequestKeyClass
 
 # this is used as the default value for optional parameters
 OMIT = typing.cast(typing.Any, ...)
@@ -95,7 +99,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ReadAccessLogPage:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which resource, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceType` + `resourceId` within a `contextId` for 'who read this resource' (both are required for that axis: rows are keyed by the pair, so `resourceId` alone matches nothing); `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
@@ -121,10 +125,10 @@ class AuthClient:
             Forensic axis — restrict to reads performed by a single credential (the API key / scoped token key id that made the call).
 
         resource_type : typing.Optional[str]
-            Restrict to a single accessed resource type: a record schema type name, or one of `document`, `search`, or `rag`.
+            The accessed resource's type: a record schema type name, or one of `document`, `folder`, `entities` or `users`. Required together with `resourceId` for the per-resource axis; with another axis it filters the page.
 
         resource_id : typing.Optional[str]
-            Forensic axis — restrict to reads of a single accessed record/document id.
+            Forensic axis — restrict to reads of a single accessed resource (a record, document, entity, user or folder id). Pass the matching `resourceType` with it: the per-resource axis is keyed by the pair.
 
         revealed_sensitive : typing.Optional[bool]
             If true, return only reads that actually revealed a sensitive value in plaintext.
@@ -358,7 +362,7 @@ class AuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, `triggers`, `agents`, or `runs`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -593,16 +597,18 @@ class AuthClient:
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         read_access_log_default: typing.Optional[bool] = OMIT,
+        allow_self_erasure: typing.Optional[bool] = OMIT,
+        self_erasure_grace_days: typing.Optional[int] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. Fields applied when the context is created: `name` (required), `description`, `companyName`; `readAccessLogDefault` (the PHI read-access-logging context default); the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap`, which only take effect for an account with the corresponding feature enabled); `identityProjectionClaims` (requires the platform provisioning capability; see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; they also require the provisioning capability). An omitted (or null) field is left unset (for `readAccessLogDefault`, no context default: read-access logging is then off unless a schema turns it on). When an existing context is returned, none of the submitted fields are applied and a value that differs from the stored one is not an error: the response shows the stored values. (Sending `identityProjectionClaims`, `allowSelfErasure` or `selfErasureGraceDays` without the provisioning capability is refused either way.) To apply the submitted fields to an existing context instead, set `?upsert=true`, which then also requires the `app-contexts:u` scope. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
         upsert : typing.Optional[bool]
-            When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+            When `true`, if an app context with the same `contextId` already exists, each submitted field (`name`, `description`, `companyName`, `readAccessLogDefault`, `meteringAxis`, `principalBurstLimit`, `principalUsageCap`, `identityProjectionClaims`, `allowSelfErasure`, and `selfErasureGraceDays`) is applied to it instead of the context being returned unchanged; an omitted (or null) field keeps its existing value. When no such context exists the context is created as without this parameter. Defaults to `false`. When the context already exists, requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         context_id : typing.Optional[str]
             Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
@@ -617,19 +623,25 @@ class AuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Only takes effect for an account with the corresponding feature enabled. When creating, omit it to keep context-only accounting (the default). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to leave it unset. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to track per-principal usage without enforcing a cap. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         read_access_log_default : typing.Optional[bool]
-            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. When creating, omit it to leave no context default (read-access logging is then off unless a schema turns it on). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
+
+        allow_self_erasure : typing.Optional[bool]
+            Whether an end user can delete their own account from this context's app, with `/v1/me/erasure`. Off by default. An app that creates accounts and is listed in the Apple App Store or Google Play must offer in-app account deletion, and this is how a Vectros app offers it without a server. Applied on create, update and `?upsert=true` like the fields above; omit it to keep the current value. Changing it (or `selfErasureGraceDays`) needs a root API key or the provisioning capability; sending the current value back is accepted from any caller allowed to update the context.
+
+        self_erasure_grace_days : typing.Optional[int]
+            How many days a self-requested account deletion waits before it runs, so the user can cancel it: 0 to 30, default 7 when unset. 0 starts the deletion at once. Applied like `allowSelfErasure`.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
-            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. When creating, omit it to declare none. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current declaration. Send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data. Sending this field without that capability is refused even when the context already exists and nothing would be applied.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -659,6 +671,8 @@ class AuthClient:
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
             read_access_log_default=read_access_log_default,
+            allow_self_erasure=allow_self_erasure,
+            self_erasure_grace_days=self_erasure_grace_days,
             identity_projection_claims=identity_projection_claims,
             request_options=request_options,
         )
@@ -978,11 +992,13 @@ class AuthClient:
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         read_access_log_default: typing.Optional[bool] = OMIT,
+        allow_self_erasure: typing.Optional[bool] = OMIT,
+        self_erasure_grace_days: typing.Optional[int] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; the same provisioning requirement). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -1001,19 +1017,25 @@ class AuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Only takes effect for an account with the corresponding feature enabled. When creating, omit it to keep context-only accounting (the default). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to leave it unset. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to track per-principal usage without enforcing a cap. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         read_access_log_default : typing.Optional[bool]
-            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. When creating, omit it to leave no context default (read-access logging is then off unless a schema turns it on). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
+
+        allow_self_erasure : typing.Optional[bool]
+            Whether an end user can delete their own account from this context's app, with `/v1/me/erasure`. Off by default. An app that creates accounts and is listed in the Apple App Store or Google Play must offer in-app account deletion, and this is how a Vectros app offers it without a server. Applied on create, update and `?upsert=true` like the fields above; omit it to keep the current value. Changing it (or `selfErasureGraceDays`) needs a root API key or the provisioning capability; sending the current value back is accepted from any caller allowed to update the context.
+
+        self_erasure_grace_days : typing.Optional[int]
+            How many days a self-requested account deletion waits before it runs, so the user can cancel it: 0 to 30, default 7 when unset. 0 starts the deletion at once. Applied like `allowSelfErasure`.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
-            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. When creating, omit it to declare none. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current declaration. Send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data. Sending this field without that capability is refused even when the context already exists and nothing would be applied.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1045,6 +1067,8 @@ class AuthClient:
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
             read_access_log_default=read_access_log_default,
+            allow_self_erasure=allow_self_erasure,
+            self_erasure_grace_days=self_erasure_grace_days,
             identity_projection_claims=identity_projection_claims,
             request_options=request_options,
         )
@@ -1331,7 +1355,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UsageReportResponse:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room (`credits.admissionLimit`, `credits.includedCredits` and `credits.overage` are not reported to a confined token). The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 
         Parameters
         ----------
@@ -1415,11 +1439,12 @@ class AuthClient:
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        accepted_id_token_client_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `acceptedIdTokenClientIds`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -1451,10 +1476,13 @@ class AuthClient:
             Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. A registration in `pending_verification` accepts no status change at all (only its own current status echoed back is tolerated) — prove control of the issuer with `POST /v1/auth/issuers/{issuerId}/verify` first — and `pending_verification` itself can never be set. Omit to leave unchanged.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
-            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here. The list replaces the stored one as a whole: send every field of each entry you keep, including additional_role_ids.
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
+        accepted_id_token_client_ids : typing.Optional[typing.Sequence[str]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to accept only the registration's `audience`. See `IssuerRequest.acceptedIdTokenClientIds` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
             Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted), and is refused with 400 unless this registration holds the unrestricted (issuer, audience) pair. A registration holds it if it was registered without a domain and then verified (it keeps it if later scoped to a domain); a registration created scoped to a domain never holds it, and neither does an older registration that predates pair claims. To get an unrestricted issuer in that case, delete the scoped registration, register a new issuer without `restrictedToDomain`, and verify it. An app context holds one issuer registration at a time, of any status, so a replacement in the same context is possible only after the delete succeeds. A registration that any user was created or matched through cannot be deleted (409): register the replacement under a different app context, which does not carry over the old context's users, roles or access profiles. A registration awaiting verification cannot be re-scoped. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
@@ -1491,6 +1519,7 @@ class AuthClient:
             status=status,
             self_signup_policies=self_signup_policies,
             captured_claims=captured_claims,
+            accepted_id_token_client_ids=accepted_id_token_client_ids,
             restricted_to_domain=restricted_to_domain,
             request_options=request_options,
         )
@@ -1579,6 +1608,7 @@ class AuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        accepted_id_token_client_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
@@ -1612,10 +1642,13 @@ class AuthClient:
             The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first login (no fallback is attempted). Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
-            Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+            Opt-in self-service signup: a list of entries, each a signup_type and a role_id, optionally with additional_role_ids. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role, with any additional roles composed after it — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role, or a combination of roles, carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
+        accepted_id_token_client_ids : typing.Optional[typing.Sequence[str]]
+            Optional extra `aud` values an ID token from this issuer may carry when an end user presents it to confirm a recent sign-in before deleting their own account (`/v1/me/erasure`). The registration's `audience` is always accepted. List your app's client ids here when your registered `audience` is an API rather than the app (as with Auth0, whose ID tokens carry the application's client id); Amazon Cognito and Firebase need nothing here. Used only for that check, never for the token exchange, so it cannot change who can sign in. List only clients you control: an ID token issued to any listed client counts as the user's sign-in. At most 10 entries.
 
         restricted_to_domain : typing.Optional[str]
             Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your account, proven in the developer portal by your account owner (POST /developer/domains, then /verify — not reachable with an API key; the owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
@@ -1655,6 +1688,7 @@ class AuthClient:
             userinfo_uri=userinfo_uri,
             self_signup_policies=self_signup_policies,
             captured_claims=captured_claims,
+            accepted_id_token_client_ids=accepted_id_token_client_ids,
             restricted_to_domain=restricted_to_domain,
             request_options=request_options,
         )
@@ -1770,6 +1804,122 @@ class AuthClient:
         _response = self._raw_client.list_profiles_for_principal(
             principal_id, start_from=start_from, limit=limit, request_options=request_options
         )
+        return _response.data
+
+    def list_public_app_keys(
+        self,
+        *,
+        limit: typing.Optional[int] = None,
+        start_from: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> PublicAppKeyPage:
+        """
+        Lists the publishable app keys of your credential's environment, active and revoked, a page at a time. A credential confined to one app context lists only that context's keys, so its page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `startFrom`, until it is null. A server key's secret is never listed. Requires the `public-keys:r` scope.
+
+        Parameters
+        ----------
+        limit : typing.Optional[int]
+            The page size, 1 to 100 (default 50).
+
+        start_from : typing.Optional[str]
+            The `nextCursor` of the previous page.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicAppKeyPage
+            The keys.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.list_public_app_keys()
+        """
+        _response = self._raw_client.list_public_app_keys(
+            limit=limit, start_from=start_from, request_options=request_options
+        )
+        return _response.data
+
+    def create_public_app_key(
+        self,
+        *,
+        context_id: typing.Optional[str] = OMIT,
+        key_class: typing.Optional[CreatePublicAppKeyRequestKeyClass] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> PublicAppKeyResponse:
+        """
+        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+
+        Parameters
+        ----------
+        context_id : typing.Optional[str]
+            The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
+
+        key_class : typing.Optional[CreatePublicAppKeyRequestKeyClass]
+            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicAppKeyResponse
+            The key was issued.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.create_public_app_key()
+        """
+        _response = self._raw_client.create_public_app_key(
+            context_id=context_id, key_class=key_class, request_options=request_options
+        )
+        return _response.data
+
+    def revoke_public_app_key(
+        self, key_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> RevokedPublicAppKeys:
+        """
+        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+
+        Parameters
+        ----------
+        key_id : str
+            The key's `keyId`, as returned when it was issued.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RevokedPublicAppKeys
+            The key and every older key of its app context are revoked.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.revoke_public_app_key(
+            key_id="keyId",
+        )
+        """
+        _response = self._raw_client.revoke_public_app_key(key_id, request_options=request_options)
         return _response.data
 
     def mint_token(
@@ -2048,7 +2198,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> TokenExchangeResponse:
         """
-        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK. The one exception is the per-IP `429`, which the edge returns before the request reaches this endpoint, in this API's rate-limit shape (`{"errorCode":"RATE_LIMITED",...}`).
 
         Parameters
         ----------
@@ -2178,7 +2328,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> ReadAccessLogPage:
         """
-        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+        Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which resource, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceType` + `resourceId` within a `contextId` for 'who read this resource' (both are required for that axis: rows are keyed by the pair, so `resourceId` alone matches nothing); `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 
         Parameters
         ----------
@@ -2204,10 +2354,10 @@ class AsyncAuthClient:
             Forensic axis — restrict to reads performed by a single credential (the API key / scoped token key id that made the call).
 
         resource_type : typing.Optional[str]
-            Restrict to a single accessed resource type: a record schema type name, or one of `document`, `search`, or `rag`.
+            The accessed resource's type: a record schema type name, or one of `document`, `folder`, `entities` or `users`. Required together with `resourceId` for the per-resource axis; with another axis it filters the page.
 
         resource_id : typing.Optional[str]
-            Forensic axis — restrict to reads of a single accessed record/document id.
+            Forensic axis — restrict to reads of a single accessed resource (a record, document, entity, user or folder id). Pass the matching `resourceType` with it: the per-resource axis is keyed by the pair.
 
         revealed_sensitive : typing.Optional[bool]
             If true, return only reads that actually revealed a sensitive value in plaintext.
@@ -2481,7 +2631,7 @@ class AsyncAuthClient:
             End of the time window (ISO-8601 UTC; defaults to now).
 
         resource : typing.Optional[str]
-            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
+            Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, `triggers`, `agents`, or `runs`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
 
         method : typing.Optional[str]
             Filter by HTTP method (`GET`, `POST`, `PUT`, or `DELETE`).
@@ -2748,16 +2898,18 @@ class AsyncAuthClient:
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         read_access_log_default: typing.Optional[bool] = OMIT,
+        allow_self_erasure: typing.Optional[bool] = OMIT,
+        self_erasure_grace_days: typing.Optional[int] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+        Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. Fields applied when the context is created: `name` (required), `description`, `companyName`; `readAccessLogDefault` (the PHI read-access-logging context default); the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap`, which only take effect for an account with the corresponding feature enabled); `identityProjectionClaims` (requires the platform provisioning capability; see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; they also require the provisioning capability). An omitted (or null) field is left unset (for `readAccessLogDefault`, no context default: read-access logging is then off unless a schema turns it on). When an existing context is returned, none of the submitted fields are applied and a value that differs from the stored one is not an error: the response shows the stored values. (Sending `identityProjectionClaims`, `allowSelfErasure` or `selfErasureGraceDays` without the provisioning capability is refused either way.) To apply the submitted fields to an existing context instead, set `?upsert=true`, which then also requires the `app-contexts:u` scope. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 
         Parameters
         ----------
         upsert : typing.Optional[bool]
-            When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+            When `true`, if an app context with the same `contextId` already exists, each submitted field (`name`, `description`, `companyName`, `readAccessLogDefault`, `meteringAxis`, `principalBurstLimit`, `principalUsageCap`, `identityProjectionClaims`, `allowSelfErasure`, and `selfErasureGraceDays`) is applied to it instead of the context being returned unchanged; an omitted (or null) field keeps its existing value. When no such context exists the context is created as without this parameter. Defaults to `false`. When the context already exists, requires the `app-contexts:u` scope in addition to `app-contexts:c`.
 
         context_id : typing.Optional[str]
             Your identifier for the app context. Must be 3-31 characters, start with a lowercase letter, and contain only lowercase letters, digits, and hyphens (for example `myapp`, `taskflow`, or `engineering-team`). Required when creating a context. Ignored when updating, since the URL path supplies the contextId on update.
@@ -2772,19 +2924,25 @@ class AsyncAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Only takes effect for an account with the corresponding feature enabled. When creating, omit it to keep context-only accounting (the default). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to leave it unset. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to track per-principal usage without enforcing a cap. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         read_access_log_default : typing.Optional[bool]
-            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. When creating, omit it to leave no context default (read-access logging is then off unless a schema turns it on). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
+
+        allow_self_erasure : typing.Optional[bool]
+            Whether an end user can delete their own account from this context's app, with `/v1/me/erasure`. Off by default. An app that creates accounts and is listed in the Apple App Store or Google Play must offer in-app account deletion, and this is how a Vectros app offers it without a server. Applied on create, update and `?upsert=true` like the fields above; omit it to keep the current value. Changing it (or `selfErasureGraceDays`) needs a root API key or the provisioning capability; sending the current value back is accepted from any caller allowed to update the context.
+
+        self_erasure_grace_days : typing.Optional[int]
+            How many days a self-requested account deletion waits before it runs, so the user can cancel it: 0 to 30, default 7 when unset. 0 starts the deletion at once. Applied like `allowSelfErasure`.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
-            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. When creating, omit it to declare none. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current declaration. Send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data. Sending this field without that capability is refused even when the context already exists and nothing would be applied.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -2822,6 +2980,8 @@ class AsyncAuthClient:
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
             read_access_log_default=read_access_log_default,
+            allow_self_erasure=allow_self_erasure,
+            self_erasure_grace_days=self_erasure_grace_days,
             identity_projection_claims=identity_projection_claims,
             request_options=request_options,
         )
@@ -3191,11 +3351,13 @@ class AsyncAuthClient:
         principal_burst_limit: typing.Optional[int] = OMIT,
         principal_usage_cap: typing.Optional[int] = OMIT,
         read_access_log_default: typing.Optional[bool] = OMIT,
+        allow_self_erasure: typing.Optional[bool] = OMIT,
+        self_erasure_grace_days: typing.Optional[int] = OMIT,
         identity_projection_claims: typing.Optional[typing.Sequence[str]] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AppContextResponse:
         """
-        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+        Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; the same provisioning requirement). Requires the `app-contexts:u` scope.
 
         Parameters
         ----------
@@ -3214,19 +3376,25 @@ class AsyncAuthClient:
             Optional display name for the organization deploying this app context — distinct from `name`, which is the app's own identity. Used to personalize platform-sent correspondence (e.g. sub-user invitation emails) with your own branding instead of a generic app name.
 
         metering_axis : typing.Optional[str]
-            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.
+            Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Only takes effect for an account with the corresponding feature enabled. When creating, omit it to keep context-only accounting (the default). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_burst_limit : typing.Optional[int]
-            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.
+            Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to leave it unset. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         principal_usage_cap : typing.Optional[int]
-            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.
+            Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to track per-principal usage without enforcing a cap. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
 
         read_access_log_default : typing.Optional[bool]
-            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.
+            Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. When creating, omit it to leave no context default (read-access logging is then off unless a schema turns it on). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.
+
+        allow_self_erasure : typing.Optional[bool]
+            Whether an end user can delete their own account from this context's app, with `/v1/me/erasure`. Off by default. An app that creates accounts and is listed in the Apple App Store or Google Play must offer in-app account deletion, and this is how a Vectros app offers it without a server. Applied on create, update and `?upsert=true` like the fields above; omit it to keep the current value. Changing it (or `selfErasureGraceDays`) needs a root API key or the provisioning capability; sending the current value back is accepted from any caller allowed to update the context.
+
+        self_erasure_grace_days : typing.Optional[int]
+            How many days a self-requested account deletion waits before it runs, so the user can cancel it: 0 to 30, default 7 when unset. 0 starts the deletion at once. Applied like `allowSelfErasure`.
 
         identity_projection_claims : typing.Optional[typing.Sequence[str]]
-            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.
+            Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. When creating, omit it to declare none. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current declaration. Send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data. Sending this field without that capability is refused even when the context already exists and nothing would be applied.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -3266,6 +3434,8 @@ class AsyncAuthClient:
             principal_burst_limit=principal_burst_limit,
             principal_usage_cap=principal_usage_cap,
             read_access_log_default=read_access_log_default,
+            allow_self_erasure=allow_self_erasure,
+            self_erasure_grace_days=self_erasure_grace_days,
             identity_projection_claims=identity_projection_claims,
             request_options=request_options,
         )
@@ -3602,7 +3772,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> UsageReportResponse:
         """
-        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
+        Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room (`credits.admissionLimit`, `credits.includedCredits` and `credits.overage` are not reported to a confined token). The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 
         Parameters
         ----------
@@ -3704,11 +3874,12 @@ class AsyncAuthClient:
         status: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        accepted_id_token_client_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+        Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `acceptedIdTokenClientIds`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 
         Parameters
         ----------
@@ -3740,10 +3911,13 @@ class AsyncAuthClient:
             Safe field — updatable. `active` or `suspended`. Setting `suspended` causes this issuer's tokens to be rejected at exchange time identically to an unregistered issuer — existing bound users are unaffected until they next need a fresh exchange. A registration in `pending_verification` accepts no status change at all (only its own current status echoed back is tolerated) — prove control of the issuer with `POST /v1/auth/issuers/{issuerId}/verify` first — and `pending_verification` itself can never be set. Omit to leave unchanged.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
-            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here. The list replaces the stored one as a whole: send every field of each entry you keep, including additional_role_ids.
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+
+        accepted_id_token_client_ids : typing.Optional[typing.Sequence[str]]
+            Safe field — updatable. Omit to leave unchanged; pass an empty list to accept only the registration's `audience`. See `IssuerRequest.acceptedIdTokenClientIds` for the full semantics.
 
         restricted_to_domain : typing.Optional[str]
             Safe field — updatable. A NEW non-blank value must already be a VERIFIED domain for your account (same requirement as at registration); an empty string clears this issuer to domain-less (unrestricted), and is refused with 400 unless this registration holds the unrestricted (issuer, audience) pair. A registration holds it if it was registered without a domain and then verified (it keeps it if later scoped to a domain); a registration created scoped to a domain never holds it, and neither does an older registration that predates pair claims. To get an unrestricted issuer in that case, delete the scoped registration, register a new issuer without `restrictedToDomain`, and verify it. An app context holds one issuer registration at a time, of any status, so a replacement in the same context is possible only after the delete succeeds. A registration that any user was created or matched through cannot be deleted (409): register the replacement under a different app context, which does not carry over the old context's users, roles or access profiles. A registration awaiting verification cannot be re-scoped. Omit to leave unchanged. See `IssuerRequest.restrictedToDomain` for the full semantics, including why this field is updatable while issuer/jwksUri/audience/contextId are not.
@@ -3788,6 +3962,7 @@ class AsyncAuthClient:
             status=status,
             self_signup_policies=self_signup_policies,
             captured_claims=captured_claims,
+            accepted_id_token_client_ids=accepted_id_token_client_ids,
             restricted_to_domain=restricted_to_domain,
             request_options=request_options,
         )
@@ -3894,6 +4069,7 @@ class AsyncAuthClient:
         userinfo_uri: typing.Optional[str] = OMIT,
         self_signup_policies: typing.Optional[typing.Sequence[SelfSignupPolicy]] = OMIT,
         captured_claims: typing.Optional[typing.Sequence[str]] = OMIT,
+        accepted_id_token_client_ids: typing.Optional[typing.Sequence[str]] = OMIT,
         restricted_to_domain: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
@@ -3927,10 +4103,13 @@ class AsyncAuthClient:
             The IdP's OIDC userinfo endpoint. Optional. Presented tokens are access tokens, which under OIDC don't carry `email` unless the IdP was specifically configured to add it — if `emailClaim` misses on the presented token, and `userinfoUri` is configured, Vectros falls back to calling this endpoint (with the presented token as the bearer credential) and reads `emailClaim` from its JSON response instead. Omit to leave the fallback disabled — a token that doesn't carry the configured email claim then fails first login (no fallback is attempted). Must use the https:// scheme — an http:// endpoint is refused, since the request carries your presented token as a bearer credential and a plaintext fetch lets an on-path attacker both harvest it and control the response this platform trusts back.
 
         self_signup_policies : typing.Optional[typing.Sequence[SelfSignupPolicy]]
-            Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+            Opt-in self-service signup: a list of entries, each a signup_type and a role_id, optionally with additional_role_ids. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role, with any additional roles composed after it — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role, or a combination of roles, carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
 
         captured_claims : typing.Optional[typing.Sequence[str]]
             Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+
+        accepted_id_token_client_ids : typing.Optional[typing.Sequence[str]]
+            Optional extra `aud` values an ID token from this issuer may carry when an end user presents it to confirm a recent sign-in before deleting their own account (`/v1/me/erasure`). The registration's `audience` is always accepted. List your app's client ids here when your registered `audience` is an API rather than the app (as with Auth0, whose ID tokens carry the application's client id); Amazon Cognito and Firebase need nothing here. Used only for that check, never for the token exchange, so it cannot change who can sign in. List only clients you control: an ID token issued to any listed client counts as the user's sign-in. At most 10 entries.
 
         restricted_to_domain : typing.Optional[str]
             Opt-in domain-capture proof of issuer control. When set, this registration's (issuer, audience) uniqueness is scoped to this specific domain rather than the bare pair, so a registration for a domain you can prove you own is never blocked by an unrelated existing registration on the same (issuer, audience) pair. REQUIRES a VERIFIED domain for your account, proven in the developer portal by your account owner (POST /developer/domains, then /verify — not reachable with an API key; the owner verifies the domain once, then this field references it by name) — registration is refused with 400 if the domain isn't already verified. At token-exchange time, this issuer's tokens are matched only when they carry an `hd` claim equal to this domain (the OIDC hosted-domain convention — Google emits this natively for Workspace/Cloud-org accounts; other IdPs need a claims-mapping rule configured to emit a claim literally named `hd`). Updatable later via PUT (unlike issuer/jwksUri/audience/contextId) — changing it never re-points an already-bound user's trust anchor or identity, only future routing eligibility; see `IssuerUpdateRequest.restrictedToDomain`. Omit for a domain-less registration: it is created `pending_verification` and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`. A token with no `hd` claim can only ever match a domain-less registration.
@@ -3978,6 +4157,7 @@ class AsyncAuthClient:
             userinfo_uri=userinfo_uri,
             self_signup_policies=self_signup_policies,
             captured_claims=captured_claims,
+            accepted_id_token_client_ids=accepted_id_token_client_ids,
             restricted_to_domain=restricted_to_domain,
             request_options=request_options,
         )
@@ -4117,6 +4297,146 @@ class AsyncAuthClient:
         _response = await self._raw_client.list_profiles_for_principal(
             principal_id, start_from=start_from, limit=limit, request_options=request_options
         )
+        return _response.data
+
+    async def list_public_app_keys(
+        self,
+        *,
+        limit: typing.Optional[int] = None,
+        start_from: typing.Optional[str] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> PublicAppKeyPage:
+        """
+        Lists the publishable app keys of your credential's environment, active and revoked, a page at a time. A credential confined to one app context lists only that context's keys, so its page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `startFrom`, until it is null. A server key's secret is never listed. Requires the `public-keys:r` scope.
+
+        Parameters
+        ----------
+        limit : typing.Optional[int]
+            The page size, 1 to 100 (default 50).
+
+        start_from : typing.Optional[str]
+            The `nextCursor` of the previous page.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicAppKeyPage
+            The keys.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.list_public_app_keys()
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.list_public_app_keys(
+            limit=limit, start_from=start_from, request_options=request_options
+        )
+        return _response.data
+
+    async def create_public_app_key(
+        self,
+        *,
+        context_id: typing.Optional[str] = OMIT,
+        key_class: typing.Optional[CreatePublicAppKeyRequestKeyClass] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> PublicAppKeyResponse:
+        """
+        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+
+        Parameters
+        ----------
+        context_id : typing.Optional[str]
+            The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
+
+        key_class : typing.Optional[CreatePublicAppKeyRequestKeyClass]
+            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        PublicAppKeyResponse
+            The key was issued.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.create_public_app_key()
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.create_public_app_key(
+            context_id=context_id, key_class=key_class, request_options=request_options
+        )
+        return _response.data
+
+    async def revoke_public_app_key(
+        self, key_id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> RevokedPublicAppKeys:
+        """
+        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+
+        Parameters
+        ----------
+        key_id : str
+            The key's `keyId`, as returned when it was issued.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RevokedPublicAppKeys
+            The key and every older key of its app context are revoked.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.revoke_public_app_key(
+                key_id="keyId",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.revoke_public_app_key(key_id, request_options=request_options)
         return _response.data
 
     async def mint_token(
@@ -4427,7 +4747,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> TokenExchangeResponse:
         """
-        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+        RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK. The one exception is the per-IP `429`, which the edge returns before the request reaches this endpoint, in this API's rate-limit shape (`{"errorCode":"RATE_LIMITED",...}`).
 
         Parameters
         ----------

@@ -12,6 +12,7 @@ from ..types.agent_tool_entry import AgentToolEntry
 from ..types.run import Run
 from ..types.run_budget import RunBudget
 from ..types.run_input import RunInput
+from ..types.run_page import RunPage
 from ..types.run_stream_event import RunStreamEvent
 from .raw_client import AsyncRawAgentsClient, RawAgentsClient
 
@@ -44,7 +45,7 @@ class AgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AgentPage:
         """
-        Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
+        Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`, and only for the agents its `runs:c` grant covers: a grant naming agents (`runs:c:<agent>`) lists those agents alone, in one page with no `nextCursor`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
 
         Parameters
         ----------
@@ -131,7 +132,7 @@ class AgentsClient:
             The agent's system prompt. At most 32,000 characters.
 
         tools : typing.Optional[typing.Sequence[AgentToolEntry]]
-            The tools a run of this agent may call, by name from the tool catalog. At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
+            The tools a run of this agent may call: catalog tools by name, and stored scripts offered as tools (an entry with `script`). At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
 
         limits : typing.Optional[AgentLimits]
 
@@ -189,7 +190,7 @@ class AgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AgentResponse:
         """
-        Returns the agent at its latest version, or at `version`. Requires the `agents:r` scope.
+        Returns the agent at its latest version, or at `version`, with `periodUsage`: what its runs have spent and hold in the current instance of each period it counts. Requires the `agents:r` scope.
 
         Parameters
         ----------
@@ -273,7 +274,7 @@ class AgentsClient:
             The agent's system prompt. At most 32,000 characters.
 
         tools : typing.Optional[typing.Sequence[AgentToolEntry]]
-            The tools a run of this agent may call, by name from the tool catalog. At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
+            The tools a run of this agent may call: catalog tools by name, and stored scripts offered as tools (an entry with `script`). At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
 
         limits : typing.Optional[AgentLimits]
 
@@ -441,7 +442,7 @@ class AgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> Run:
         """
-        Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 30 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. Takes no body.
+        Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 45 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. A grant naming an agent (`runs:c:<agent>`, `runs:r:<agent>`) reaches only runs of that agent: any other run answers `404` to the cancel, and the whole run is returned only when `runs:r` names its agent too. Takes no body.
 
         Parameters
         ----------
@@ -481,7 +482,7 @@ class AgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> Run:
         """
-        Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for 30 days after it ends. Requires the `runs:r` scope.
+        Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for at least 30 days after it ends. Requires the `runs:r` scope. A grant naming an agent (`runs:r:<agent>`) reads only runs of that agent; any other run answers `404`.
 
         Parameters
         ----------
@@ -513,6 +514,69 @@ class AgentsClient:
         _response = self._raw_client.get_run(id, context_id=context_id, request_options=request_options)
         return _response.data
 
+    def list_runs(
+        self,
+        *,
+        context_id: typing.Optional[str] = None,
+        user_id: typing.Optional[str] = None,
+        status: typing.Optional[str] = None,
+        agent_id: typing.Optional[str] = None,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RunPage:
+        """
+        Returns a page of runs, newest first. Each run is what `GET /v1/runs/{id}` returns without `usage` (read a run by its id for its charge). A credential lists the runs it started (for a token bound to a user, that user's runs) in its app context. Your root key lists every run, so it must name `contextId` (that context's runs), `userId` (the runs started by tokens bound to that user; across your app contexts, grouped by context and newest first within each, unless `contextId` is named too), or both. Requires the `runs:r` scope. A grant naming agents (`runs:r:<agent>`) lists only runs of those agents. Runs are kept for at least 30 days after they end. A run started before this list existed appears only in your root key's list of its context until it expires; it can always be read by its id. A page may hold fewer runs than `limit`, or none, while `nextCursor` is present: a request reads a bounded part of the runs it could list, so a filter that matches few of them returns a short page to go on from. Keep reading until `nextCursor` is absent.
+
+        Parameters
+        ----------
+        context_id : typing.Optional[str]
+            The app context to list. Only a credential that is not confined to one app context may name another context; a confined credential naming a context other than its own gets `403`. Omit it to use your credential's context; your root key must name it or `userId`.
+
+        user_id : typing.Optional[str]
+            Root key: list the runs started by tokens bound to this user (not runs started by a key). A token bound to a user may name only that user, which changes nothing; any other value, or any value from a credential that is not a token bound to a user, is `403`.
+
+        status : typing.Optional[str]
+            Only runs with this status: today `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED` or `EXPIRED` (other values may be added). An unknown value is `400`.
+
+        agent_id : typing.Optional[str]
+            Only runs of this agent.
+
+        start_from : typing.Optional[str]
+            Pagination cursor: pass the `nextCursor` of the previous page; omit it for the first page. Opaque — echo it back unchanged.
+
+        limit : typing.Optional[int]
+            Maximum number of runs per page, 1-100; defaults to 20.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RunPage
+            A page of runs.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.agents.list_runs()
+        """
+        _response = self._raw_client.list_runs(
+            context_id=context_id,
+            user_id=user_id,
+            status=status,
+            agent_id=agent_id,
+            start_from=start_from,
+            limit=limit,
+            request_options=request_options,
+        )
+        return _response.data
+
     def create_run(
         self,
         *,
@@ -525,7 +589,7 @@ class AgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.Iterator[RunStreamEvent]:
         """
-        Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope, and agent runs switched on for your tenant by an account owner.
+        Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope (a grant naming an agent, `runs:c:<agent>`, starts only that agent), and agent runs switched on for your tenant by an account owner.
 
         Parameters
         ----------
@@ -607,7 +671,7 @@ class AsyncAgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AgentPage:
         """
-        Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
+        Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`, and only for the agents its `runs:c` grant covers: a grant naming agents (`runs:c:<agent>`) lists those agents alone, in one page with no `nextCursor`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
 
         Parameters
         ----------
@@ -702,7 +766,7 @@ class AsyncAgentsClient:
             The agent's system prompt. At most 32,000 characters.
 
         tools : typing.Optional[typing.Sequence[AgentToolEntry]]
-            The tools a run of this agent may call, by name from the tool catalog. At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
+            The tools a run of this agent may call: catalog tools by name, and stored scripts offered as tools (an entry with `script`). At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
 
         limits : typing.Optional[AgentLimits]
 
@@ -768,7 +832,7 @@ class AsyncAgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AgentResponse:
         """
-        Returns the agent at its latest version, or at `version`. Requires the `agents:r` scope.
+        Returns the agent at its latest version, or at `version`, with `periodUsage`: what its runs have spent and hold in the current instance of each period it counts. Requires the `agents:r` scope.
 
         Parameters
         ----------
@@ -860,7 +924,7 @@ class AsyncAgentsClient:
             The agent's system prompt. At most 32,000 characters.
 
         tools : typing.Optional[typing.Sequence[AgentToolEntry]]
-            The tools a run of this agent may call, by name from the tool catalog. At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
+            The tools a run of this agent may call: catalog tools by name, and stored scripts offered as tools (an entry with `script`). At most 50, each named once. A tool that creates, changes or deletes data needs `allowWrites: true`.
 
         limits : typing.Optional[AgentLimits]
 
@@ -1052,7 +1116,7 @@ class AsyncAgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> Run:
         """
-        Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 30 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. Takes no body.
+        Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 45 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. A grant naming an agent (`runs:c:<agent>`, `runs:r:<agent>`) reaches only runs of that agent: any other run answers `404` to the cancel, and the whole run is returned only when `runs:r` names its agent too. Takes no body.
 
         Parameters
         ----------
@@ -1100,7 +1164,7 @@ class AsyncAgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> Run:
         """
-        Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for 30 days after it ends. Requires the `runs:r` scope.
+        Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for at least 30 days after it ends. Requires the `runs:r` scope. A grant naming an agent (`runs:r:<agent>`) reads only runs of that agent; any other run answers `404`.
 
         Parameters
         ----------
@@ -1140,6 +1204,77 @@ class AsyncAgentsClient:
         _response = await self._raw_client.get_run(id, context_id=context_id, request_options=request_options)
         return _response.data
 
+    async def list_runs(
+        self,
+        *,
+        context_id: typing.Optional[str] = None,
+        user_id: typing.Optional[str] = None,
+        status: typing.Optional[str] = None,
+        agent_id: typing.Optional[str] = None,
+        start_from: typing.Optional[str] = None,
+        limit: typing.Optional[int] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RunPage:
+        """
+        Returns a page of runs, newest first. Each run is what `GET /v1/runs/{id}` returns without `usage` (read a run by its id for its charge). A credential lists the runs it started (for a token bound to a user, that user's runs) in its app context. Your root key lists every run, so it must name `contextId` (that context's runs), `userId` (the runs started by tokens bound to that user; across your app contexts, grouped by context and newest first within each, unless `contextId` is named too), or both. Requires the `runs:r` scope. A grant naming agents (`runs:r:<agent>`) lists only runs of those agents. Runs are kept for at least 30 days after they end. A run started before this list existed appears only in your root key's list of its context until it expires; it can always be read by its id. A page may hold fewer runs than `limit`, or none, while `nextCursor` is present: a request reads a bounded part of the runs it could list, so a filter that matches few of them returns a short page to go on from. Keep reading until `nextCursor` is absent.
+
+        Parameters
+        ----------
+        context_id : typing.Optional[str]
+            The app context to list. Only a credential that is not confined to one app context may name another context; a confined credential naming a context other than its own gets `403`. Omit it to use your credential's context; your root key must name it or `userId`.
+
+        user_id : typing.Optional[str]
+            Root key: list the runs started by tokens bound to this user (not runs started by a key). A token bound to a user may name only that user, which changes nothing; any other value, or any value from a credential that is not a token bound to a user, is `403`.
+
+        status : typing.Optional[str]
+            Only runs with this status: today `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED` or `EXPIRED` (other values may be added). An unknown value is `400`.
+
+        agent_id : typing.Optional[str]
+            Only runs of this agent.
+
+        start_from : typing.Optional[str]
+            Pagination cursor: pass the `nextCursor` of the previous page; omit it for the first page. Opaque — echo it back unchanged.
+
+        limit : typing.Optional[int]
+            Maximum number of runs per page, 1-100; defaults to 20.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RunPage
+            A page of runs.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.agents.list_runs()
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.list_runs(
+            context_id=context_id,
+            user_id=user_id,
+            status=status,
+            agent_id=agent_id,
+            start_from=start_from,
+            limit=limit,
+            request_options=request_options,
+        )
+        return _response.data
+
     async def create_run(
         self,
         *,
@@ -1152,7 +1287,7 @@ class AsyncAgentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> typing.AsyncIterator[RunStreamEvent]:
         """
-        Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope, and agent runs switched on for your tenant by an account owner.
+        Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope (a grant naming an agent, `runs:c:<agent>`, starts only that agent), and agent runs switched on for your tenant by an account owner.
 
         Parameters
         ----------

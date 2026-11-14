@@ -8,7 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class ScriptRefRequest(UniversalBaseModel):
     """
-    A reference to a stored script by name and version — the script a trigger rule invokes, or the one `POST /v1/scripts/execute` runs.
+    A reference to a stored script by name and version — the script a trigger rule invokes, the one `POST /v1/scripts/execute` runs, or the one an agent's script tool offers.
     """
 
     name: str = pydantic.Field()
@@ -18,7 +18,7 @@ class ScriptRefRequest(UniversalBaseModel):
 
     version: str = pydantic.Field()
     """
-    A specific version number (as a decimal string), or the literal 'latest' to float to whichever version is newest when the rule fires or the request runs.
+    A specific version number (as a decimal string), or the literal 'latest' to float to whichever version is newest when the rule fires, the request runs or the agent's run starts.
     """
 
     if IS_PYDANTIC_V2:

@@ -2,7 +2,7 @@
 # Vectros AI Platform Python SDK — pyproject.toml
 #
 # The package source under `vectros/` is generated from the Vectros OpenAPI specification;
-# this file is its build definition. `0.49.0` is replaced with the release version when
+# this file is its build definition. `0.50.0` is replaced with the release version when
 # the package is built.
 # =============================================================================
 
@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vectros"
-version = "0.49.0"
+version = "0.50.0"
 description = "Vectros AI Platform SDK — hybrid search, document ingestion, structured records, and inference for your application."
 readme = "README.md"
 requires-python = ">=3.8"

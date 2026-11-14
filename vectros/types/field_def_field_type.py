@@ -3,5 +3,8 @@
 import typing
 
 FieldDefFieldType = typing.Union[
-    typing.Literal["string", "number", "boolean", "date", "enum", "array", "object", "reference"], typing.Any
+    typing.Literal[
+        "string", "number", "boolean", "date", "enum", "array", "object", "reference", "geo", "asset", "assets"
+    ],
+    typing.Any,
 ]

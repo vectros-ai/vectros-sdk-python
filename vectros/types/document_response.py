@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .document_extraction import DocumentExtraction
+from .document_media import DocumentMedia
 from .document_response_index_mode import DocumentResponseIndexMode
 from .document_response_index_status import DocumentResponseIndexStatus
 from .document_response_status import DocumentResponseStatus
@@ -51,13 +52,14 @@ class DocumentResponse(UniversalBaseModel):
         FieldMetadata(alias="indexStatus"),
         pydantic.Field(
             alias="indexStatus",
-            description="Processing status of the document (system-managed, read-only). PENDING_UPLOAD, UPLOADED, EXTRACTING, and PENDING_INDEX are in-flight states; INDEXED means indexing is complete and the document is searchable. Keyword (TEXT) matching is immediate the moment a document is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a document you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed document that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a document semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the document) has no such fallback. SKIPPED means there was no indexable text, so there was nothing to index — the document is stored and retrievable, just not searchable (not an error). For a file document, `extraction` says why its file yielded no text; STORED means it is store-only (indexMode=NONE) — persisted and retrievable but by design not searchable; FAILED means processing failed.",
+            description="Processing status of the document (system-managed, read-only). PENDING_UPLOAD, UPLOADED, EXTRACTING, and PENDING_INDEX are in-flight states; INDEXED means indexing is complete and the document is searchable. Keyword (TEXT) matching is immediate the moment a document is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a document you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed document that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a document semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the document) has no such fallback. SKIPPED means there was no indexable text, so there was nothing to index — the document is stored and retrievable, just not searchable (not an error). A schema-typed document with no indexable text but a readable `geo` location is indexed by its location and ends INDEXED; a `$near` search finds it. This does not apply when its `indexMode` is SEMANTIC: such a document ends SKIPPED and no search finds it. For a file document, `extraction` says why its file yielded no text, including a file whose type text is not extracted from (`NOT_EXTRACTED`); STORED means it is store-only (indexMode=NONE) — persisted and retrievable but by design not searchable; FAILED means processing failed.",
         ),
     ] = None
     index_failure: typing_extensions.Annotated[
         typing.Optional[IndexFailure], FieldMetadata(alias="indexFailure"), pydantic.Field(alias="indexFailure")
     ] = None
     extraction: typing.Optional[DocumentExtraction] = None
+    media: typing.Optional[DocumentMedia] = None
     index_mode: typing_extensions.Annotated[
         typing.Optional[DocumentResponseIndexMode],
         FieldMetadata(alias="indexMode"),
@@ -140,7 +142,16 @@ class DocumentResponse(UniversalBaseModel):
         typing.Optional[str],
         FieldMetadata(alias="fileType"),
         pydantic.Field(
-            alias="fileType", description="MIME type of the uploaded file. Present only for file-backed documents."
+            alias="fileType",
+            description="The media type the file was uploaded with, as the uploader declared it: lower case, without parameters, and inferred from the file name's extension when it was declared as `application/octet-stream` or not given. It is not checked against the file's content: `detectedType` is what the content was detected as. Present only for file-backed documents.",
+        ),
+    ] = None
+    detected_type: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="detectedType"),
+        pydantic.Field(
+            alias="detectedType",
+            description="The media type detected from the file's content when its text was extracted, which decides whether text is extracted from it at all. It can differ from `fileType`. Absent until extraction has run, for text-ingested documents, and for files extracted before this field existed.",
         ),
     ] = None
     file_size: typing_extensions.Annotated[

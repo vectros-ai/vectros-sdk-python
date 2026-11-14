@@ -11,12 +11,15 @@ from ..core.parse_error import ParsingError
 from ..core.pydantic_utilities import parse_obj_as
 from ..core.request_options import RequestOptions
 from ..errors.bad_request_error import BadRequestError
+from ..errors.conflict_error import ConflictError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
 from ..errors.not_implemented_error import NotImplementedError
+from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..types.erasure_request_response import ErasureRequestResponse
 from ..types.export_request_response import ExportRequestResponse
+from ..types.self_erasure_response import SelfErasureResponse
 from .types.erasure_request_audit_disposition import ErasureRequestAuditDisposition
 from .types.export_request_format import ExportRequestFormat
 from .types.export_request_scope import ExportRequestScope
@@ -393,6 +396,354 @@ class RawComplianceClient:
             )
         raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
 
+    def cancel_self_erasure(
+        self, id: str, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[SelfErasureResponse]:
+        """
+        Cancels the signed-in user's own scheduled account deletion in this app while its waiting period runs; nothing is deleted. Once the deletion has started it can no longer be cancelled. Like requesting it, cancelling needs a fresh ID token proving the user just signed in (not the one that requested the deletion), so a deletion the user asked for cannot be cancelled with an API key alone. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[SelfErasureResponse]
+            Cancelled, or already cancelled (answered from its status, without checking the ID token).
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/me/erasure/{encode_path_param(id)}/cancel",
+            method="POST",
+            json={
+                "idToken": id_token,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def get_pending_self_erasure(
+        self, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[SelfErasureResponse]:
+        """
+        Returns the signed-in user's account deletion in this app that is still scheduled or running, so the app can show when it will happen and offer to cancel it. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[SelfErasureResponse]
+            The pending deletion.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/me/erasure",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def request_self_erasure(
+        self, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[SelfErasureResponse]:
+        """
+        Schedules the deletion of the signed-in user's own account in this app: their data in this app context and their access to it. Only this app is affected; other app contexts are other apps. The user's identity is removed too when this is the account's only app context. The deletion starts after the app's waiting period (`selfErasureGraceDays`, default 7 days), during which the user can cancel it, and the user is emailed when it is scheduled and when it completes (to the verified email in the ID token). Requires the user's own scoped token, a fresh ID token proving they just signed in, and account deletion turned on for this app (`allowSelfErasure` on the app context). Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token. The account owner cannot use it.
+
+        Parameters
+        ----------
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[SelfErasureResponse]
+            The deletion is scheduled.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            "v1/me/erasure",
+            method="POST",
+            json={
+                "idToken": id_token,
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def get_self_erasure(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[SelfErasureResponse]:
+        """
+        Returns one of the signed-in user's own account deletions in this app, in any status; once it has completed, with the certificate of what was removed. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[SelfErasureResponse]
+            The deletion request.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/me/erasure/{encode_path_param(id)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
 
 class AsyncRawComplianceClient:
     def __init__(self, *, client_wrapper: AsyncClientWrapper):
@@ -743,6 +1094,354 @@ class AsyncRawComplianceClient:
                 )
             if _response.status_code == 501:
                 raise NotImplementedError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def cancel_self_erasure(
+        self, id: str, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[SelfErasureResponse]:
+        """
+        Cancels the signed-in user's own scheduled account deletion in this app while its waiting period runs; nothing is deleted. Once the deletion has started it can no longer be cancelled. Like requesting it, cancelling needs a fresh ID token proving the user just signed in (not the one that requested the deletion), so a deletion the user asked for cannot be cancelled with an API key alone. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[SelfErasureResponse]
+            Cancelled, or already cancelled (answered from its status, without checking the ID token).
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/me/erasure/{encode_path_param(id)}/cancel",
+            method="POST",
+            json={
+                "idToken": id_token,
+            },
+            headers={
+                "content-type": "application/json",
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def get_pending_self_erasure(
+        self, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[SelfErasureResponse]:
+        """
+        Returns the signed-in user's account deletion in this app that is still scheduled or running, so the app can show when it will happen and offer to cancel it. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[SelfErasureResponse]
+            The pending deletion.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/me/erasure",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def request_self_erasure(
+        self, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[SelfErasureResponse]:
+        """
+        Schedules the deletion of the signed-in user's own account in this app: their data in this app context and their access to it. Only this app is affected; other app contexts are other apps. The user's identity is removed too when this is the account's only app context. The deletion starts after the app's waiting period (`selfErasureGraceDays`, default 7 days), during which the user can cancel it, and the user is emailed when it is scheduled and when it completes (to the verified email in the ID token). Requires the user's own scoped token, a fresh ID token proving they just signed in, and account deletion turned on for this app (`allowSelfErasure` on the app context). Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token. The account owner cannot use it.
+
+        Parameters
+        ----------
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[SelfErasureResponse]
+            The deletion is scheduled.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            "v1/me/erasure",
+            method="POST",
+            json={
+                "idToken": id_token,
+            },
+            request_options=request_options,
+            omit=OMIT,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 409:
+                raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def get_self_erasure(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[SelfErasureResponse]:
+        """
+        Returns one of the signed-in user's own account deletions in this app, in any status; once it has completed, with the certificate of what was removed. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[SelfErasureResponse]
+            The deletion request.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/me/erasure/{encode_path_param(id)}",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    SelfErasureResponse,
+                    parse_obj_as(
+                        type_=SelfErasureResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 403:
+                raise ForbiddenError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

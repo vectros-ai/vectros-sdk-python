@@ -29,12 +29,33 @@ class Credits(UniversalBaseModel):
     ] = None
     limit: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Plan monthly credit limit. Null for unlimited (enterprise) plans.
+    The monthly credit limit that applied this period: your plan's limit, or a limit set for your account, adjusted for a plan change during the period. Requests past it are refused unless overage applies (see `admissionLimit`); where a limit is set for your account, requests made with a scoped token are held to the higher of it and your plan's limit. For a closed month it is the limit that held in that month once the month's billing is final (normally within a week of its end); until then, and for months before this behaviour, it is computed from today's plan. For a token confined to some app contexts it is your plan's limit, or the limit set for your account, without the plan-change adjustment. Null when the account has no monthly limit.
     """
 
     remaining: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Remaining credits before plan limit hit. Null for unlimited plans.
+    Credits left before `limit` this period, never below zero. Null when the account has no monthly limit.
+    """
+
+    admission_limit: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="admissionLimit"),
+        pydantic.Field(
+            alias="admissionLimit",
+            description="The credit level at which requests stop this period. With overage on it is `limit` plus the credits your monthly overage budget pays for (for an account with an overage agreement, the cap that agreement sets); without overage it equals `limit`. Requests already in flight when it is reached can exceed it by a small amount. For a closed month with self-service overage it is the highest limit requests could reach during the period (`limit` plus the highest monthly budget in force); it is not what was billed: `overage` is the amount billed. Null when the account has no monthly limit, and not reported to a token confined to some app contexts.",
+        ),
+    ] = None
+    included_credits: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="includedCredits"),
+        pydantic.Field(
+            alias="includedCredits",
+            description="The credits included in the period's price, above which usage counts as overage. Equals `limit` unless an overage agreement sets a different included amount. Null when the account has no monthly limit, and not reported to a token confined to some app contexts.",
+        ),
+    ] = None
+    overage: typing.Optional[int] = pydantic.Field(default=None)
+    """
+    Credits of overage for the period. With self-service overage it is the overage billed, at most your monthly budget, in whole credits rounded up as billed; for the current month it is what has been billed so far, so `used` can be past `limit` by more than it while recent usage is still being billed. With an overage agreement it is the usage past `includedCredits`, up to `admissionLimit`. Zero without overage. Not reported (null) to a token confined to some app contexts.
     """
 
     breakdown: typing.Optional[CreditBreakdown] = None

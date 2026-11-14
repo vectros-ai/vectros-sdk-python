@@ -22,6 +22,7 @@ from ..types.batch_lookup_input import BatchLookupInput
 from ..types.batch_lookup_response import BatchLookupResponse
 from ..types.batch_write_response import BatchWriteResponse
 from ..types.model_data_version_page import ModelDataVersionPage
+from ..types.public_view_copy_response import PublicViewCopyResponse
 from ..types.record_lookup_page import RecordLookupPage
 from ..types.record_page import RecordPage
 from ..types.record_request import RecordRequest
@@ -1279,6 +1280,70 @@ class RawRecordsClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def get_record_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[PublicViewCopyResponse]:
+        """
+        For a record whose type has a `publicView` in `projection` mode: what the public sees of it, which is the fields the type lists, as last copied from the record. `published` is false when the record is not public now. Requires the `records:r:<type>` scope, with ownership checked as for reading the record.
+
+        Parameters
+        ----------
+        id : str
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[PublicViewCopyResponse]
+            The record's public copy, or `published: false`.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/records/{encode_path_param(id)}/public-view",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewCopyResponse,
+                    parse_obj_as(
+                        type_=PublicViewCopyResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -2669,6 +2734,70 @@ class AsyncRawRecordsClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def get_record_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[PublicViewCopyResponse]:
+        """
+        For a record whose type has a `publicView` in `projection` mode: what the public sees of it, which is the fields the type lists, as last copied from the record. `published` is false when the record is not public now. Requires the `records:r:<type>` scope, with ownership checked as for reading the record.
+
+        Parameters
+        ----------
+        id : str
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[PublicViewCopyResponse]
+            The record's public copy, or `published: false`.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/records/{encode_path_param(id)}/public-view",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewCopyResponse,
+                    parse_obj_as(
+                        type_=PublicViewCopyResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

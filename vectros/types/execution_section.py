@@ -10,12 +10,12 @@ from ..core.serialization import FieldMetadata
 
 class ExecutionSection(UniversalBaseModel):
     """
-    Script execution time this period — trigger rules and synchronous `POST /v1/scripts/execute` calls together — and the surcharge it incurred. The millisecond figures are SUPPORTING detail so you can verify the charge — the billing unit is credits, never milliseconds. To check it yourself: billableMillis is totalMillis, plus 200 ms per execution, less includedMillis; the charge is then 1 credit per 100 seconds of billableMillis, with sub-credit remainders carried forward within the period rather than rounded away. Because remainders carry, compare creditsMilli against your period-to-date total rather than against a single execution.
+    Script execution time this period — trigger rules, synchronous `POST /v1/scripts/execute` calls and agent script tools together — and the surcharge it incurred. The millisecond figures are SUPPORTING detail so you can verify the charge — the billing unit is credits, never milliseconds. To check it yourself: billableMillis is totalMillis, plus 200 ms per execution, less includedMillis; the charge is then 1 credit per 100 seconds of billableMillis, with sub-credit remainders carried forward within the period rather than rounded away. Because remainders carry, compare creditsMilli against your period-to-date total rather than against a single execution.
     """
 
     executions: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Script executions metered this period, trigger and synchronous. Counts every execution that ran your script, including those that ended in an error and those that owed no charge; excludes firings refused before your script ran, which are never metered.
+    Script executions metered this period: trigger, synchronous and agent script tool. Counts every execution that ran your script, including those that ended in an error and those that owed no charge; excludes firings refused before your script ran, which are never metered.
     """
 
     total_millis: typing_extensions.Annotated[

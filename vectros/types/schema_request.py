@@ -8,8 +8,10 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .field_def import FieldDef
 from .lookup_def import LookupDef
+from .public_view_def import PublicViewDef
 from .render_hint_def import RenderHintDef
 from .schema_request_allowed_surfaces_item import SchemaRequestAllowedSurfacesItem
+from .schema_request_file_profile import SchemaRequestFileProfile
 from .schema_request_index_mode import SchemaRequestIndexMode
 from .schema_request_storage_profile import SchemaRequestStorageProfile
 
@@ -79,6 +81,38 @@ class SchemaRequest(UniversalBaseModel):
             description="Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.",
         ),
     ] = None
+    file_profile: typing_extensions.Annotated[
+        typing.Optional[SchemaRequestFileProfile],
+        FieldMetadata(alias="fileProfile"),
+        pydantic.Field(
+            alias="fileProfile",
+            description='Makes this a public-media type: a document type for images. The only value is `PUBLIC_MEDIA`. A public-media type must have `allowedSurfaces` exactly `["document"]` and is never indexed (`indexMode` is `NONE`, the default for this type). Its documents are created only by `POST /v1/documents/upload`, cannot be created from text or retyped, and their file cannot be replaced once uploaded. Once set, the profile cannot be removed; it cannot be added to a schema that already has documents or variants.',
+        ),
+    ] = None
+    media_kinds: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="mediaKinds"),
+        pydantic.Field(
+            alias="mediaKinds",
+            description='With `fileProfile: PUBLIC_MEDIA`: the kinds of media this type accepts. Only `image` is available; `video` is refused with errorCode `MEDIA_KIND_NOT_AVAILABLE`. Defaults to `["image"]`.',
+        ),
+    ] = None
+    max_bytes: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="maxBytes"),
+        pydantic.Field(
+            alias="maxBytes",
+            description="With `fileProfile: PUBLIC_MEDIA`: the largest file, in bytes, this type declares. At most 10485760 (10 MiB), which is also the default. An upload of this type whose `size` is above it is refused at upload start (`MEDIA_TOO_LARGE`).",
+        ),
+    ] = None
+    content_types: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="contentTypes"),
+        pydantic.Field(
+            alias="contentTypes",
+            description="With `fileProfile: PUBLIC_MEDIA`: the file types this type declares. A subset of `image/jpeg`, `image/png`, `image/webp` and `image/gif`, which is also the default. An upload of this type whose `fileType` is not one of them is refused at upload start (`MEDIA_FORMAT_NOT_ACCEPTED`).",
+        ),
+    ] = None
     allowed_surfaces: typing_extensions.Annotated[
         typing.Optional[typing.List[SchemaRequestAllowedSurfacesItem]],
         FieldMetadata(alias="allowedSurfaces"),
@@ -112,6 +146,9 @@ class SchemaRequest(UniversalBaseModel):
             alias="basedOn",
             description='The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name\'s shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.',
         ),
+    ] = None
+    public_view: typing_extensions.Annotated[
+        typing.Optional[PublicViewDef], FieldMetadata(alias="publicView"), pydantic.Field(alias="publicView")
     ] = None
 
     if IS_PYDANTIC_V2:

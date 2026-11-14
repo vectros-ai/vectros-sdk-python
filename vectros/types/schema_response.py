@@ -8,8 +8,10 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .field_def import FieldDef
 from .lookup_def import LookupDef
+from .public_view_def import PublicViewDef
 from .render_hint_def import RenderHintDef
 from .schema_response_allowed_surfaces_item import SchemaResponseAllowedSurfacesItem
+from .schema_response_file_profile import SchemaResponseFileProfile
 from .schema_response_index_mode import SchemaResponseIndexMode
 from .schema_response_storage_profile import SchemaResponseStorageProfile
 
@@ -72,6 +74,38 @@ class SchemaResponse(UniversalBaseModel):
             description="Payload storage profile: STANDARD (externalize large payloads to S3), LOW_LATENCY (always store inline), or LARGE_PAYLOAD (always externalize). Defaults to STANDARD.",
         ),
     ] = None
+    file_profile: typing_extensions.Annotated[
+        typing.Optional[SchemaResponseFileProfile],
+        FieldMetadata(alias="fileProfile"),
+        pydantic.Field(
+            alias="fileProfile",
+            description="`PUBLIC_MEDIA` when this is a public-media type (a document type for images); absent otherwise.",
+        ),
+    ] = None
+    media_kinds: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="mediaKinds"),
+        pydantic.Field(
+            alias="mediaKinds",
+            description='For a public-media type: the media kinds it accepts, as declared (absent means `["image"]`).',
+        ),
+    ] = None
+    max_bytes: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="maxBytes"),
+        pydantic.Field(
+            alias="maxBytes",
+            description="For a public-media type: the largest file, in bytes, as declared (absent means 10485760, 10 MiB).",
+        ),
+    ] = None
+    content_types: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="contentTypes"),
+        pydantic.Field(
+            alias="contentTypes",
+            description="For a public-media type: the file types it accepts, as declared (absent means `image/jpeg`, `image/png`, `image/webp` and `image/gif`).",
+        ),
+    ] = None
     index_mode: typing_extensions.Annotated[
         typing.Optional[SchemaResponseIndexMode],
         FieldMetadata(alias="indexMode"),
@@ -100,6 +134,9 @@ class SchemaResponse(UniversalBaseModel):
             alias="basedOn",
             description="The id of the schema this one is a customization of, or null if this schema IS the shared base for `typeName` in this context.",
         ),
+    ] = None
+    public_view: typing_extensions.Annotated[
+        typing.Optional[PublicViewDef], FieldMetadata(alias="publicView"), pydantic.Field(alias="publicView")
     ] = None
     schema_version: typing_extensions.Annotated[
         typing.Optional[int],

@@ -20,7 +20,7 @@ class ScriptRequest(UniversalBaseModel):
 
     source: str = pydantic.Field()
     """
-    The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400.
+    The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400. The source runs as a plain script, not a module: the value of its last expression is the result, `input` is a global, and `export`, a top-level `return` and `await` are syntax errors.
     """
 
     declared_input_contract: typing_extensions.Annotated[
@@ -29,6 +29,22 @@ class ScriptRequest(UniversalBaseModel):
         pydantic.Field(
             alias="declaredInputContract",
             description="Optional free-text description of the input shape this script expects. Not validated or enforced. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.",
+        ),
+    ] = None
+    input_schema: typing_extensions.Annotated[
+        typing.Optional[typing.Dict[str, typing.Any]],
+        FieldMetadata(alias="inputSchema"),
+        pydantic.Field(
+            alias="inputSchema",
+            description='Optional. The input this script accepts, as a JSON Schema object that is ENFORCED: every argument object is checked against it before the script runs, both when the script is offered to an agent as a tool (the model is shown this schema) and on `POST /v1/scripts/execute` (its `input`). Required to offer the script as an agent tool; trigger rules do not use it. The root must be `{"type": "object"}`. Every node must declare `type` (`string`, `number`, `integer`, `boolean`, `array` or `object`) and may add `description` (at most 2,000 characters) and `enum` (1 to 100 distinct values of the node\'s type); an object node may also use `properties` (at most 100 members, names of 1 to 64 characters), `required` and `additionalProperties` (false unless set to true); an array node may use `items`. No other keyword is accepted. At most 5 levels deep and 16,384 bytes. An optional member sent as null is treated as absent. The script receives the checked arguments as `input.params`, the same place `POST /v1/scripts/execute` puts its `input`.',
+        ),
+    ] = None
+    opt_in_operations: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="optInOperations"),
+        pydantic.Field(
+            alias="optInOperations",
+            description="Optional. The operation names this version declares; it is part of the version and cannot change. Omit it or send an empty list: declaring an operation needs the capability mapped to it, a credential holding none of those capabilities gets a 403, and any value it may not declare is refused with a 400.",
         ),
     ] = None
     provisioned_by: typing_extensions.Annotated[

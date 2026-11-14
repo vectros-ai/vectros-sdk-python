@@ -9,12 +9,12 @@ from .index_failure_code import IndexFailureCode
 
 class IndexFailure(UniversalBaseModel):
     """
-    Why search indexing failed. Present only when the index status is FAILED.
+    Why search indexing failed, or why indexed content is missing part of its index. Present when the index status is FAILED, and also with code `LOCATION_NOT_INDEXED` when the content is indexed but a location value could not be read.
     """
 
     code: typing.Optional[IndexFailureCode] = pydantic.Field(default=None)
     """
-    A stable, machine-readable reason code. Branch on this value rather than on `message`. `SOURCE_UNAVAILABLE` — the underlying item could not be loaded and may have been deleted. `TEXT_INDEX_FAILED` — keyword indexing failed; the content may still be findable by semantic search. `EMBEDDING_FAILED` — semantic indexing failed; the content may still be findable by keyword search. `INDEXING_FAILED` — no index leg is serving this content, so it is not findable by search at all. `VECTOR_LIMIT_EXCEEDED` — your vector storage limit was reached, so semantic indexing was skipped; keyword search is still serving this content. `INTERNAL` — an error on our side; retry, and contact support if it persists.
+    A stable, machine-readable reason code. Branch on this value rather than on `message`. `SOURCE_UNAVAILABLE` — the underlying item could not be loaded and may have been deleted. `TEXT_INDEX_FAILED` — keyword indexing failed; the content may still be findable by semantic search. `EMBEDDING_FAILED` — semantic indexing failed; the content may still be findable by keyword search. `INDEXING_FAILED` — no index leg is serving this content, so it is not findable by search at all. `VECTOR_LIMIT_EXCEEDED` — your vector storage limit was reached, so semantic indexing was skipped; keyword search is still serving this content. `INTERNAL` — an error on our side; retry, and contact support if it persists. `LOCATION_NOT_INDEXED` — the content is indexed (status INDEXED), but a value in one of its `geo` fields is not a valid point, so the content was indexed without that location and is not found by distance search; write a valid `{lat, lon}` to fix it.
     """
 
     message: typing.Optional[str] = pydantic.Field(default=None)

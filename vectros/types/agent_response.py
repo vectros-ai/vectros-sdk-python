@@ -8,12 +8,13 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .agent_budget import AgentBudget
 from .agent_limits import AgentLimits
+from .agent_period_usage import AgentPeriodUsage
 from .agent_tool_entry import AgentToolEntry
 
 
 class AgentResponse(UniversalBaseModel):
     """
-    A stored agent. A caller holding `runs:c` but not `agents:r` sees only `id`, `name`, `description`, `latestVersion` and `status`. A purged version carries no content.
+    A stored agent. A caller holding `runs:c` for it but not `agents:r` sees only `id`, `name`, `description`, `latestVersion` and `status`. A purged version carries no content.
     """
 
     id: typing.Optional[str] = pydantic.Field(default=None)
@@ -68,6 +69,14 @@ class AgentResponse(UniversalBaseModel):
 
     limits: typing.Optional[AgentLimits] = None
     budget: typing.Optional[AgentBudget] = None
+    period_usage: typing_extensions.Annotated[
+        typing.Optional[typing.List[AgentPeriodUsage]],
+        FieldMetadata(alias="periodUsage"),
+        pydantic.Field(
+            alias="periodUsage",
+            description="What the agent's runs have spent and hold in each period it counts: every capped period, and always the current month. Returned only when one agent is read (`GET /v1/agents/{id}`).",
+        ),
+    ] = None
     created_at: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="createdAt"),

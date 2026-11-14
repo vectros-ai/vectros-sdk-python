@@ -34,7 +34,10 @@ class DocumentDownloadResponse(UniversalBaseModel):
     file_type: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="fileType"),
-        pydantic.Field(alias="fileType", description="MIME type of the file, as captured at upload time."),
+        pydantic.Field(
+            alias="fileType",
+            description="The media type the file was uploaded with (the document's `fileType`): the uploader's declaration, not checked against the file's content.",
+        ),
     ] = None
 
     if IS_PYDANTIC_V2:

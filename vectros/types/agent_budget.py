@@ -6,11 +6,12 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .agent_budget_period import AgentBudgetPeriod
 
 
 class AgentBudget(UniversalBaseModel):
     """
-    The per-run spending cap of an agent.
+    The spending caps of an agent: per run, and optionally per calendar period.
     """
 
     max_inference_cents: typing_extensions.Annotated[
@@ -19,6 +20,19 @@ class AgentBudget(UniversalBaseModel):
         pydantic.Field(
             alias="maxInferenceCents",
             description="The most a run of this agent may spend on model calls, in US cents, up to 500. A minimum applies; a value of 1 or more but below the minimum is refused with errorCode `BUDGET_TOO_LOW`, whose message names the minimum; a value outside 1 to 500 is a plain `400`. Defaults to 100.",
+        ),
+    ] = None
+    periods: typing.Optional[typing.List[AgentBudgetPeriod]] = pydantic.Field(default=None)
+    """
+    Optional caps on what all runs of this agent may spend on model calls in a calendar period, at most one per period. Absent or empty means no period cap. Each run counts in the periods it STARTS in: it reserves its whole per-run budget against them when it starts and gets back what it did not spend when it ends, so the runs started in a period never commit more than the cap in force when each one started. A run that would go over is refused with errorCode `AGENT_BUDGET_EXHAUSTED`; a run whose budget is larger than a cap (a run of an older version, or a caller's budget) with `BUDGET_EXCEEDS_PERIOD_CAP`. Lowering a cap stops new runs; it does not undo what was already spent or reserved. Spending is counted from the release that introduced period caps. The caps of the agent's newest version apply to every run of the agent, whichever version the run uses.
+    """
+
+    rag_max_inference_cents: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="ragMaxInferenceCents"),
+        pydantic.Field(
+            alias="ragMaxInferenceCents",
+            description="Optional: the most this agent's `rag_ask` tool may spend on its answers in one run, in US cents, from 1 up to `maxInferenceCents`. The answers are paid from the run's budget (inside `maxInferenceCents`, and counted in the period caps); this narrows what they may take of it. Absent means no narrower limit. A `rag_ask` call that would go over fails as a tool error and the run goes on. Has no effect unless the agent lists `rag_ask`.",
         ),
     ] = None
 

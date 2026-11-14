@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .geocode_status_view import GeocodeStatusView
 from .index_failure import IndexFailure
 from .record_response_index_mode import RecordResponseIndexMode
 from .record_response_index_status import RecordResponseIndexStatus
@@ -116,7 +117,7 @@ class RecordResponse(UniversalBaseModel):
         FieldMetadata(alias="indexStatus"),
         pydantic.Field(
             alias="indexStatus",
-            description="Search-index status. PENDING_INDEX means the record is queued for indexing. INDEXED means indexing is complete and it is searchable via `POST /v1/search`. Keyword (TEXT) matching is immediate the moment a record is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a record you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed record that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a record semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the record) has no such fallback. SKIPPED means the record had no indexable text (e.g. only non-searchable fields populated) so there was nothing to index — it is stored and retrievable, just not full-text/semantic searchable until a searchable field is filled in; not an error. FAILED means indexing hit an error — the record is still readable but not searchable. Null for a store-only record (`indexMode` NONE), which has no indexing to track.",
+            description="Search-index status. PENDING_INDEX means the record is queued for indexing. INDEXED means indexing is complete and it is searchable via `POST /v1/search`. Keyword (TEXT) matching is immediate the moment a record is INDEXED. In practice the semantic (vector) index is normally immediately queryable too — if a search still misses a record you just wrote, suspect your account's rate limit before indexing lag: a rate-limited request (including a retry the SDK made on your behalf) can silently take some time to actually run, which looks identical to \"my data isn't there yet.\" A freshly indexed record that matches a HYBRID or RAG query's keywords can surface without waiting on the vector index, on a best-effort basis that is not guaranteed. A query that can only match a record semantically (a `mode: SEMANTIC` search, or a HYBRID/RAG query sharing no words with the record) has no such fallback. SKIPPED means the record had no indexable text (e.g. only non-searchable fields populated) so there was nothing to index — it is stored and retrievable, just not full-text/semantic searchable until a searchable field is filled in; not an error. A record with no indexable text but a readable `geo` location is indexed by its location and ends INDEXED; a `$near` search finds it (it has no text for a query to match). This does not apply when its `indexMode` is SEMANTIC: such a record ends SKIPPED and no search finds it. FAILED means indexing hit an error — the record is still readable but not searchable. Null for a store-only record (`indexMode` NONE), which has no indexing to track.",
         ),
     ] = None
     index_failure: typing_extensions.Annotated[
@@ -128,6 +129,14 @@ class RecordResponse(UniversalBaseModel):
         pydantic.Field(
             alias="indexMode",
             description="The record's resolved search-index mode: the per-record override if set, otherwise the schema's type-level default, otherwise NONE. HYBRID, SEMANTIC, and TEXT make the record searchable; NONE is store-only.",
+        ),
+    ] = None
+    geocode_status: typing_extensions.Annotated[
+        typing.Optional[typing.Dict[str, GeocodeStatusView]],
+        FieldMetadata(alias="geocodeStatus"),
+        pydantic.Field(
+            alias="geocodeStatus",
+            description="Read-only. For each `geo` field that is filled from an address (`geocode.from` on the schema), how its coordinates were obtained, keyed by field id. Absent when the record's type fills no field from an address. Geocoding is part of the geo pilot.",
         ),
     ] = None
     created_by: typing_extensions.Annotated[
@@ -161,6 +170,22 @@ class RecordResponse(UniversalBaseModel):
         pydantic.Field(
             alias="expiresAt",
             description="The record's absolute expiry as an ISO-8601 UTC timestamp, when a TTL is set — the record is automatically deleted at (or shortly after) this time. Null when the record has no expiry.",
+        ),
+    ] = None
+    public_id: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="publicId"),
+        pydantic.Field(
+            alias="publicId",
+            description="The record's public identifier, present only when its type is public (the schema declares publicView). Stable and opaque: anonymous public reads address the record by this value, never by its id.",
+        ),
+    ] = None
+    public_state: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="publicState"),
+        pydantic.Field(
+            alias="publicState",
+            description="Whether the record is published, present only when its type is public: PUBLISHED when it is ACTIVE, unexpired and matches the type's publishWhen; otherwise UNPUBLISHED. Anonymous reads also need the tenant's public access, a public budget and public serving open to the account.",
         ),
     ] = None
 

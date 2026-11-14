@@ -14,9 +14,11 @@ if typing.TYPE_CHECKING:
     from .acting_via_response import ActingViaResponse
     from .admin_logs_response import AdminLogsResponse
     from .agent_budget import AgentBudget
+    from .agent_budget_period import AgentBudgetPeriod
     from .agent_definition_request import AgentDefinitionRequest
     from .agent_limits import AgentLimits
     from .agent_page import AgentPage
+    from .agent_period_usage import AgentPeriodUsage
     from .agent_response import AgentResponse
     from .agent_tool_entry import AgentToolEntry
     from .app_context_page import AppContextPage
@@ -69,6 +71,7 @@ if typing.TYPE_CHECKING:
     from .document_extraction_outcome import DocumentExtractionOutcome
     from .document_ingest import DocumentIngest
     from .document_lookup_page import DocumentLookupPage
+    from .document_media import DocumentMedia
     from .document_page import DocumentPage
     from .document_request import DocumentRequest
     from .document_request_index_mode import DocumentRequestIndexMode
@@ -91,6 +94,7 @@ if typing.TYPE_CHECKING:
     from .erasure_certificate_audit_disposition import ErasureCertificateAuditDisposition
     from .erasure_context_result import ErasureContextResult
     from .erasure_request_response import ErasureRequestResponse
+    from .erasure_request_response_failure_code import ErasureRequestResponseFailureCode
     from .erasure_request_response_status import ErasureRequestResponseStatus
     from .error_event import ErrorEvent
     from .error_event_event import ErrorEventEvent
@@ -110,6 +114,9 @@ if typing.TYPE_CHECKING:
     from .folder_page import FolderPage
     from .folder_request import FolderRequest
     from .folder_response import FolderResponse
+    from .geocode_def import GeocodeDef
+    from .geocode_status_view import GeocodeStatusView
+    from .geocode_status_view_status import GeocodeStatusViewStatus
     from .identity_lookup_request import IdentityLookupRequest
     from .identity_lookup_request_order import IdentityLookupRequestOrder
     from .identity_section import IdentitySection
@@ -141,6 +148,16 @@ if typing.TYPE_CHECKING:
     from .ping_response import PingResponse
     from .ping_response_environment import PingResponseEnvironment
     from .ping_response_principal_type import PingResponsePrincipalType
+    from .public_app_key_page import PublicAppKeyPage
+    from .public_app_key_response import PublicAppKeyResponse
+    from .public_record_page import PublicRecordPage
+    from .public_record_response import PublicRecordResponse
+    from .public_search_page import PublicSearchPage
+    from .public_view_copy_response import PublicViewCopyResponse
+    from .public_view_def import PublicViewDef
+    from .public_view_republish_response import PublicViewRepublishResponse
+    from .publish_when_def import PublishWhenDef
+    from .publish_when_def_in_item import PublishWhenDefInItem
     from .query_counts import QueryCounts
     from .rag_search import RagSearch
     from .rag_search_content_types_item import RagSearchContentTypesItem
@@ -180,6 +197,8 @@ if typing.TYPE_CHECKING:
     from .render_hint_def import RenderHintDef
     from .render_hint_def_widget import RenderHintDefWidget
     from .resolved_scope import ResolvedScope
+    from .revoked_key import RevokedKey
+    from .revoked_public_app_keys import RevokedPublicAppKeys
     from .role_page import RolePage
     from .role_request import RoleRequest
     from .role_response import RoleResponse
@@ -192,6 +211,7 @@ if typing.TYPE_CHECKING:
     from .run_input import RunInput
     from .run_message_completed_event import RunMessageCompletedEvent
     from .run_message_delta_event import RunMessageDeltaEvent
+    from .run_page import RunPage
     from .run_started_event import RunStartedEvent
     from .run_stream_event import (
         RunStreamEvent,
@@ -210,10 +230,12 @@ if typing.TYPE_CHECKING:
     from .schema_page import SchemaPage
     from .schema_request import SchemaRequest
     from .schema_request_allowed_surfaces_item import SchemaRequestAllowedSurfacesItem
+    from .schema_request_file_profile import SchemaRequestFileProfile
     from .schema_request_index_mode import SchemaRequestIndexMode
     from .schema_request_storage_profile import SchemaRequestStorageProfile
     from .schema_response import SchemaResponse
     from .schema_response_allowed_surfaces_item import SchemaResponseAllowedSurfacesItem
+    from .schema_response_file_profile import SchemaResponseFileProfile
     from .schema_response_index_mode import SchemaResponseIndexMode
     from .schema_response_storage_profile import SchemaResponseStorageProfile
     from .scope_clause import ScopeClause
@@ -234,6 +256,9 @@ if typing.TYPE_CHECKING:
     from .search_results_event import SearchResultsEvent
     from .search_results_event_event import SearchResultsEventEvent
     from .search_section import SearchSection
+    from .self_erasure_request import SelfErasureRequest
+    from .self_erasure_response import SelfErasureResponse
+    from .self_erasure_response_status import SelfErasureResponseStatus
     from .self_signup_policy import SelfSignupPolicy
     from .storage_bytes_search import StorageBytesSearch
     from .storage_entry import StorageEntry
@@ -273,9 +298,11 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ActingViaResponse": ".acting_via_response",
     "AdminLogsResponse": ".admin_logs_response",
     "AgentBudget": ".agent_budget",
+    "AgentBudgetPeriod": ".agent_budget_period",
     "AgentDefinitionRequest": ".agent_definition_request",
     "AgentLimits": ".agent_limits",
     "AgentPage": ".agent_page",
+    "AgentPeriodUsage": ".agent_period_usage",
     "AgentResponse": ".agent_response",
     "AgentToolEntry": ".agent_tool_entry",
     "AppContextPage": ".app_context_page",
@@ -324,6 +351,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "DocumentExtractionOutcome": ".document_extraction_outcome",
     "DocumentIngest": ".document_ingest",
     "DocumentLookupPage": ".document_lookup_page",
+    "DocumentMedia": ".document_media",
     "DocumentPage": ".document_page",
     "DocumentRequest": ".document_request",
     "DocumentRequestIndexMode": ".document_request_index_mode",
@@ -346,6 +374,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ErasureCertificateAuditDisposition": ".erasure_certificate_audit_disposition",
     "ErasureContextResult": ".erasure_context_result",
     "ErasureRequestResponse": ".erasure_request_response",
+    "ErasureRequestResponseFailureCode": ".erasure_request_response_failure_code",
     "ErasureRequestResponseStatus": ".erasure_request_response_status",
     "ErrorEvent": ".error_event",
     "ErrorEventEvent": ".error_event_event",
@@ -365,6 +394,9 @@ _dynamic_imports: typing.Dict[str, str] = {
     "FolderPage": ".folder_page",
     "FolderRequest": ".folder_request",
     "FolderResponse": ".folder_response",
+    "GeocodeDef": ".geocode_def",
+    "GeocodeStatusView": ".geocode_status_view",
+    "GeocodeStatusViewStatus": ".geocode_status_view_status",
     "IdentityLookupRequest": ".identity_lookup_request",
     "IdentityLookupRequestOrder": ".identity_lookup_request_order",
     "IdentitySection": ".identity_section",
@@ -396,6 +428,16 @@ _dynamic_imports: typing.Dict[str, str] = {
     "PingResponse": ".ping_response",
     "PingResponseEnvironment": ".ping_response_environment",
     "PingResponsePrincipalType": ".ping_response_principal_type",
+    "PublicAppKeyPage": ".public_app_key_page",
+    "PublicAppKeyResponse": ".public_app_key_response",
+    "PublicRecordPage": ".public_record_page",
+    "PublicRecordResponse": ".public_record_response",
+    "PublicSearchPage": ".public_search_page",
+    "PublicViewCopyResponse": ".public_view_copy_response",
+    "PublicViewDef": ".public_view_def",
+    "PublicViewRepublishResponse": ".public_view_republish_response",
+    "PublishWhenDef": ".publish_when_def",
+    "PublishWhenDefInItem": ".publish_when_def_in_item",
     "QueryCounts": ".query_counts",
     "RagSearch": ".rag_search",
     "RagSearchContentTypesItem": ".rag_search_content_types_item",
@@ -433,6 +475,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RenderHintDef": ".render_hint_def",
     "RenderHintDefWidget": ".render_hint_def_widget",
     "ResolvedScope": ".resolved_scope",
+    "RevokedKey": ".revoked_key",
+    "RevokedPublicAppKeys": ".revoked_public_app_keys",
     "RolePage": ".role_page",
     "RoleRequest": ".role_request",
     "RoleResponse": ".role_response",
@@ -445,6 +489,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "RunInput": ".run_input",
     "RunMessageCompletedEvent": ".run_message_completed_event",
     "RunMessageDeltaEvent": ".run_message_delta_event",
+    "RunPage": ".run_page",
     "RunStartedEvent": ".run_started_event",
     "RunStreamEvent": ".run_stream_event",
     "RunStreamEvent_MessageCompleted": ".run_stream_event",
@@ -461,10 +506,12 @@ _dynamic_imports: typing.Dict[str, str] = {
     "SchemaPage": ".schema_page",
     "SchemaRequest": ".schema_request",
     "SchemaRequestAllowedSurfacesItem": ".schema_request_allowed_surfaces_item",
+    "SchemaRequestFileProfile": ".schema_request_file_profile",
     "SchemaRequestIndexMode": ".schema_request_index_mode",
     "SchemaRequestStorageProfile": ".schema_request_storage_profile",
     "SchemaResponse": ".schema_response",
     "SchemaResponseAllowedSurfacesItem": ".schema_response_allowed_surfaces_item",
+    "SchemaResponseFileProfile": ".schema_response_file_profile",
     "SchemaResponseIndexMode": ".schema_response_index_mode",
     "SchemaResponseStorageProfile": ".schema_response_storage_profile",
     "ScopeClause": ".scope_clause",
@@ -485,6 +532,9 @@ _dynamic_imports: typing.Dict[str, str] = {
     "SearchResultsEvent": ".search_results_event",
     "SearchResultsEventEvent": ".search_results_event_event",
     "SearchSection": ".search_section",
+    "SelfErasureRequest": ".self_erasure_request",
+    "SelfErasureResponse": ".self_erasure_response",
+    "SelfErasureResponseStatus": ".self_erasure_response_status",
     "SelfSignupPolicy": ".self_signup_policy",
     "StorageBytesSearch": ".storage_bytes_search",
     "StorageEntry": ".storage_entry",
@@ -548,9 +598,11 @@ __all__ = [
     "ActingViaResponse",
     "AdminLogsResponse",
     "AgentBudget",
+    "AgentBudgetPeriod",
     "AgentDefinitionRequest",
     "AgentLimits",
     "AgentPage",
+    "AgentPeriodUsage",
     "AgentResponse",
     "AgentToolEntry",
     "AppContextPage",
@@ -599,6 +651,7 @@ __all__ = [
     "DocumentExtractionOutcome",
     "DocumentIngest",
     "DocumentLookupPage",
+    "DocumentMedia",
     "DocumentPage",
     "DocumentRequest",
     "DocumentRequestIndexMode",
@@ -621,6 +674,7 @@ __all__ = [
     "ErasureCertificateAuditDisposition",
     "ErasureContextResult",
     "ErasureRequestResponse",
+    "ErasureRequestResponseFailureCode",
     "ErasureRequestResponseStatus",
     "ErrorEvent",
     "ErrorEventEvent",
@@ -640,6 +694,9 @@ __all__ = [
     "FolderPage",
     "FolderRequest",
     "FolderResponse",
+    "GeocodeDef",
+    "GeocodeStatusView",
+    "GeocodeStatusViewStatus",
     "IdentityLookupRequest",
     "IdentityLookupRequestOrder",
     "IdentitySection",
@@ -671,6 +728,16 @@ __all__ = [
     "PingResponse",
     "PingResponseEnvironment",
     "PingResponsePrincipalType",
+    "PublicAppKeyPage",
+    "PublicAppKeyResponse",
+    "PublicRecordPage",
+    "PublicRecordResponse",
+    "PublicSearchPage",
+    "PublicViewCopyResponse",
+    "PublicViewDef",
+    "PublicViewRepublishResponse",
+    "PublishWhenDef",
+    "PublishWhenDefInItem",
     "QueryCounts",
     "RagSearch",
     "RagSearchContentTypesItem",
@@ -708,6 +775,8 @@ __all__ = [
     "RenderHintDef",
     "RenderHintDefWidget",
     "ResolvedScope",
+    "RevokedKey",
+    "RevokedPublicAppKeys",
     "RolePage",
     "RoleRequest",
     "RoleResponse",
@@ -720,6 +789,7 @@ __all__ = [
     "RunInput",
     "RunMessageCompletedEvent",
     "RunMessageDeltaEvent",
+    "RunPage",
     "RunStartedEvent",
     "RunStreamEvent",
     "RunStreamEvent_MessageCompleted",
@@ -736,10 +806,12 @@ __all__ = [
     "SchemaPage",
     "SchemaRequest",
     "SchemaRequestAllowedSurfacesItem",
+    "SchemaRequestFileProfile",
     "SchemaRequestIndexMode",
     "SchemaRequestStorageProfile",
     "SchemaResponse",
     "SchemaResponseAllowedSurfacesItem",
+    "SchemaResponseFileProfile",
     "SchemaResponseIndexMode",
     "SchemaResponseStorageProfile",
     "ScopeClause",
@@ -760,6 +832,9 @@ __all__ = [
     "SearchResultsEvent",
     "SearchResultsEventEvent",
     "SearchSection",
+    "SelfErasureRequest",
+    "SelfErasureResponse",
+    "SelfErasureResponseStatus",
     "SelfSignupPolicy",
     "StorageBytesSearch",
     "StorageEntry",

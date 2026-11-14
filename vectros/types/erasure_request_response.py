@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .erasure_certificate import ErasureCertificate
+from .erasure_request_response_failure_code import ErasureRequestResponseFailureCode
 from .erasure_request_response_status import ErasureRequestResponseStatus
 
 
@@ -63,6 +64,14 @@ class ErasureRequestResponse(UniversalBaseModel):
         pydantic.Field(
             alias="failureReason",
             description="Free text describing why the erasure failed. Its wording is not stable, so do not branch on it. Present only when `status` is `failed`; null otherwise.",
+        ),
+    ] = None
+    failure_code: typing_extensions.Annotated[
+        typing.Optional[ErasureRequestResponseFailureCode],
+        FieldMetadata(alias="failureCode"),
+        pydantic.Field(
+            alias="failureCode",
+            description="A stable code for the kind of failure, when there is one. `cancelled`: an account deletion the user requested from an app ended before it started, and nothing was erased; do not resubmit it automatically. Absent otherwise.",
         ),
     ] = None
     certificate: typing.Optional[ErasureCertificate] = None

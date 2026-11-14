@@ -6,16 +6,17 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .script_ref_request import ScriptRefRequest
 
 
 class AgentToolEntry(UniversalBaseModel):
     """
-    One entry of an agent's tool whitelist.
+    One entry of an agent's tool whitelist: a catalog tool, or (with `script`) a stored script offered as a tool.
     """
 
     name: str = pydantic.Field()
     """
-    The tool's name in the tool catalog.
+    The tool's name: a tool catalog name, or for a script tool the name the model sees, 1-64 letters, digits, `_` or `-`, which must not be a catalog tool's name.
     """
 
     allow_writes: typing_extensions.Annotated[
@@ -23,9 +24,14 @@ class AgentToolEntry(UniversalBaseModel):
         FieldMetadata(alias="allowWrites"),
         pydantic.Field(
             alias="allowWrites",
-            description="Required `true` for a tool that creates, changes or deletes data, and stored as given for any tool. When any entry has it, `limits.maxWrites` must be at least 1. Defaults to `false`.",
+            description="Required `true` for a tool that creates, changes or deletes data, and stored as given for any tool. When any entry has it, `limits.maxWrites` must be at least 1. Defaults to `false`. A script tool without it runs with read verbs only: a write it attempts fails the call and nothing is written.",
         ),
     ] = None
+    script: typing.Optional[ScriptRefRequest] = None
+    description: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    For a script tool only: the description the model sees, 1 to 1,024 characters. When omitted, one is generated from the script's name and version.
+    """
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

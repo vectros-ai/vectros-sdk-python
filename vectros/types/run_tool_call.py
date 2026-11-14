@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .script_ref_request import ScriptRefRequest
 
 
 class RunToolCall(UniversalBaseModel):
@@ -25,13 +26,15 @@ class RunToolCall(UniversalBaseModel):
 
     outcome: typing.Optional[str] = pydantic.Field(default=None)
     """
-    How the call ended: `OK`, `TOOL_ERROR`, `UNKNOWN` (a change whose result was lost: check before repeating it) or `ABANDONED` (it never finished); absent while it runs. A call the run refused is not listed. Other values may be added.
+    How the call ended: `OK`, `TOOL_ERROR`, `UNKNOWN` (a change whose result was lost: check before repeating it) `ABANDONED` (it never finished) or `NOT_STARTED` (a script tool refused before it ran, for example by a rate or credit limit: nothing ran); absent while it runs. A call the run refused is not listed. Other values may be added.
     """
 
     at: typing.Optional[str] = pydantic.Field(default=None)
     """
     When the call last changed state (ISO 8601).
     """
+
+    script: typing.Optional[ScriptRefRequest] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

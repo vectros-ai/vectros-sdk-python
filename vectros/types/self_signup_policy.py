@@ -8,7 +8,7 @@ from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 
 class SelfSignupPolicy(UniversalBaseModel):
     """
-    One self-service signup entry: a `signup_type` and the `role_id` a new caller is bound to.
+    One self-service signup entry: a `signup_type`, the `role_id` a new caller is bound to, and optionally `additional_role_ids`, more roles composed after it onto the new profile.
     """
 
     signup_type: str = pydantic.Field()
@@ -19,6 +19,11 @@ class SelfSignupPolicy(UniversalBaseModel):
     role_id: str = pydantic.Field()
     """
     The role a brand-new self-signup caller matching this signupType is bound to. Must never resolve to a role carrying elevated (provisioning or wildcard) scope — checked when you register this policy (skipped if the role doesn't exist yet) and always checked again, unskippable, at the moment a caller actually signs up.
+    """
+
+    additional_role_ids: typing.Optional[typing.List[str]] = pydantic.Field(default=None)
+    """
+    Optional. More roles a brand-new self-signup caller matching this signupType is bound to, composed in order after `role_id` onto the new access profile. At most 9 entries, no duplicates, none repeating `role_id`, each the same grammar as a role id. The roles TOGETHER must never carry elevated scope: checked when you register this policy (for the roles that exist already) and always checked again, on the combination, at the moment a caller signs up.
     """
 
     if IS_PYDANTIC_V2:

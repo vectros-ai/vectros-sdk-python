@@ -16,6 +16,7 @@ if typing.TYPE_CHECKING:
     from .folders.client import AsyncFoldersClient, FoldersClient
     from .identity.client import AsyncIdentityClient, IdentityClient
     from .inference.client import AsyncInferenceClient, InferenceClient
+    from .public.client import AsyncPublicClient, PublicClient
     from .records.client import AsyncRecordsClient, RecordsClient
     from .schemas.client import AsyncSchemasClient, SchemasClient
     from .scripts.client import AsyncScriptsClient, ScriptsClient
@@ -101,6 +102,7 @@ class VectrosApi:
         self._schemas: typing.Optional[SchemasClient] = None
         self._scripts: typing.Optional[ScriptsClient] = None
         self._search: typing.Optional[SearchClient] = None
+        self._public: typing.Optional[PublicClient] = None
         self._triggers: typing.Optional[TriggersClient] = None
 
     @property
@@ -190,6 +192,14 @@ class VectrosApi:
 
             self._search = SearchClient(client_wrapper=self._client_wrapper)
         return self._search
+
+    @property
+    def public(self):
+        if self._public is None:
+            from .public.client import PublicClient  # noqa: E402
+
+            self._public = PublicClient(client_wrapper=self._client_wrapper)
+        return self._public
 
     @property
     def triggers(self):
@@ -299,6 +309,7 @@ class AsyncVectrosApi:
         self._schemas: typing.Optional[AsyncSchemasClient] = None
         self._scripts: typing.Optional[AsyncScriptsClient] = None
         self._search: typing.Optional[AsyncSearchClient] = None
+        self._public: typing.Optional[AsyncPublicClient] = None
         self._triggers: typing.Optional[AsyncTriggersClient] = None
 
     @property
@@ -388,6 +399,14 @@ class AsyncVectrosApi:
 
             self._search = AsyncSearchClient(client_wrapper=self._client_wrapper)
         return self._search
+
+    @property
+    def public(self):
+        if self._public is None:
+            from .public.client import AsyncPublicClient  # noqa: E402
+
+            self._public = AsyncPublicClient(client_wrapper=self._client_wrapper)
+        return self._public
 
     @property
     def triggers(self):

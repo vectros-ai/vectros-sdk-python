@@ -90,6 +90,14 @@ class IssuerResponse(UniversalBaseModel):
             description="Additional OIDC claim names captured from this issuer's tokens on every successful exchange, beyond `emailClaim`. Absent (not an empty list) when none are configured.",
         ),
     ] = None
+    accepted_id_token_client_ids: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="acceptedIdTokenClientIds"),
+        pydantic.Field(
+            alias="acceptedIdTokenClientIds",
+            description="Extra `aud` values accepted on an ID token presented to confirm a recent sign-in before an end user deletes their own account, beyond `audience`. Absent when none are configured.",
+        ),
+    ] = None
     restricted_to_domain: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="restrictedToDomain"),

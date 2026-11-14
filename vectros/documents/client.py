@@ -783,9 +783,10 @@ class DocumentsClient:
         self,
         *,
         file_name: str,
-        file_type: str,
         upsert: typing.Optional[bool] = None,
         confirm_untyped: typing.Optional[bool] = None,
+        file_type: typing.Optional[str] = OMIT,
+        size: typing.Optional[int] = OMIT,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -797,21 +798,24 @@ class DocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Any type of file can be uploaded. Text is extracted only from document formats (plain text, CSV, TSV, Markdown, JSON, YAML, HTML, XML, PDF, RTF, Word, Excel, PowerPoint, Outlook messages, OpenDocument, EPUB, e-mail messages and mbox exports, WordPerfect, Visio, Publisher, OneNote and Apple iWork), and which format a file is in is decided from its content, not from `fileType`. Any other file (audio, video, images, archives such as zip) is stored and can be downloaded, but is not read: its `extraction.outcome` is `NOT_EXTRACTED`. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. For a document of a public-media type the file is never replaced: while its upload is still pending, the same request issues a URL for the SAME object instead, and once the upload has arrived it is refused (`409`, errorCode `PUBLIC_MEDIA_IMMUTABLE`). The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key (for a pending public-media document, its not-yet-written object), so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call targets a new key (for a public-media document, see above), so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant. **Send `size`, the exact length of the file in bytes.** The upload is then bound: the file's media type and its length are part of `uploadUrl`'s signature, so a PUT with another `Content-Type` or another length is refused with `403 SignatureDoesNotMatch` before anything is stored. Send every header in the response's `requiredHeaders`, with its value unchanged. `size` is required for a document of a public-media type and optional for every other upload.
 
         Parameters
         ----------
         file_name : str
             Original file name, including its extension. Used as the document title when no separate title is provided.
 
-        file_type : str
-            MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
-
         upsert : typing.Optional[bool]
             When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         confirm_untyped : typing.Optional[bool]
             Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
+
+        file_type : typing.Optional[str]
+            Media type of the file being uploaded, as `type/subtype`. Any valid media type is accepted. It is stored lower case and without parameters (`text/plain; charset=utf-8` is stored as `text/plain`), and when it is omitted or `application/octet-stream` it is inferred from the extension of `fileName`. Without `size` it is a label only: it does not set the Content-Type of the stored file (your PUT to `uploadUrl` does). With `size`, `uploadUrl` is signed for this type in its stored form, and your PUT must send it as given in the response's `requiredHeaders`. For a document of a public-media type it must be a type that document type accepts. Whether text is extracted is decided from the file's content (see `detectedType` on the document).
+
+        size : typing.Optional[int]
+            The exact length of the file in bytes, at least 1. When you send it, the upload is bound: the file's media type and this length become part of `uploadUrl`'s signature, so the storage service refuses a PUT whose `Content-Type` differs from the one in the response's `requiredHeaders` or whose length differs from `size` (`403 SignatureDoesNotMatch`), before anything is stored. Send the exact number of bytes you will upload (in a browser, `File.size`); your HTTP client sets `Content-Length` from the body. A file can be at most 104857600 bytes (100 MiB). Required for a document of a public-media type. Optional for every other upload.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -843,7 +847,7 @@ class DocumentsClient:
         Returns
         -------
         FileUploadResponse
-            A document with the same `externalId` already existed (`created: false`); a fresh presigned upload URL was issued for it (idempotent upload); the upload targets a new object, which the document adopts once the upload is validated.
+            A document with the same `externalId` already existed (`created: false`); a fresh presigned upload URL was issued for it (idempotent upload); the upload targets a new object, which the document adopts once the upload is validated. For a pending public-media document, the URL targets its same, not-yet-written object.
 
         Examples
         --------
@@ -855,14 +859,14 @@ class DocumentsClient:
         )
         client.documents.upload_document(
             file_name="patient_intake_2024_01_15.pdf",
-            file_type="application/pdf",
         )
         """
         _response = self._raw_client.upload_document(
             file_name=file_name,
-            file_type=file_type,
             upsert=upsert,
             confirm_untyped=confirm_untyped,
+            file_type=file_type,
+            size=size,
             index_mode=index_mode,
             store_text=store_text,
             folder_id=folder_id,
@@ -1730,9 +1734,10 @@ class AsyncDocumentsClient:
         self,
         *,
         file_name: str,
-        file_type: str,
         upsert: typing.Optional[bool] = None,
         confirm_untyped: typing.Optional[bool] = None,
+        file_type: typing.Optional[str] = OMIT,
+        size: typing.Optional[int] = OMIT,
         index_mode: typing.Optional[FileUploadRequestIndexMode] = OMIT,
         store_text: typing.Optional[bool] = OMIT,
         folder_id: typing.Optional[str] = OMIT,
@@ -1744,21 +1749,24 @@ class AsyncDocumentsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> FileUploadResponse:
         """
-        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
+        Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Any type of file can be uploaded. Text is extracted only from document formats (plain text, CSV, TSV, Markdown, JSON, YAML, HTML, XML, PDF, RTF, Word, Excel, PowerPoint, Outlook messages, OpenDocument, EPUB, e-mail messages and mbox exports, WordPerfect, Visio, Publisher, OneNote and Apple iWork), and which format a file is in is decided from its content, not from `fileType`. Any other file (audio, video, images, archives such as zip) is stored and can be downloaded, but is not read: its `extraction.outcome` is `NOT_EXTRACTED`. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. For a document of a public-media type the file is never replaced: while its upload is still pending, the same request issues a URL for the SAME object instead, and once the upload has arrived it is refused (`409`, errorCode `PUBLIC_MEDIA_IMMUTABLE`). The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key (for a pending public-media document, its not-yet-written object), so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call targets a new key (for a public-media document, see above), so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant. **Send `size`, the exact length of the file in bytes.** The upload is then bound: the file's media type and its length are part of `uploadUrl`'s signature, so a PUT with another `Content-Type` or another length is refused with `403 SignatureDoesNotMatch` before anything is stored. Send every header in the response's `requiredHeaders`, with its value unchanged. `size` is required for a document of a public-media type and optional for every other upload.
 
         Parameters
         ----------
         file_name : str
             Original file name, including its extension. Used as the document title when no separate title is provided.
 
-        file_type : str
-            MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
-
         upsert : typing.Optional[bool]
             When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
 
         confirm_untyped : typing.Optional[bool]
             Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
+
+        file_type : typing.Optional[str]
+            Media type of the file being uploaded, as `type/subtype`. Any valid media type is accepted. It is stored lower case and without parameters (`text/plain; charset=utf-8` is stored as `text/plain`), and when it is omitted or `application/octet-stream` it is inferred from the extension of `fileName`. Without `size` it is a label only: it does not set the Content-Type of the stored file (your PUT to `uploadUrl` does). With `size`, `uploadUrl` is signed for this type in its stored form, and your PUT must send it as given in the response's `requiredHeaders`. For a document of a public-media type it must be a type that document type accepts. Whether text is extracted is decided from the file's content (see `detectedType` on the document).
+
+        size : typing.Optional[int]
+            The exact length of the file in bytes, at least 1. When you send it, the upload is bound: the file's media type and this length become part of `uploadUrl`'s signature, so the storage service refuses a PUT whose `Content-Type` differs from the one in the response's `requiredHeaders` or whose length differs from `size` (`403 SignatureDoesNotMatch`), before anything is stored. Send the exact number of bytes you will upload (in a browser, `File.size`); your HTTP client sets `Content-Length` from the body. A file can be at most 104857600 bytes (100 MiB). Required for a document of a public-media type. Optional for every other upload.
 
         index_mode : typing.Optional[FileUploadRequestIndexMode]
             Indexing strategy applied after the file is processed and its text is extracted. `HYBRID` runs both BM25 keyword and dense-vector semantic indexing (recommended). `SEMANTIC` indexes only as dense vectors. `TEXT` indexes only with BM25. `NONE` is store-only (archival): the file is still uploaded and its text extracted, but it is not search-indexed — retrievable by id/download and structured-field lookup only. Optional: omit to inherit the bound schema's default index mode. If neither this field nor the schema specifies one, the request is rejected. When both are set, this per-file value wins.
@@ -1790,7 +1798,7 @@ class AsyncDocumentsClient:
         Returns
         -------
         FileUploadResponse
-            A document with the same `externalId` already existed (`created: false`); a fresh presigned upload URL was issued for it (idempotent upload); the upload targets a new object, which the document adopts once the upload is validated.
+            A document with the same `externalId` already existed (`created: false`); a fresh presigned upload URL was issued for it (idempotent upload); the upload targets a new object, which the document adopts once the upload is validated. For a pending public-media document, the URL targets its same, not-yet-written object.
 
         Examples
         --------
@@ -1807,7 +1815,6 @@ class AsyncDocumentsClient:
         async def main() -> None:
             await client.documents.upload_document(
                 file_name="patient_intake_2024_01_15.pdf",
-                file_type="application/pdf",
             )
 
 
@@ -1815,9 +1822,10 @@ class AsyncDocumentsClient:
         """
         _response = await self._raw_client.upload_document(
             file_name=file_name,
-            file_type=file_type,
             upsert=upsert,
             confirm_untyped=confirm_untyped,
+            file_type=file_type,
+            size=size,
             index_mode=index_mode,
             store_text=store_text,
             folder_id=folder_id,

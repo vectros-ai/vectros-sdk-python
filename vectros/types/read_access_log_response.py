@@ -43,7 +43,7 @@ class ReadAccessLogResponse(UniversalBaseModel):
     ] = None
     action: typing.Optional[ReadAccessLogResponseAction] = pydantic.Field(default=None)
     """
-    What the caller did: `read` (single fetch), `list`, `lookup`, `search`, or `rag`.
+    What the caller did: `read` (a single fetch, including a read of the version history of a record, document, entity, user or folder, and a create that returned one that already existed), `list`, `lookup`, `search`, or `rag`.
     """
 
     resource_type: typing_extensions.Annotated[
@@ -51,7 +51,7 @@ class ReadAccessLogResponse(UniversalBaseModel):
         FieldMetadata(alias="resourceType"),
         pydantic.Field(
             alias="resourceType",
-            description="The accessed resource's type: a record schema type name, or one of `document`, `search`, or `rag`.",
+            description="The accessed resource's type: a record schema type name, or one of `document`, `folder`, `entities` or `users`. A `search` or `rag` disclosure carries the type of the document or record it disclosed, and may be absent when that type is not known.",
         ),
     ] = None
     resource_id: typing_extensions.Annotated[

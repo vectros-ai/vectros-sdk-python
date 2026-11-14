@@ -45,11 +45,11 @@ class RawScriptsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScriptExecuteResponse]:
         """
-        Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
+        Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on. Because the writes are one transaction, an entity's `externalId` cannot be freed (by a delete or by changing it) and given to another entity in the same run; the run fails with a `400` saying so. Free it in one run and reuse it in the next.
 
         **Permission.** Requires the `scripts:x` scope — the permission to *execute* — separate from the `scripts:c` permission to push scripts. Bare `scripts:x` grants every script in the context; `scripts:x:<name>` grants exactly that script name, every version of it. Execution discloses no source, so `scripts:r` is not needed. Inside the script, every read and write is enforced by your credential's data scopes exactly as the equivalent REST call would be — `scripts:x` alone can read and write nothing.
 
-        **Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. `params` is not validated — a script that needs a shape checks for it and throws; the script's `declaredInputContract` is documentation for readers and is not enforced.
+        **Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. When the script version declares an `inputSchema`, your `input` is checked against it before anything runs (a `400` naming every problem, the same words a script tool's call gets) and an optional member sent as null is removed; a version without one gets `params` unvalidated, and a script that needs a shape checks for it and throws. The script's `declaredInputContract` is documentation for readers and is not enforced.
 
         **Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 3 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field. So "create a folder and file N documents" holds up to 97 plain documents, 48 with one range field or one reference, 32 with both; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
 
@@ -65,7 +65,7 @@ class RawScriptsClient:
             Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without executing again — when that attempt succeeded or ended `EXECUTION_OUTCOME_UNKNOWN`; a failed attempt is not remembered. The body is compared byte for byte, so the same key with a differently formatted body is a different request (`422`). With a key present the serialised `result` is capped at 16 KB.
 
         input : typing.Optional[typing.Dict[str, typing.Any]]
-            A free-form JSON object your script receives as `input.params`. The platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
+            A JSON object your script receives as `input.params`. When the script version declares an `inputSchema`, this object is checked against it before the script runs (a `400` naming every problem; an optional member sent as null is removed); otherwise the platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -328,6 +328,8 @@ class RawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        input_schema: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        opt_in_operations: typing.Optional[typing.Sequence[str]] = OMIT,
         provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[ScriptResponse]:
@@ -340,10 +342,16 @@ class RawScriptsClient:
             The script's referenceable name/slug — stable across versions. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required.
 
         source : str
-            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400.
+            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400. The source runs as a plain script, not a module: the value of its last expression is the result, `input` is a global, and `export`, a top-level `return` and `await` are syntax errors.
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        input_schema : typing.Optional[typing.Dict[str, typing.Any]]
+            Optional. The input this script accepts, as a JSON Schema object that is ENFORCED: every argument object is checked against it before the script runs, both when the script is offered to an agent as a tool (the model is shown this schema) and on `POST /v1/scripts/execute` (its `input`). Required to offer the script as an agent tool; trigger rules do not use it. The root must be `{"type": "object"}`. Every node must declare `type` (`string`, `number`, `integer`, `boolean`, `array` or `object`) and may add `description` (at most 2,000 characters) and `enum` (1 to 100 distinct values of the node's type); an object node may also use `properties` (at most 100 members, names of 1 to 64 characters), `required` and `additionalProperties` (false unless set to true); an array node may use `items`. No other keyword is accepted. At most 5 levels deep and 16,384 bytes. An optional member sent as null is treated as absent. The script receives the checked arguments as `input.params`, the same place `POST /v1/scripts/execute` puts its `input`.
+
+        opt_in_operations : typing.Optional[typing.Sequence[str]]
+            Optional. The operation names this version declares; it is part of the version and cannot change. Omit it or send an empty list: declaring an operation needs the capability mapped to it, a credential holding none of those capabilities gets a 403, and any value it may not declare is refused with a 400.
 
         provisioned_by : typing.Optional[str]
             An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. The `vectros bootstrap --blueprint` command sets it to the blueprint's name on every script it pushes. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
@@ -363,6 +371,8 @@ class RawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "inputSchema": input_schema,
+                "optInOperations": opt_in_operations,
                 "provisionedBy": provisioned_by,
             },
             request_options=request_options,
@@ -491,6 +501,8 @@ class RawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        input_schema: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        opt_in_operations: typing.Optional[typing.Sequence[str]] = OMIT,
         provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[None]:
@@ -505,10 +517,16 @@ class RawScriptsClient:
             The script's referenceable name/slug — stable across versions. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required.
 
         source : str
-            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400.
+            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400. The source runs as a plain script, not a module: the value of its last expression is the result, `input` is a global, and `export`, a top-level `return` and `await` are syntax errors.
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        input_schema : typing.Optional[typing.Dict[str, typing.Any]]
+            Optional. The input this script accepts, as a JSON Schema object that is ENFORCED: every argument object is checked against it before the script runs, both when the script is offered to an agent as a tool (the model is shown this schema) and on `POST /v1/scripts/execute` (its `input`). Required to offer the script as an agent tool; trigger rules do not use it. The root must be `{"type": "object"}`. Every node must declare `type` (`string`, `number`, `integer`, `boolean`, `array` or `object`) and may add `description` (at most 2,000 characters) and `enum` (1 to 100 distinct values of the node's type); an object node may also use `properties` (at most 100 members, names of 1 to 64 characters), `required` and `additionalProperties` (false unless set to true); an array node may use `items`. No other keyword is accepted. At most 5 levels deep and 16,384 bytes. An optional member sent as null is treated as absent. The script receives the checked arguments as `input.params`, the same place `POST /v1/scripts/execute` puts its `input`.
+
+        opt_in_operations : typing.Optional[typing.Sequence[str]]
+            Optional. The operation names this version declares; it is part of the version and cannot change. Omit it or send an empty list: declaring an operation needs the capability mapped to it, a credential holding none of those capabilities gets a 403, and any value it may not declare is refused with a 400.
 
         provisioned_by : typing.Optional[str]
             An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. The `vectros bootstrap --blueprint` command sets it to the blueprint's name on every script it pushes. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
@@ -527,6 +545,8 @@ class RawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "inputSchema": input_schema,
+                "optInOperations": opt_in_operations,
                 "provisionedBy": provisioned_by,
             },
             headers={
@@ -648,11 +668,11 @@ class AsyncRawScriptsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScriptExecuteResponse]:
         """
-        Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
+        Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on. Because the writes are one transaction, an entity's `externalId` cannot be freed (by a delete or by changing it) and given to another entity in the same run; the run fails with a `400` saying so. Free it in one run and reuse it in the next.
 
         **Permission.** Requires the `scripts:x` scope — the permission to *execute* — separate from the `scripts:c` permission to push scripts. Bare `scripts:x` grants every script in the context; `scripts:x:<name>` grants exactly that script name, every version of it. Execution discloses no source, so `scripts:r` is not needed. Inside the script, every read and write is enforced by your credential's data scopes exactly as the equivalent REST call would be — `scripts:x` alone can read and write nothing.
 
-        **Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. `params` is not validated — a script that needs a shape checks for it and throws; the script's `declaredInputContract` is documentation for readers and is not enforced.
+        **Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. When the script version declares an `inputSchema`, your `input` is checked against it before anything runs (a `400` naming every problem, the same words a script tool's call gets) and an optional member sent as null is removed; a version without one gets `params` unvalidated, and a script that needs a shape checks for it and throws. The script's `declaredInputContract` is documentation for readers and is not enforced.
 
         **Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 3 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field. So "create a folder and file N documents" holds up to 97 plain documents, 48 with one range field or one reference, 32 with both; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
 
@@ -668,7 +688,7 @@ class AsyncRawScriptsClient:
             Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without executing again — when that attempt succeeded or ended `EXECUTION_OUTCOME_UNKNOWN`; a failed attempt is not remembered. The body is compared byte for byte, so the same key with a differently formatted body is a different request (`422`). With a key present the serialised `result` is capped at 16 KB.
 
         input : typing.Optional[typing.Dict[str, typing.Any]]
-            A free-form JSON object your script receives as `input.params`. The platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
+            A JSON object your script receives as `input.params`. When the script version declares an `inputSchema`, this object is checked against it before the script runs (a `400` naming every problem; an optional member sent as null is removed); otherwise the platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -931,6 +951,8 @@ class AsyncRawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        input_schema: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        opt_in_operations: typing.Optional[typing.Sequence[str]] = OMIT,
         provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[ScriptResponse]:
@@ -943,10 +965,16 @@ class AsyncRawScriptsClient:
             The script's referenceable name/slug — stable across versions. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required.
 
         source : str
-            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400.
+            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400. The source runs as a plain script, not a module: the value of its last expression is the result, `input` is a global, and `export`, a top-level `return` and `await` are syntax errors.
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        input_schema : typing.Optional[typing.Dict[str, typing.Any]]
+            Optional. The input this script accepts, as a JSON Schema object that is ENFORCED: every argument object is checked against it before the script runs, both when the script is offered to an agent as a tool (the model is shown this schema) and on `POST /v1/scripts/execute` (its `input`). Required to offer the script as an agent tool; trigger rules do not use it. The root must be `{"type": "object"}`. Every node must declare `type` (`string`, `number`, `integer`, `boolean`, `array` or `object`) and may add `description` (at most 2,000 characters) and `enum` (1 to 100 distinct values of the node's type); an object node may also use `properties` (at most 100 members, names of 1 to 64 characters), `required` and `additionalProperties` (false unless set to true); an array node may use `items`. No other keyword is accepted. At most 5 levels deep and 16,384 bytes. An optional member sent as null is treated as absent. The script receives the checked arguments as `input.params`, the same place `POST /v1/scripts/execute` puts its `input`.
+
+        opt_in_operations : typing.Optional[typing.Sequence[str]]
+            Optional. The operation names this version declares; it is part of the version and cannot change. Omit it or send an empty list: declaring an operation needs the capability mapped to it, a credential holding none of those capabilities gets a 403, and any value it may not declare is refused with a 400.
 
         provisioned_by : typing.Optional[str]
             An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. The `vectros bootstrap --blueprint` command sets it to the blueprint's name on every script it pushes. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
@@ -966,6 +994,8 @@ class AsyncRawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "inputSchema": input_schema,
+                "optInOperations": opt_in_operations,
                 "provisionedBy": provisioned_by,
             },
             request_options=request_options,
@@ -1094,6 +1124,8 @@ class AsyncRawScriptsClient:
         name: str,
         source: str,
         declared_input_contract: typing.Optional[str] = OMIT,
+        input_schema: typing.Optional[typing.Dict[str, typing.Any]] = OMIT,
+        opt_in_operations: typing.Optional[typing.Sequence[str]] = OMIT,
         provisioned_by: typing.Optional[str] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[None]:
@@ -1108,10 +1140,16 @@ class AsyncRawScriptsClient:
             The script's referenceable name/slug — stable across versions. Must be 1-64 characters of letters, digits, underscores ('_'), and hyphens ('-'). Required.
 
         source : str
-            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400.
+            The script's source text, stored as-is: nothing parses or validates it at push time, so a syntax error surfaces as a `SCRIPT_ERROR` when the version first runs — from a trigger rule that references it, or from `POST /v1/scripts/execute`. Required, non-blank. Capped at 300,000 UTF-8 bytes (~300 KB) — an oversized push is rejected with a 400. The source runs as a plain script, not a module: the value of its last expression is the result, `input` is a global, and `export`, a top-level `return` and `await` are syntax errors.
 
         declared_input_contract : typing.Optional[str]
             Optional free-text description of the input shape this script expects. Not validated or enforced. Capped at 50,000 UTF-8 bytes (~50 KB) — an oversized value is rejected with a 400.
+
+        input_schema : typing.Optional[typing.Dict[str, typing.Any]]
+            Optional. The input this script accepts, as a JSON Schema object that is ENFORCED: every argument object is checked against it before the script runs, both when the script is offered to an agent as a tool (the model is shown this schema) and on `POST /v1/scripts/execute` (its `input`). Required to offer the script as an agent tool; trigger rules do not use it. The root must be `{"type": "object"}`. Every node must declare `type` (`string`, `number`, `integer`, `boolean`, `array` or `object`) and may add `description` (at most 2,000 characters) and `enum` (1 to 100 distinct values of the node's type); an object node may also use `properties` (at most 100 members, names of 1 to 64 characters), `required` and `additionalProperties` (false unless set to true); an array node may use `items`. No other keyword is accepted. At most 5 levels deep and 16,384 bytes. An optional member sent as null is treated as absent. The script receives the checked arguments as `input.params`, the same place `POST /v1/scripts/execute` puts its `input`.
+
+        opt_in_operations : typing.Optional[typing.Sequence[str]]
+            Optional. The operation names this version declares; it is part of the version and cannot change. Omit it or send an empty list: declaring an operation needs the capability mapped to it, a credential holding none of those capabilities gets a 403, and any value it may not declare is refused with a 400.
 
         provisioned_by : typing.Optional[str]
             An optional provenance marker naming the blueprint that provisions this script, so a convergent caller can tell a script it manages from one hand-authored or owned by a different blueprint. The `vectros bootstrap --blueprint` command sets it to the blueprint's name on every script it pushes. Leave it unset for a script you manage yourself. MAY BE SET ON ABSENT, NEVER CHANGED, evaluated against the CURRENT LATEST version of this `name` at push time: if the latest version has no marker recorded, this push may set any value (including onto a previously-unmarked, hand-authored name); if the latest version already has one recorded, an omitted value inherits it forward, and supplying a DIFFERENT value is refused. This compares against whichever version is newest right now, not a value fixed for the name's whole history — deleting the version(s) carrying a given marker and pushing again is unconstrained by it.
@@ -1130,6 +1168,8 @@ class AsyncRawScriptsClient:
                 "name": name,
                 "source": source,
                 "declaredInputContract": declared_input_contract,
+                "inputSchema": input_schema,
+                "optInOperations": opt_in_operations,
                 "provisionedBy": provisioned_by,
             },
             headers={

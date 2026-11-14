@@ -7,6 +7,7 @@ import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
 from .field_def_field_type import FieldDefFieldType
+from .geocode_def import GeocodeDef
 
 
 class FieldDef(UniversalBaseModel):
@@ -24,7 +25,7 @@ class FieldDef(UniversalBaseModel):
         FieldMetadata(alias="fieldType"),
         pydantic.Field(
             alias="fieldType",
-            description="Data type of the field. Use `reference` for a foreign-key field that points at another type — then set `targetTypeName`, `targetField`, `targetSurface`, and `cardinality` below.",
+            description='Data type of the field. Use `reference` for a foreign-key field that points at another type — then set `targetTypeName`, `targetField`, `targetSurface`, and `cardinality` below. Use `geo` for a location: its value is `{"lat": <number>, "lon": <number>}` in WGS84 decimal degrees (`lat` -90 to 90, `lon` -180 to 180, no other keys). A `geo` field cannot be `sensitive` or `searchable`, cannot be a lookup or a `sortBy` target, and an existing field cannot be changed to or from `geo`. Declaring as `geo` a key that existing records already hold leaves a value that is not a valid point as it was: it is not indexed as a location, and a later write of that record that keeps it is refused until it is replaced with a point. `geo` is in a limited pilot and is refused unless it is enabled for your account. Use `asset` for one image and `assets` for an array of up to 20 images: each value is the `id` of a document of a type with `fileProfile: PUBLIC_MEDIA`, and `documentTypes` lists the types it accepts (`validation.maxItems` may set a lower limit for `assets`). A record holds at most 25 images across its asset fields. An `asset` or `assets` field can be added only to a schema with a `publicView` (in `projection` mode it must be listed in `publicView.fields`), cannot be `sensitive` or `searchable`, and an existing field cannot be changed to or from either type. An image cannot be attached in this version (`400` `ASSET_NOT_ATTACHABLE`).',
         ),
     ]
     required: typing.Optional[bool] = pydantic.Field(default=None)
@@ -39,7 +40,7 @@ class FieldDef(UniversalBaseModel):
 
     filterable: typing.Optional[bool] = pydantic.Field(default=None)
     """
-    Whether this field can be used as a filter in queries.
+    Whether this field can be used as a filter in queries. Defaults to `false`, except for a `geo` field, where it defaults to `true`: a `geo` field with `filterable: false` stores its value without indexing it for location search. The default applies whenever the flag is omitted, so an update that omits it for a `geo` field stored with `filterable: false` turns indexing on; existing records are indexed when they are next written.
     """
 
     description: typing.Optional[str] = pydantic.Field(default=None)
@@ -95,6 +96,16 @@ class FieldDef(UniversalBaseModel):
     """
     Keep this field on the record row when the record's payload is stored out of line (large records, or a `LARGE_PAYLOAD` storage profile). An inline field appears in list and lookup projections without `includePayload`, and is the ONLY kind of field a trigger rule may project into its script's `input.record` — a rule's `fields` may name a field only if it is `inline`, `filterable`, or a lookup field, and not `sensitive`. Cannot be combined with `sensitive`. Removing it from a field a trigger rule still projects is refused.
     """
+
+    document_types: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="documentTypes"),
+        pydantic.Field(
+            alias="documentTypes",
+            description="For an `asset` or `assets` field only, and required there: the document types (their `typeName`s) whose documents the field accepts. Each must be a type with `fileProfile: PUBLIC_MEDIA` when a record is written; a value of any other type is refused.",
+        ),
+    ] = None
+    geocode: typing.Optional[GeocodeDef] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

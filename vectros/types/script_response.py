@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class ScriptResponse(UniversalBaseModel):
     """
-    A script object — an opaque, versioned JS source blob. A version runs when a trigger rule references it or when `POST /v1/scripts/execute` names it; this response describes the stored version, not an execution.
+    A script object — an opaque, versioned JS source blob. A version runs when a trigger rule references it, when `POST /v1/scripts/execute` names it, or when an agent's script tool calls it; this response describes the stored version, not an execution.
     """
 
     id: typing.Optional[str] = pydantic.Field(default=None)
@@ -50,6 +50,22 @@ class ScriptResponse(UniversalBaseModel):
         pydantic.Field(
             alias="declaredInputContract",
             description="Free-text description of the input shape this script expects, or null if not supplied.",
+        ),
+    ] = None
+    input_schema: typing_extensions.Annotated[
+        typing.Optional[typing.Dict[str, typing.Any]],
+        FieldMetadata(alias="inputSchema"),
+        pydantic.Field(
+            alias="inputSchema",
+            description="The enforced input schema this script version declares; absent when it declares none. A version needs one to be offered to an agent as a tool.",
+        ),
+    ] = None
+    opt_in_operations: typing_extensions.Annotated[
+        typing.Optional[typing.List[str]],
+        FieldMetadata(alias="optInOperations"),
+        pydantic.Field(
+            alias="optInOperations",
+            description="The operation names this version declares, sorted; empty when it declares none.",
         ),
     ] = None
     provisioned_by: typing_extensions.Annotated[

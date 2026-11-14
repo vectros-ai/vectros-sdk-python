@@ -3,5 +3,8 @@
 import typing
 
 DocumentExtractionOutcome = typing.Union[
-    typing.Literal["OK", "TRUNCATED", "NO_TEXT", "ENCRYPTED", "UNSUPPORTED", "TOO_LARGE", "UNREADABLE"], typing.Any
+    typing.Literal[
+        "OK", "TRUNCATED", "NO_TEXT", "ENCRYPTED", "UNSUPPORTED", "TOO_LARGE", "UNREADABLE", "NOT_EXTRACTED"
+    ],
+    typing.Any,
 ]

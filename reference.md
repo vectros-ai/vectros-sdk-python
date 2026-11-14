@@ -74,7 +74,7 @@ client.auth.get_jwks()
 <dl>
 <dd>
 
-Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which record, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceId` within a `contextId` for 'who read this record'; `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
+Returns a page of per-subject PHI read-access rows: who read which subject's PHI, when, against which resource, and whether any sensitive value was actually revealed in plaintext. Metadata only — never the PHI itself. Rows exist only where read-access logging is enabled. Provide at least one query axis: a subject (`subjectType` + `subjectId`) within a `contextId` for the primary accounting query; `resourceType` + `resourceId` within a `contextId` for 'who read this resource' (both are required for that axis: rows are keyed by the pair, so `resourceId` alone matches nothing); `callerKeyId` for 'what did this credential read' (account-wide forensic); or `contextId` alone to enumerate a whole context. `from`/`to` bound the time window. Results are scoped to your account, derived from your token — never from input. Requires the `access-log:r` scope.
 </dd>
 </dl>
 </dd>
@@ -176,7 +176,7 @@ client.auth.get_access_log(
 <dl>
 <dd>
 
-**resource_type:** `typing.Optional[str]` — Restrict to a single accessed resource type: a record schema type name, or one of `document`, `search`, or `rag`.
+**resource_type:** `typing.Optional[str]` — The accessed resource's type: a record schema type name, or one of `document`, `folder`, `entities` or `users`. Required together with `resourceId` for the per-resource axis; with another axis it filters the page.
     
 </dd>
 </dl>
@@ -184,7 +184,7 @@ client.auth.get_access_log(
 <dl>
 <dd>
 
-**resource_id:** `typing.Optional[str]` — Forensic axis — restrict to reads of a single accessed record/document id.
+**resource_id:** `typing.Optional[str]` — Forensic axis — restrict to reads of a single accessed resource (a record, document, entity, user or folder id). Pass the matching `resourceType` with it: the per-resource axis is keyed by the pair.
     
 </dd>
 </dl>
@@ -613,7 +613,7 @@ client.auth.get_admin_logs(
 <dl>
 <dd>
 
-**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, or `triggers`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
+**resource:** `typing.Optional[str]` — Filter by resource type. One of `documents`, `records`, `search`, `schemas`, `folders`, `entities`, `namespaces`, `users`, `usage`, `auth`, `models`, `ping`, `issuers`, `rag`, `chat`, `ask`, `erasure-requests`, `export`, `scripts`, `triggers`, `agents`, or `runs`. `clients` and `orgs` are not accepted — `/v1/orgs` and `/v1/clients` were retired onto `/v1/entities/{namespace}` and no log row was ever written under those resource names. `trigger-failures` is also not accepted: `GET /v1/trigger-failures` rows are logged under `triggers`, not a separate resource name.
     
 </dd>
 </dl>
@@ -939,7 +939,7 @@ client.auth.list_app_contexts()
 <dl>
 <dd>
 
-Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. To overwrite an existing context's `name`/`description`/`companyName` instead of returning it unchanged, set `?upsert=true` (this also requires the `app-contexts:u` scope). The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
+Creates a new app context. This call is idempotent by `contextId`: if an app context with the same `contextId` already exists, the existing app context is returned (with status 200) instead of creating a duplicate. The response's `created` field (and the HTTP status — 201 when created, 200 when an existing context was returned) tells the two apart. Fields applied when the context is created: `name` (required), `description`, `companyName`; `readAccessLogDefault` (the PHI read-access-logging context default); the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap`, which only take effect for an account with the corresponding feature enabled); `identityProjectionClaims` (requires the platform provisioning capability; see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; they also require the provisioning capability). An omitted (or null) field is left unset (for `readAccessLogDefault`, no context default: read-access logging is then off unless a schema turns it on). When an existing context is returned, none of the submitted fields are applied and a value that differs from the stored one is not an error: the response shows the stored values. (Sending `identityProjectionClaims`, `allowSelfErasure` or `selfErasureGraceDays` without the provisioning capability is refused either way.) To apply the submitted fields to an existing context instead, set `?upsert=true`, which then also requires the `app-contexts:u` scope. The reserved `contextId` value `vectros-admin` cannot be created through this endpoint; it is provisioned automatically for your account. Requires the `app-contexts:c` scope.
 </dd>
 </dl>
 </dd>
@@ -985,7 +985,7 @@ client.auth.create_app_context()
 <dl>
 <dd>
 
-**upsert:** `typing.Optional[bool]` — When `true`, if an app context with the same `contextId` already exists its `name`, `description`, and `companyName` are updated to the submitted values instead of being returned unchanged. Defaults to `false`. Requires the `app-contexts:u` scope in addition to `app-contexts:c`.
+**upsert:** `typing.Optional[bool]` — When `true`, if an app context with the same `contextId` already exists, each submitted field (`name`, `description`, `companyName`, `readAccessLogDefault`, `meteringAxis`, `principalBurstLimit`, `principalUsageCap`, `identityProjectionClaims`, `allowSelfErasure`, and `selfErasureGraceDays`) is applied to it instead of the context being returned unchanged; an omitted (or null) field keeps its existing value. When no such context exists the context is created as without this parameter. Defaults to `false`. When the context already exists, requires the `app-contexts:u` scope in addition to `app-contexts:c`.
     
 </dd>
 </dl>
@@ -1516,7 +1516,7 @@ client.auth.get_app_context(
 <dl>
 <dd>
 
-Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); and `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description). Requires the `app-contexts:u` scope.
+Updates an app context. This is a partial update: any field you omit (or send as null) keeps its existing value. The `contextId` is immutable and is taken from the URL path, so any `contextId` in the request body is ignored. Patchable fields: `name`, `description`, `companyName`; the per-principal metering trio (`meteringAxis`, `principalBurstLimit`, `principalUsageCap` — only takes effect for an account with the corresponding feature enabled); `readAccessLogDefault` (the PHI read-access-logging context default); `identityProjectionClaims` (requires the platform provisioning capability on top of the ordinary scope below — see its own field description); and `allowSelfErasure` and `selfErasureGraceDays` (end-user account deletion; the same provisioning requirement). Requires the `app-contexts:u` scope.
 </dd>
 </dl>
 </dd>
@@ -2105,7 +2105,7 @@ client.auth.get_role_versions(
 <dl>
 <dd>
 
-Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room. The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
+Returns full usage detail for the requested calendar month, broken down by category (search, documents, records, and trigger-script execution time) with per-category credit estimates and a split between your live and test environments. Defaults to the current month when `year` and `month` are omitted. Requires the `billing:r` scope on scoped tokens; API keys always have access. **A token confined to a single app context sees only that context's usage**: totals, the environment split, and the `contexts` breakdown narrow to it, and the environment your context is not bound to is omitted (`null`), not zeroed. Only a token with cross-context reach sees your full account-wide totals. Two exceptions to the narrowing, since they have no per-context breakdown to narrow to: `reads.calls.used`/`reads.dataOut.bytes` (metered per account, not per context) read as `0` for a confined token rather than a narrowed figure — the corresponding overage-credit charge fields narrow correctly; and `credits.limit` stays your whole plan's ceiling, so `credits.remaining` may overstate the account's true remaining room (`credits.admissionLimit`, `credits.includedCredits` and `credits.overage` are not reported to a confined token). The `execution` section narrows correctly for a confined token, like the other per-context charge fields — but note its credits carry sub-credit remainders forward across your whole account for the period, so compare `execution.creditsMilli` against your account-wide figure rather than recomputing it from one context's `billableMillis`.
 </dd>
 </dl>
 </dd>
@@ -2265,7 +2265,7 @@ client.auth.get_issuer(
 <dl>
 <dd>
 
-Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
+Updates the mutable fields of a registered issuer: `subClaim`, `emailClaim`, `userinfoUri`, `capturedClaims`, `acceptedIdTokenClientIds`, `restrictedToDomain` (a new non-blank value must already be a VERIFIED domain for your account; an empty string clears it where permitted; see `IssuerUpdateRequest.restrictedToDomain` for the full semantics), `status` (`active`/`suspended` — a registration awaiting verification (`pending_verification`) accepts no status change until it is verified; a suspended issuer's tokens are rejected identically to an unregistered issuer at exchange time), and `selfSignupPolicies`. Fields omitted from the body are left unchanged (partial update). `issuer`, `jwksUri`, `audience`, and `contextId` are trust-anchor / routing-pin fields and are immutable via this route — supplying a value that differs from the current registration is rejected with 400; supplying the current value back is a no-op. Rotating a trust anchor requires deleting and re-registering the issuer, which is itself refused while any user is bound through it. **`subClaim` is identity-determining, not merely cosmetic**: it names which verified JWT claim is read as the federated user's identifier, so changing it on an issuer that already has bound users would silently re-identify (or, under self-signup, orphan) every one of them — changing it is therefore refused once any user has bound through this issuer, the same guard `DELETE` already applies, and is only free before the first real login. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only update an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId. A root API key may update any issuer.
 </dd>
 </dl>
 </dd>
@@ -2377,7 +2377,7 @@ client.auth.update_issuer(
 <dl>
 <dd>
 
-**self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here.
+**self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to disable self-signup entirely. See `IssuerRequest.selfSignupPolicies` for the full semantics — the same elevated-role restriction applies here. The list replaces the stored one as a whole: send every field of each entry you keep, including additional_role_ids.
     
 </dd>
 </dl>
@@ -2386,6 +2386,14 @@ client.auth.update_issuer(
 <dd>
 
 **captured_claims:** `typing.Optional[typing.List[str]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to stop capturing any claim beyond email. See `IssuerRequest.capturedClaims` for the full semantics.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**accepted_id_token_client_ids:** `typing.Optional[typing.List[str]]` — Safe field — updatable. Omit to leave unchanged; pass an empty list to accept only the registration's `audience`. See `IssuerRequest.acceptedIdTokenClientIds` for the full semantics.
     
 </dd>
 </dl>
@@ -2683,7 +2691,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-**self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Opt-in self-service signup: a list of {signup_type, role_id} pairs. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
+**self_signup_policies:** `typing.Optional[typing.List[SelfSignupPolicy]]` — Opt-in self-service signup: a list of entries, each a signup_type and a role_id, optionally with additional_role_ids. When a first-time exchange caller presents no invite token but names a signup_type matching one of these (or omits signup_type and exactly one entry exists), a brand-new user is created and bound to that entry's role, with any additional roles composed after it — no invite required. Every entry must, by construction, be something you're willing to grant to ANY caller who can present a token from this issuer: no entry may target a role, or a combination of roles, carrying elevated (provisioning or wildcard) scope — rejected. Omit entirely to leave self-signup disabled (the default).
     
 </dd>
 </dl>
@@ -2692,6 +2700,14 @@ client.auth.register_issuer(
 <dd>
 
 **captured_claims:** `typing.Optional[typing.List[str]]` — Opt-in additional identity-claim capture. A list of OIDC claim names — beyond `emailClaim`, which keeps its own dedicated field — to capture from this issuer's tokens on every successful token exchange and store as your tenant's golden IdP-asserted identity copy. Not a fixed set: name whatever claims this IdP actually asserts (standard, e.g. `name`/`phone_number`/`address`, or your IdP's own custom claims). Each claim is read from the verified token first, falling back to `userinfoUri` (if configured) only for names still missing after that. Omit entirely to capture nothing beyond email (the default).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**accepted_id_token_client_ids:** `typing.Optional[typing.List[str]]` — Optional extra `aud` values an ID token from this issuer may carry when an end user presents it to confirm a recent sign-in before deleting their own account (`/v1/me/erasure`). The registration's `audience` is always accepted. List your app's client ids here when your registered `audience` is an API rather than the app (as with Auth0, whose ID tokens carry the application's client id); Amazon Cognito and Firebase need nothing here. Used only for that check, never for the token exchange, so it cannot change who can sign in. List only clients you control: an ID token issued to any listed client counts as the user's sign-in. At most 10 entries.
     
 </dd>
 </dl>
@@ -2931,6 +2947,234 @@ client.auth.list_profiles_for_principal(
 <dd>
 
 **limit:** `typing.Optional[int]` — Maximum number of access profiles to return per page (1–100; defaults to 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">list_public_app_keys</a>(...) -> PublicAppKeyPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Lists the publishable app keys of your credential's environment, active and revoked, a page at a time. A credential confined to one app context lists only that context's keys, so its page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `startFrom`, until it is null. A server key's secret is never listed. Requires the `public-keys:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.list_public_app_keys()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — The page size, 1 to 100 (default 50).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — The `nextCursor` of the previous page.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">create_public_app_key</a>(...) -> PublicAppKeyResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.create_public_app_key()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**context_id:** `typing.Optional[str]` — The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**key_class:** `typing.Optional[CreatePublicAppKeyRequestKeyClass]` — `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">revoke_public_app_key</a>(...) -> RevokedPublicAppKeys</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.revoke_public_app_key(
+    key_id="keyId",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**key_id:** `str` — The key's `keyId`, as returned when it was issued.
     
 </dd>
 </dl>
@@ -3303,7 +3547,7 @@ client.auth.assume_token(
 <dl>
 <dd>
 
-RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK.
+RFC 8693 OAuth 2.0 Token Exchange. Trades a JWT issued by a third-party identity provider you've registered (`POST /v1/auth/issuers`) for a Vectros `st_*` scoped bearer token — no Vectros credential required to call this endpoint. The exchanged token's scope is resolved entirely server-side from the matched user's access profile; this endpoint accepts no caller-supplied scope, resource, or audience parameter (RFC 8693 §2.1's `resource`/`audience`/`scope` are not used in v1 — the registered `(issuer, audience)` pair alone pins the target tenant and app context). On a first-time login (no existing Vectros identity for this subject), two opt-in binding paths exist: `invite_token` (a `PENDING` sub-user invitation), and — if the registration declares one or more self-signup policies — `signup_type` (a brand-new user is created and bound to the policy's configured role). If `invite_token` is present at all, it is the ONLY path tried — a failed invite never falls through to self-signup. Neither field is required for a subject with an existing identity. If your issuer is registered against more than one app context (each via its own audience), `context_id` selects which one to target; omit it when your token's `aud` claim matches only one registered context — the common case, unaffected by this field. Uses the OAuth-standard error envelope (`{"error":..., "error_description":...}`, RFC 6749 §5.2), NOT this API's usual `{"message":...}` shape — its client is generic OAuth tooling, not the Vectros SDK. The one exception is the per-IP `429`, which the edge returns before the request reaches this endpoint, in this API's rate-limit shape (`{"errorCode":"RATE_LIMITED",...}`).
 </dd>
 </dl>
 </dd>
@@ -3430,7 +3674,7 @@ Selects which self-service signup policy to apply for a first-time login with NO
 <dl>
 <dd>
 
-Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
+Returns a page of the agents in the app context, newest first, each at its latest version. A caller holding `runs:c` but not `agents:r` gets only each agent's `id`, `name`, `description`, `latestVersion` and `status`, and only for the agents its `runs:c` grant covers: a grant naming agents (`runs:c:<agent>`) lists those agents alone, in one page with no `nextCursor`. Retired and purged agents are left out unless `includeRetired=true`. Requires `agents:r` or `runs:c`.
 </dd>
 </dl>
 </dd>
@@ -3612,7 +3856,7 @@ client.agents.create_agent(
 <dl>
 <dd>
 
-Returns the agent at its latest version, or at `version`. Requires the `agents:r` scope.
+Returns the agent at its latest version, or at `version`, with `periodUsage`: what its runs have spent and hold in the current instance of each period it counts. Requires the `agents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -3997,7 +4241,7 @@ client.agents.list_agent_versions(
 <dl>
 <dd>
 
-Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 30 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. Takes no body.
+Stops a run. The answer is `202` with the run still `RUNNING`: read it with `GET /v1/runs/{id}` to see it end. A model call in progress is cut within a few seconds; a tool call in progress is first allowed to finish, for up to about 45 seconds, so its change is recorded and billed, and the run stops as soon as it has. The run then ends `CANCELLED` with `errorCode` `CANCELLED_BY_CALLER`, unless it had already completed, in which case it stays `COMPLETED`. Its reservation is settled once, like any run's: a model call in progress when it stopped is charged up to its maximum. A run that has ended (or that had not started, which this cancel ends) answers `200` with its final state, so a cancel can always be retried. A run can be cancelled by the credential that started it (for a token bound to a user, by that user) and by your root key. Requires the `runs:c` scope; with `runs:r` as well the answer is the whole run, otherwise only its `id`, `status`, `terminal`, `reason` and `errorCode`. A grant naming an agent (`runs:c:<agent>`, `runs:r:<agent>`) reaches only runs of that agent: any other run answers `404` to the cancel, and the whole run is returned only when `runs:r` names its agent too. Takes no body.
 </dd>
 </dl>
 </dd>
@@ -4077,7 +4321,7 @@ client.agents.cancel_run(
 <dl>
 <dd>
 
-Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for 30 days after it ends. Requires the `runs:r` scope.
+Returns the status and metadata of one run: the agent version that ran, how it ended, its tool calls (never their arguments or results) and what it was charged. It never returns text: the answer is delivered only in the run's stream. A run is visible to the credential that started it (for a token bound to a user, to that user) and to your root key, and is kept for at least 30 days after it ends. Requires the `runs:r` scope. A grant naming an agent (`runs:r:<agent>`) reads only runs of that agent; any other run answers `404`.
 </dd>
 </dl>
 </dd>
@@ -4145,6 +4389,116 @@ client.agents.get_run(
 </dl>
 </details>
 
+<details><summary><code>client.agents.<a href="src/vectros/agents/client.py">list_runs</a>(...) -> RunPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns a page of runs, newest first. Each run is what `GET /v1/runs/{id}` returns without `usage` (read a run by its id for its charge). A credential lists the runs it started (for a token bound to a user, that user's runs) in its app context. Your root key lists every run, so it must name `contextId` (that context's runs), `userId` (the runs started by tokens bound to that user; across your app contexts, grouped by context and newest first within each, unless `contextId` is named too), or both. Requires the `runs:r` scope. A grant naming agents (`runs:r:<agent>`) lists only runs of those agents. Runs are kept for at least 30 days after they end. A run started before this list existed appears only in your root key's list of its context until it expires; it can always be read by its id. A page may hold fewer runs than `limit`, or none, while `nextCursor` is present: a request reads a bounded part of the runs it could list, so a filter that matches few of them returns a short page to go on from. Keep reading until `nextCursor` is absent.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.agents.list_runs()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**context_id:** `typing.Optional[str]` — The app context to list. Only a credential that is not confined to one app context may name another context; a confined credential naming a context other than its own gets `403`. Omit it to use your credential's context; your root key must name it or `userId`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**user_id:** `typing.Optional[str]` — Root key: list the runs started by tokens bound to this user (not runs started by a key). A token bound to a user may name only that user, which changes nothing; any other value, or any value from a credential that is not a token bound to a user, is `403`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**status:** `typing.Optional[str]` — Only runs with this status: today `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED` or `EXPIRED` (other values may be added). An unknown value is `400`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**agent_id:** `typing.Optional[str]` — Only runs of this agent.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**start_from:** `typing.Optional[str]` — Pagination cursor: pass the `nextCursor` of the previous page; omit it for the first page. Opaque — echo it back unchanged.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — Maximum number of runs per page, 1-100; defaults to 20.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 <details><summary><code>client.agents.<a href="src/vectros/agents/client.py">create_run</a>(...) -> typing.Iterator[bytes]</code></summary>
 <dl>
 <dd>
@@ -4157,7 +4511,7 @@ client.agents.get_run(
 <dl>
 <dd>
 
-Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope, and agent runs switched on for your tenant by an account owner.
+Starts a run of a stored agent and streams what it does as Server-Sent Events. The response is always `text/event-stream` once the run has started, whatever `Accept` you send (a request refused before the run starts is answered with JSON); its `X-Vectros-Run-Id` header names the run. The run's tool calls act as you, with your own permissions, and only through the tools the agent lists. On a prepaid account the run reserves its budget from your inference balance when it starts and returns what its model calls did not use when it ends; a fixed fee per run, tool calls and run time are billed separately, against your plan. Read each event's `type`; ignore types and fields you do not know; stop at the event with `terminal: true`. A stream that ends without one: read the run with `GET /v1/runs/{id}`. Closing the stream stops the run only on a best-effort basis. Requires the `runs:c` scope (a grant naming an agent, `runs:c:<agent>`, starts only that agent), and agent runs switched on for your tenant by an account owner.
 </dd>
 </dl>
 </dd>
@@ -5442,7 +5796,7 @@ client.documents.get_document_versions(
 <dl>
 <dd>
 
-Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key, so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call always targets a new key, so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant.
+Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Any type of file can be uploaded. Text is extracted only from document formats (plain text, CSV, TSV, Markdown, JSON, YAML, HTML, XML, PDF, RTF, Word, Excel, PowerPoint, Outlook messages, OpenDocument, EPUB, e-mail messages and mbox exports, WordPerfect, Visio, Publisher, OneNote and Apple iWork), and which format a file is in is decided from its content, not from `fileType`. Any other file (audio, video, images, archives such as zip) is stored and can be downloaded, but is not read: its `extraction.outcome` is `NOT_EXTRACTED`. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. For a document of a public-media type the file is never replaced: while its upload is still pending, the same request issues a URL for the SAME object instead, and once the upload has arrived it is refused (`409`, errorCode `PUBLIC_MEDIA_IMMUTABLE`). The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key (for a pending public-media document, its not-yet-written object), so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call targets a new key (for a public-media document, see above), so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant. **Send `size`, the exact length of the file in bytes.** The upload is then bound: the file's media type and its length are part of `uploadUrl`'s signature, so a PUT with another `Content-Type` or another length is refused with `403 SignatureDoesNotMatch` before anything is stored. Send every header in the response's `requiredHeaders`, with its value unchanged. `size` is required for a document of a public-media type and optional for every other upload.
 </dd>
 </dl>
 </dd>
@@ -5466,7 +5820,6 @@ client = VectrosApi(
 
 client.documents.upload_document(
     file_name="patient_intake_2024_01_15.pdf",
-    file_type="application/pdf",
 )
 
 ```
@@ -5491,14 +5844,6 @@ client.documents.upload_document(
 <dl>
 <dd>
 
-**file_type:** `str` — MIME type of the file being uploaded. Used to set the correct Content-Type on the stored object.
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
 **upsert:** `typing.Optional[bool]` — When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
     
 </dd>
@@ -5508,6 +5853,22 @@ client.documents.upload_document(
 <dd>
 
 **confirm_untyped:** `typing.Optional[bool]` — Required when the request supplies `externalId` but omits `schemaId`. Since externalId uniqueness is scoped per schema, an externalId-bearing request with no `schemaId` would otherwise silently land in a separate UNTYPED slot instead of the typed document the caller likely meant — pass `schemaId` to target the typed document, or `confirmUntyped=true` to confirm a genuinely untyped document is intended. Ignored (has no effect) when `schemaId` is supplied, or when `externalId` is omitted entirely. Defaults to `false`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**file_type:** `typing.Optional[str]` — Media type of the file being uploaded, as `type/subtype`. Any valid media type is accepted. It is stored lower case and without parameters (`text/plain; charset=utf-8` is stored as `text/plain`), and when it is omitted or `application/octet-stream` it is inferred from the extension of `fileName`. Without `size` it is a label only: it does not set the Content-Type of the stored file (your PUT to `uploadUrl` does). With `size`, `uploadUrl` is signed for this type in its stored form, and your PUT must send it as given in the response's `requiredHeaders`. For a document of a public-media type it must be a type that document type accepts. Whether text is extracted is decided from the file's content (see `detectedType` on the document).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**size:** `typing.Optional[int]` — The exact length of the file in bytes, at least 1. When you send it, the upload is bound: the file's media type and this length become part of `uploadUrl`'s signature, so the storage service refuses a PUT whose `Content-Type` differs from the one in the response's `requiredHeaders` or whose length differs from `size` (`403 SignatureDoesNotMatch`), before anything is stored. Send the exact number of bytes you will upload (in a browser, `File.size`); your HTTP client sets `Content-Length` from the body. A file can be at most 104857600 bytes (100 MiB). Required for a document of a public-media type. Optional for every other upload.
     
 </dd>
 </dl>
@@ -7798,6 +8159,293 @@ client.compliance.get_export(
 </dl>
 </details>
 
+<details><summary><code>client.compliance.<a href="src/vectros/compliance/client.py">cancel_self_erasure</a>(...) -> SelfErasureResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Cancels the signed-in user's own scheduled account deletion in this app while its waiting period runs; nothing is deleted. Once the deletion has started it can no longer be cancelled. Like requesting it, cancelling needs a fresh ID token proving the user just signed in (not the one that requested the deletion), so a deletion the user asked for cannot be cancelled with an API key alone. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.compliance.cancel_self_erasure(
+    id="er_550e8400e29b41d4a716446655440000",
+    id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The request's id.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request:** `SelfErasureRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.compliance.<a href="src/vectros/compliance/client.py">get_pending_self_erasure</a>() -> SelfErasureResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns the signed-in user's account deletion in this app that is still scheduled or running, so the app can show when it will happen and offer to cancel it. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.compliance.get_pending_self_erasure()
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.compliance.<a href="src/vectros/compliance/client.py">request_self_erasure</a>(...) -> SelfErasureResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Schedules the deletion of the signed-in user's own account in this app: their data in this app context and their access to it. Only this app is affected; other app contexts are other apps. The user's identity is removed too when this is the account's only app context. The deletion starts after the app's waiting period (`selfErasureGraceDays`, default 7 days), during which the user can cancel it, and the user is emailed when it is scheduled and when it completes (to the verified email in the ID token). Requires the user's own scoped token, a fresh ID token proving they just signed in, and account deletion turned on for this app (`allowSelfErasure` on the app context). Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token. The account owner cannot use it.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.compliance.request_self_erasure(
+    id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**request:** `SelfErasureRequest` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.compliance.<a href="src/vectros/compliance/client.py">get_self_erasure</a>(...) -> SelfErasureResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns one of the signed-in user's own account deletions in this app, in any status; once it has completed, with the certificate of what was removed. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.compliance.get_self_erasure(
+    id="er_550e8400e29b41d4a716446655440000",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The request's id.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 ## Folders
 <details><summary><code>client.folders.<a href="src/vectros/folders/client.py">list_folders</a>(...) -> FolderPage</code></summary>
 <dl>
@@ -9978,6 +10626,78 @@ You may supply fewer values than the lookup declares, as long as they are a lead
 </dl>
 </details>
 
+<details><summary><code>client.records.<a href="src/vectros/records/client.py">get_record_public_view</a>(...) -> PublicViewCopyResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+For a record whose type has a `publicView` in `projection` mode: what the public sees of it, which is the fields the type lists, as last copied from the record. `published` is false when the record is not public now. Requires the `records:r:<type>` scope, with ownership checked as for reading the record.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.records.get_record_public_view(
+    id="id",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 <details><summary><code>client.records.<a href="src/vectros/records/client.py">get_record_tombstone</a>(...) -> TombstoneResponse</code></summary>
 <dl>
 <dd>
@@ -10575,6 +11295,150 @@ client.schemas.delete_schema(
 </dl>
 </details>
 
+<details><summary><code>client.schemas.<a href="src/vectros/schemas/client.py">get_schema_republish</a>(...) -> PublicViewRepublishResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+The progress of the latest republish of a `projection` schema's public copies. Requires the `schemas:r` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.schemas.get_schema_republish(
+    id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The id of the schema.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.schemas.<a href="src/vectros/schemas/client.py">republish_schema_public_view</a>(...) -> PublicViewRepublishResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+For a schema whose `publicView` is in `projection` mode: rewrites every record's public copy from the record as it is now, in the background. A republish also starts on its own whenever the public view changes, so you need this only to repair copies. Each copy written is billed as a record write. If one is already running for the current public view and making progress, that one is returned. Requires the `schemas:u` scope.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.schemas.republish_schema_public_view(
+    id="6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` — The id of the schema.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 <details><summary><code>client.schemas.<a href="src/vectros/schemas/client.py">get_schema_versions</a>(...) -> ModelDataVersionPage</code></summary>
 <dl>
 <dd>
@@ -10668,11 +11532,11 @@ client.schemas.get_schema_versions(
 <dl>
 <dd>
 
-Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on.
+Runs a script you previously pushed to `POST /v1/scripts`, under your own credential, and returns what it returned. Every write the script makes is buffered and committed as ONE transaction after the script finishes: either all of them land or none do, and the response is sent only after they have committed — so everything in `result` is committed state or the script's own computation over it. On any failure the body is the standard error envelope and nothing the script staged is committed: its rows are written only when the transaction commits, and a document body or a large payload is DECIDED at that point and WRITTEN to storage only after the commit, so an aborted execution leaves nothing behind. The one residual sits after a successful commit, outside this response: if storing a body fails then, the row exists and the body may not — so a `200` guarantees the rows, and a document's text should be read before it is relied on. Because the writes are one transaction, an entity's `externalId` cannot be freed (by a delete or by changing it) and given to another entity in the same run; the run fails with a `400` saying so. Free it in one run and reuse it in the next.
 
 **Permission.** Requires the `scripts:x` scope — the permission to *execute* — separate from the `scripts:c` permission to push scripts. Bare `scripts:x` grants every script in the context; `scripts:x:<name>` grants exactly that script name, every version of it. Execution discloses no source, so `scripts:r` is not needed. Inside the script, every read and write is enforced by your credential's data scopes exactly as the equivalent REST call would be — `scripts:x` alone can read and write nothing.
 
-**Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. `params` is not validated — a script that needs a shape checks for it and throws; the script's `declaredInputContract` is documentation for readers and is not enforced.
+**Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. When the script version declares an `inputSchema`, your `input` is checked against it before anything runs (a `400` naming every problem, the same words a script tool's call gets) and an optional member sent as null is removed; a version without one gets `params` unvalidated, and a script that needs a shape checks for it and throws. The script's `declaredInputContract` is documentation for readers and is not enforced.
 
 **Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 3 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field. So "create a folder and file N documents" holds up to 97 plain documents, 48 with one range field or one reference, 32 with both; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
 
@@ -10738,7 +11602,7 @@ client.scripts.execute_script(
 <dl>
 <dd>
 
-**input:** `typing.Optional[typing.Dict[str, typing.Any]]` — A free-form JSON object your script receives as `input.params`. The platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
+**input:** `typing.Optional[typing.Dict[str, typing.Any]]` — A JSON object your script receives as `input.params`. When the script version declares an `inputSchema`, this object is checked against it before the script runs (a `400` naming every problem; an optional member sent as null is removed); otherwise the platform does not validate or interpret it — a script that needs a shape checks for it and throws, which reaches you as a `400` carrying the script's own message. The script's `declaredInputContract` describes this object for readers; it is not enforced. Sized by the request body limit (256 KB for this endpoint). Omitting it is the same as `{}`.
     
 </dd>
 </dl>
@@ -10899,7 +11763,7 @@ client = VectrosApi(
 
 client.scripts.create_script(
     name="notify-assignee",
-    source="export default function(input) { return { ok: true }; }",
+    source="({ ok: true });",
 )
 
 ```
@@ -11045,7 +11909,7 @@ client = VectrosApi(
 client.scripts.update_script(
     id="id",
     name="notify-assignee",
-    source="export default function(input) { return { ok: true }; }",
+    source="({ ok: true });",
 )
 
 ```
@@ -11197,9 +12061,7 @@ client = VectrosApi(
     base_url="https://yourhost.com/path/to/api",
 )
 
-client.search.content(
-    query="patient intake form diabetes",
-)
+client.search.content()
 
 ```
 </dd>
@@ -11215,7 +12077,7 @@ client.search.content(
 <dl>
 <dd>
 
-**query:** `str` — The search query, expressed in natural language or as keywords. Required.
+**query:** `typing.Optional[str]` — The search query, expressed in natural language or as keywords. Required, unless `filters` contains a `$near` filter: a `$near` with no query returns the matches within the radius, nearest first, and is billed as a `TEXT` search whatever `mode` says.
     
 </dd>
 </dl>
@@ -11271,7 +12133,7 @@ client.search.content(
 <dl>
 <dd>
 
-**filters:** `typing.Optional[typing.Dict[str, FilterValue]]` — Field-level filters applied to your document and record metadata. Each key is a field name, and top-level keys are AND-combined. Each value is one of: a scalar (string, number, or boolean) for an exact match; an array of scalars to match any one of them; or an operator map for ranges, negation, and membership. The supported operators are a closed set: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` (each takes a scalar) and `$in`, `$nin` (each takes an array of scalars). Operators within one map are AND-combined, so `{"price":{"$gte":100,"$lte":500}}` expresses a closed range; `$in` and `$nin` may not be combined with other operators. Numbers and booleans are matched by type, so the field must have been ingested under a typed schema; dates may be sent as ISO 8601 strings or epoch milliseconds. Unknown operators, non-scalar operands, and malformed field names are rejected with a 400.
+**filters:** `typing.Optional[typing.Dict[str, FilterValue]]` — Field-level filters applied to your document and record metadata. Each key is a field name, and top-level keys are AND-combined. Each value is one of: a scalar (string, number, or boolean) for an exact match; an array of scalars to match any one of them; or an operator map for ranges, negation, and membership. The supported operators are a closed set: `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte` (each takes a scalar) and `$in`, `$nin` (each takes an array of scalars). Operators within one map are AND-combined, so `{"price":{"$gte":100,"$lte":500}}` expresses a closed range; `$in` and `$nin` may not be combined with other operators. Numbers and booleans are matched by type, so the field must have been ingested under a typed schema; dates may be sent as ISO 8601 strings or epoch milliseconds. Unknown operators, non-scalar operands, and malformed field names are rejected with a 400. A field of type `geo` takes the `$near` operator: `{"location":{"$near":{"lat":47.6062,"lon":-122.3321,"radiusMeters":5000}}}` keeps only content whose location is within `radiusMeters` (1 to 2,000,000) of the point, measured as great-circle distance on a sphere, inclusive. `$near` must be the only operator in its map, and at most one `$near` is allowed per request. Each result then carries `distanceMeters`. With a query and no `sortBy`, results keep their relevance order. Without `typeName`, a `$near` on a field that is not of type `geo` matches nothing: the result is empty, not an error. With `typeName`, a `$near` on a field that no schema of that type declares as `geo` is a `400`. This check does not apply to a key that reaches every app context: that key gets an empty result.
     
 </dd>
 </dl>
@@ -11367,7 +12229,343 @@ client.search.content(
 <dl>
 <dd>
 
-**require_complete:** `typing.Optional[bool]` — A fail-closed override. When true, the request returns HTTP 503 instead of partial results if one of the search engines is unavailable. Defaults to false, in which case an outage degrades to the surviving engine and the response carries `degraded: true` along with the failed engines in `degradedLegs`. Set this to true only when complete results are required and a degraded answer is unacceptable.
+**require_complete:** `typing.Optional[bool]` — A fail-closed override. When true, the request returns HTTP 503 instead of partial results if one of the search engines is unavailable. Defaults to false, in which case an outage degrades to the surviving engine and the response carries `degraded: true` along with the failed engines in `degradedLegs`. Set this to true only when complete results are required and a degraded answer is unacceptable. It also returns a 503 instead of a search ordered by distance that would carry `incompleteResults: true`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sort_by:** `typing.Optional[SearchRequestSortBy]` — The result order. Omit it for relevance order. `distance` orders results nearest first; it requires a `$near` filter, and either no `query` or `mode` TEXT (it is rejected with a 400 for HYBRID and SEMANTIC). A `TEXT` search with a `$near` (ordered by distance or not) returns no keyword-highlighted snippet: `snippet` falls back to an excerpt of the item. A search with no `query` runs as a keyword-index search whatever `mode` says, so content indexed for semantic search only is not found by it, nor by a `TEXT` search ordered by distance. A search ordered by distance returns at most one result per item (`uniqueDocuments` does not apply).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+## Public
+<details><summary><code>client.public.<a href="src/vectros/public/client.py">get_public_record</a>(...) -> PublicRecordResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.public.get_public_record(
+    type="type",
+    public_id="publicId",
+    k="k",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**type:** `str` — The record type.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**public_id:** `str` — The record's public identifier.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**k:** `str` — A publishable app key of the record's app context.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.public.<a href="src/vectros/public/client.py">list_public_records</a>(...) -> PublicRecordPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value: such a type lists all of its published records, and filtering them (by category, location or text) is not available on this route. For a type published as a projection, the field must also be one the type publishes; any other field returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.public.list_public_records(
+    type="type",
+    k="k",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**type:** `str` — The record type.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**k:** `str` — A publishable app key of the type's app context.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — The page size, 1 to 40 (default 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**cursor:** `typing.Optional[str]` — The `nextCursor` of the previous page.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.public.<a href="src/vectros/public/client.py">search_public_records</a>(...) -> PublicSearchPage</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters. There is no total count: page with `offset` while `hasMore` is true. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first (charged as a text search, and the type must offer `text`); with a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search is enabled per account on request. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.public.search_public_records(
+    k="k",
+    type="type",
+    near_lat="38.7223",
+    near_lon="-9.1393",
+    near_radius=5000,
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**k:** `str` — A publishable app key of the type's app context.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**type:** `str` — The record type to search.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**q:** `typing.Optional[str]` — The text to search for, at most 256 characters. Required, except with `near.*`: then leave it out to list the records near a place, nearest first.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**mode:** `typing.Optional[str]` — `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**offset:** `typing.Optional[int]` — How many results to skip, 0 to 200 (default 0).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**limit:** `typing.Optional[int]` — The page size, 1 to 40 (default 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**near_lat:** `typing.Optional[str]` — The latitude of the place to search near, -90 to 90, written as a plain decimal with at most 6 decimal places (for example `38.7223` or `-0.5`; no exponent, no leading `+`, and not `-0`). Send with `near.lon` and `near.radius`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**near_lon:** `typing.Optional[str]` — The longitude of the place to search near, -180 to 180, written as a plain decimal with at most 6 decimal places (for example `-9.1393`; no exponent, no leading `+`, and not `-0`). Send with `near.lat` and `near.radius`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**near_radius:** `typing.Optional[int]` — The search radius in whole metres, 1 to 200000. Send with `near.lat` and `near.lon`.
     
 </dd>
 </dl>

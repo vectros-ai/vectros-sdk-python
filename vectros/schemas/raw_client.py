@@ -15,13 +15,17 @@ from ..errors.bad_request_error import BadRequestError
 from ..errors.conflict_error import ConflictError
 from ..errors.forbidden_error import ForbiddenError
 from ..errors.not_found_error import NotFoundError
+from ..errors.service_unavailable_error import ServiceUnavailableError
 from ..errors.too_many_requests_error import TooManyRequestsError
 from ..types.field_def import FieldDef
 from ..types.lookup_def import LookupDef
 from ..types.model_data_version_page import ModelDataVersionPage
+from ..types.public_view_def import PublicViewDef
+from ..types.public_view_republish_response import PublicViewRepublishResponse
 from ..types.render_hint_def import RenderHintDef
 from ..types.schema_page import SchemaPage
 from ..types.schema_request_allowed_surfaces_item import SchemaRequestAllowedSurfacesItem
+from ..types.schema_request_file_profile import SchemaRequestFileProfile
 from ..types.schema_request_index_mode import SchemaRequestIndexMode
 from ..types.schema_request_storage_profile import SchemaRequestStorageProfile
 from ..types.schema_response import SchemaResponse
@@ -133,11 +137,16 @@ class RawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        file_profile: typing.Optional[SchemaRequestFileProfile] = OMIT,
+        media_kinds: typing.Optional[typing.Sequence[str]] = OMIT,
+        max_bytes: typing.Optional[int] = OMIT,
+        content_types: typing.Optional[typing.Sequence[str]] = OMIT,
         allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
+        public_view: typing.Optional[PublicViewDef] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -175,6 +184,18 @@ class RawSchemasClient:
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
 
+        file_profile : typing.Optional[SchemaRequestFileProfile]
+            Makes this a public-media type: a document type for images. The only value is `PUBLIC_MEDIA`. A public-media type must have `allowedSurfaces` exactly `["document"]` and is never indexed (`indexMode` is `NONE`, the default for this type). Its documents are created only by `POST /v1/documents/upload`, cannot be created from text or retyped, and their file cannot be replaced once uploaded. Once set, the profile cannot be removed; it cannot be added to a schema that already has documents or variants.
+
+        media_kinds : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the kinds of media this type accepts. Only `image` is available; `video` is refused with errorCode `MEDIA_KIND_NOT_AVAILABLE`. Defaults to `["image"]`.
+
+        max_bytes : typing.Optional[int]
+            With `fileProfile: PUBLIC_MEDIA`: the largest file, in bytes, this type declares. At most 10485760 (10 MiB), which is also the default. An upload of this type whose `size` is above it is refused at upload start (`MEDIA_TOO_LARGE`).
+
+        content_types : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the file types this type declares. A subset of `image/jpeg`, `image/png`, `image/webp` and `image/gif`, which is also the default. An upload of this type whose `fileType` is not one of them is refused at upload start (`MEDIA_FORMAT_NOT_ACCEPTED`).
+
         allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
@@ -189,6 +210,8 @@ class RawSchemasClient:
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
+
+        public_view : typing.Optional[PublicViewDef]
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -220,11 +243,18 @@ class RawSchemasClient:
                 "capabilities": capabilities,
                 "indexMode": index_mode,
                 "storageProfile": storage_profile,
+                "fileProfile": file_profile,
+                "mediaKinds": media_kinds,
+                "maxBytes": max_bytes,
+                "contentTypes": content_types,
                 "allowedSurfaces": allowed_surfaces,
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
                 "basedOn": based_on,
+                "publicView": convert_and_respect_annotation_metadata(
+                    object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
             },
             headers={
                 "content-type": "application/json",
@@ -288,6 +318,17 @@ class RawSchemasClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -373,11 +414,16 @@ class RawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        file_profile: typing.Optional[SchemaRequestFileProfile] = OMIT,
+        media_kinds: typing.Optional[typing.Sequence[str]] = OMIT,
+        max_bytes: typing.Optional[int] = OMIT,
+        content_types: typing.Optional[typing.Sequence[str]] = OMIT,
         allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
+        public_view: typing.Optional[PublicViewDef] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -415,6 +461,18 @@ class RawSchemasClient:
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
 
+        file_profile : typing.Optional[SchemaRequestFileProfile]
+            Makes this a public-media type: a document type for images. The only value is `PUBLIC_MEDIA`. A public-media type must have `allowedSurfaces` exactly `["document"]` and is never indexed (`indexMode` is `NONE`, the default for this type). Its documents are created only by `POST /v1/documents/upload`, cannot be created from text or retyped, and their file cannot be replaced once uploaded. Once set, the profile cannot be removed; it cannot be added to a schema that already has documents or variants.
+
+        media_kinds : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the kinds of media this type accepts. Only `image` is available; `video` is refused with errorCode `MEDIA_KIND_NOT_AVAILABLE`. Defaults to `["image"]`.
+
+        max_bytes : typing.Optional[int]
+            With `fileProfile: PUBLIC_MEDIA`: the largest file, in bytes, this type declares. At most 10485760 (10 MiB), which is also the default. An upload of this type whose `size` is above it is refused at upload start (`MEDIA_TOO_LARGE`).
+
+        content_types : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the file types this type declares. A subset of `image/jpeg`, `image/png`, `image/webp` and `image/gif`, which is also the default. An upload of this type whose `fileType` is not one of them is refused at upload start (`MEDIA_FORMAT_NOT_ACCEPTED`).
+
         allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
@@ -429,6 +487,8 @@ class RawSchemasClient:
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
+
+        public_view : typing.Optional[PublicViewDef]
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -457,11 +517,18 @@ class RawSchemasClient:
                 "capabilities": capabilities,
                 "indexMode": index_mode,
                 "storageProfile": storage_profile,
+                "fileProfile": file_profile,
+                "mediaKinds": media_kinds,
+                "maxBytes": max_bytes,
+                "contentTypes": content_types,
                 "allowedSurfaces": allowed_surfaces,
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
                 "basedOn": based_on,
+                "publicView": convert_and_respect_annotation_metadata(
+                    object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
             },
             headers={
                 "content-type": "application/json",
@@ -534,6 +601,17 @@ class RawSchemasClient:
                         ),
                     ),
                 )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             _response_json = _response.json()
         except JSONDecodeError:
             raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
@@ -591,6 +669,147 @@ class RawSchemasClient:
                 )
             if _response.status_code == 409:
                 raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def get_schema_republish(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[PublicViewRepublishResponse]:
+        """
+        The progress of the latest republish of a `projection` schema's public copies. Requires the `schemas:r` scope.
+
+        Parameters
+        ----------
+        id : str
+            The id of the schema.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[PublicViewRepublishResponse]
+            The latest republish; `status` is absent when none has run.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/schemas/{encode_path_param(id)}/republish",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewRepublishResponse,
+                    parse_obj_as(
+                        type_=PublicViewRepublishResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    def republish_schema_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> HttpResponse[PublicViewRepublishResponse]:
+        """
+        For a schema whose `publicView` is in `projection` mode: rewrites every record's public copy from the record as it is now, in the background. A republish also starts on its own whenever the public view changes, so you need this only to repair copies. Each copy written is billed as a record write. If one is already running for the current public view and making progress, that one is returned. Requires the `schemas:u` scope.
+
+        Parameters
+        ----------
+        id : str
+            The id of the schema.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        HttpResponse[PublicViewRepublishResponse]
+            The republish is running.
+        """
+        _response = self._client_wrapper.httpx_client.request(
+            f"v1/schemas/{encode_path_param(id)}/republish",
+            method="POST",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewRepublishResponse,
+                    parse_obj_as(
+                        type_=PublicViewRepublishResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return HttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -787,11 +1006,16 @@ class AsyncRawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        file_profile: typing.Optional[SchemaRequestFileProfile] = OMIT,
+        media_kinds: typing.Optional[typing.Sequence[str]] = OMIT,
+        max_bytes: typing.Optional[int] = OMIT,
+        content_types: typing.Optional[typing.Sequence[str]] = OMIT,
         allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
+        public_view: typing.Optional[PublicViewDef] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -829,6 +1053,18 @@ class AsyncRawSchemasClient:
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
 
+        file_profile : typing.Optional[SchemaRequestFileProfile]
+            Makes this a public-media type: a document type for images. The only value is `PUBLIC_MEDIA`. A public-media type must have `allowedSurfaces` exactly `["document"]` and is never indexed (`indexMode` is `NONE`, the default for this type). Its documents are created only by `POST /v1/documents/upload`, cannot be created from text or retyped, and their file cannot be replaced once uploaded. Once set, the profile cannot be removed; it cannot be added to a schema that already has documents or variants.
+
+        media_kinds : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the kinds of media this type accepts. Only `image` is available; `video` is refused with errorCode `MEDIA_KIND_NOT_AVAILABLE`. Defaults to `["image"]`.
+
+        max_bytes : typing.Optional[int]
+            With `fileProfile: PUBLIC_MEDIA`: the largest file, in bytes, this type declares. At most 10485760 (10 MiB), which is also the default. An upload of this type whose `size` is above it is refused at upload start (`MEDIA_TOO_LARGE`).
+
+        content_types : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the file types this type declares. A subset of `image/jpeg`, `image/png`, `image/webp` and `image/gif`, which is also the default. An upload of this type whose `fileType` is not one of them is refused at upload start (`MEDIA_FORMAT_NOT_ACCEPTED`).
+
         allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
@@ -843,6 +1079,8 @@ class AsyncRawSchemasClient:
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
+
+        public_view : typing.Optional[PublicViewDef]
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -874,11 +1112,18 @@ class AsyncRawSchemasClient:
                 "capabilities": capabilities,
                 "indexMode": index_mode,
                 "storageProfile": storage_profile,
+                "fileProfile": file_profile,
+                "mediaKinds": media_kinds,
+                "maxBytes": max_bytes,
+                "contentTypes": content_types,
                 "allowedSurfaces": allowed_surfaces,
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
                 "basedOn": based_on,
+                "publicView": convert_and_respect_annotation_metadata(
+                    object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
             },
             headers={
                 "content-type": "application/json",
@@ -942,6 +1187,17 @@ class AsyncRawSchemasClient:
                 )
             if _response.status_code == 429:
                 raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,
@@ -1027,11 +1283,16 @@ class AsyncRawSchemasClient:
         capabilities: typing.Optional[typing.Dict[str, bool]] = OMIT,
         index_mode: typing.Optional[SchemaRequestIndexMode] = OMIT,
         storage_profile: typing.Optional[SchemaRequestStorageProfile] = OMIT,
+        file_profile: typing.Optional[SchemaRequestFileProfile] = OMIT,
+        media_kinds: typing.Optional[typing.Sequence[str]] = OMIT,
+        max_bytes: typing.Optional[int] = OMIT,
+        content_types: typing.Optional[typing.Sequence[str]] = OMIT,
         allowed_surfaces: typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]] = OMIT,
         active: typing.Optional[bool] = OMIT,
         user_id: typing.Optional[str] = OMIT,
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
+        public_view: typing.Optional[PublicViewDef] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -1069,6 +1330,18 @@ class AsyncRawSchemasClient:
         storage_profile : typing.Optional[SchemaRequestStorageProfile]
             Where this type's payload is stored. STANDARD (default): payloads of 4 KB or larger are externalized to S3, smaller ones are stored inline. LOW_LATENCY: always store inline for the lowest read latency. LARGE_PAYLOAD: always externalize to S3, which lifts the 400 KB item-size ceiling. For externalized types, list and lookup responses return only the indexed projection unless you pass `includePayload=true`.
 
+        file_profile : typing.Optional[SchemaRequestFileProfile]
+            Makes this a public-media type: a document type for images. The only value is `PUBLIC_MEDIA`. A public-media type must have `allowedSurfaces` exactly `["document"]` and is never indexed (`indexMode` is `NONE`, the default for this type). Its documents are created only by `POST /v1/documents/upload`, cannot be created from text or retyped, and their file cannot be replaced once uploaded. Once set, the profile cannot be removed; it cannot be added to a schema that already has documents or variants.
+
+        media_kinds : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the kinds of media this type accepts. Only `image` is available; `video` is refused with errorCode `MEDIA_KIND_NOT_AVAILABLE`. Defaults to `["image"]`.
+
+        max_bytes : typing.Optional[int]
+            With `fileProfile: PUBLIC_MEDIA`: the largest file, in bytes, this type declares. At most 10485760 (10 MiB), which is also the default. An upload of this type whose `size` is above it is refused at upload start (`MEDIA_TOO_LARGE`).
+
+        content_types : typing.Optional[typing.Sequence[str]]
+            With `fileProfile: PUBLIC_MEDIA`: the file types this type declares. A subset of `image/jpeg`, `image/png`, `image/webp` and `image/gif`, which is also the default. An upload of this type whose `fileType` is not one of them is refused at upload start (`MEDIA_FORMAT_NOT_ACCEPTED`).
+
         allowed_surfaces : typing.Optional[typing.Sequence[SchemaRequestAllowedSurfacesItem]]
             Which typed surfaces may bind this schema by its id: `record`, `document`, `user`, or `entity`. Required when creating, and must be non-empty; on update, omit it to keep the current surfaces. Identity entities in ANY namespace — `org`, `client`, or one you registered, such as `team` — bind under the single `entity` surface; use the schema's `typeName` to distinguish them, not the surface. A schema may list several surfaces (for a shared type usable on both records and documents). This drives surface-scoped schema listing (`GET /v1/schemas?surface=`) and is enforced at bind time — for example, a document cannot bind a record-only schema. A `user`-surfaced schema is control-plane managed and can only be created, updated, or deleted with a root API key — a user is tenant-global, so its schema has one tenant-wide home. An `entity`-surfaced schema, by contrast, is writable by an ordinary scoped credential holding `schemas:c`/`u`/`d`, and is homed in that credential's own app context. `record`/`document` schemas are unaffected either way — any credential holding the matching scope may write them, as before.
 
@@ -1083,6 +1356,8 @@ class AsyncRawSchemasClient:
 
         based_on : typing.Optional[str]
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
+
+        public_view : typing.Optional[PublicViewDef]
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1111,11 +1386,18 @@ class AsyncRawSchemasClient:
                 "capabilities": capabilities,
                 "indexMode": index_mode,
                 "storageProfile": storage_profile,
+                "fileProfile": file_profile,
+                "mediaKinds": media_kinds,
+                "maxBytes": max_bytes,
+                "contentTypes": content_types,
                 "allowedSurfaces": allowed_surfaces,
                 "active": active,
                 "userId": user_id,
                 "scopes": scopes,
                 "basedOn": based_on,
+                "publicView": convert_and_respect_annotation_metadata(
+                    object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
             },
             headers={
                 "content-type": "application/json",
@@ -1188,6 +1470,17 @@ class AsyncRawSchemasClient:
                         ),
                     ),
                 )
+            if _response.status_code == 503:
+                raise ServiceUnavailableError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
             _response_json = _response.json()
         except JSONDecodeError:
             raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
@@ -1247,6 +1540,147 @@ class AsyncRawSchemasClient:
                 )
             if _response.status_code == 409:
                 raise ConflictError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 429:
+                raise TooManyRequestsError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def get_schema_republish(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[PublicViewRepublishResponse]:
+        """
+        The progress of the latest republish of a `projection` schema's public copies. Requires the `schemas:r` scope.
+
+        Parameters
+        ----------
+        id : str
+            The id of the schema.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[PublicViewRepublishResponse]
+            The latest republish; `status` is absent when none has run.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/schemas/{encode_path_param(id)}/republish",
+            method="GET",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewRepublishResponse,
+                    parse_obj_as(
+                        type_=PublicViewRepublishResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            _response_json = _response.json()
+        except JSONDecodeError:
+            raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response.text)
+        except ValidationError as e:
+            raise ParsingError(
+                status_code=_response.status_code, headers=dict(_response.headers), body=_response.json(), cause=e
+            )
+        raise ApiError(status_code=_response.status_code, headers=dict(_response.headers), body=_response_json)
+
+    async def republish_schema_public_view(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> AsyncHttpResponse[PublicViewRepublishResponse]:
+        """
+        For a schema whose `publicView` is in `projection` mode: rewrites every record's public copy from the record as it is now, in the background. A republish also starts on its own whenever the public view changes, so you need this only to repair copies. Each copy written is billed as a record write. If one is already running for the current public view and making progress, that one is returned. Requires the `schemas:u` scope.
+
+        Parameters
+        ----------
+        id : str
+            The id of the schema.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        AsyncHttpResponse[PublicViewRepublishResponse]
+            The republish is running.
+        """
+        _response = await self._client_wrapper.httpx_client.request(
+            f"v1/schemas/{encode_path_param(id)}/republish",
+            method="POST",
+            request_options=request_options,
+        )
+        try:
+            if 200 <= _response.status_code < 300:
+                _data = typing.cast(
+                    PublicViewRepublishResponse,
+                    parse_obj_as(
+                        type_=PublicViewRepublishResponse,  # type: ignore
+                        object_=_response.json(),
+                    ),
+                )
+                return AsyncHttpResponse(response=_response, data=_data)
+            if _response.status_code == 400:
+                raise BadRequestError(
+                    headers=dict(_response.headers),
+                    body=typing.cast(
+                        typing.Any,
+                        parse_obj_as(
+                            type_=typing.Any,  # type: ignore
+                            object_=_response.json(),
+                        ),
+                    ),
+                )
+            if _response.status_code == 404:
+                raise NotFoundError(
                     headers=dict(_response.headers),
                     body=typing.cast(
                         typing.Any,

@@ -6,6 +6,7 @@ from ..core.client_wrapper import AsyncClientWrapper, SyncClientWrapper
 from ..core.request_options import RequestOptions
 from ..types.erasure_request_response import ErasureRequestResponse
 from ..types.export_request_response import ExportRequestResponse
+from ..types.self_erasure_response import SelfErasureResponse
 from .raw_client import AsyncRawComplianceClient, RawComplianceClient
 from .types.erasure_request_audit_disposition import ErasureRequestAuditDisposition
 from .types.export_request_format import ExportRequestFormat
@@ -222,6 +223,141 @@ class ComplianceClient:
         )
         """
         _response = self._raw_client.get_export(id, request_options=request_options)
+        return _response.data
+
+    def cancel_self_erasure(
+        self, id: str, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Cancels the signed-in user's own scheduled account deletion in this app while its waiting period runs; nothing is deleted. Once the deletion has started it can no longer be cancelled. Like requesting it, cancelling needs a fresh ID token proving the user just signed in (not the one that requested the deletion), so a deletion the user asked for cannot be cancelled with an API key alone. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            Cancelled, or already cancelled (answered from its status, without checking the ID token).
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.compliance.cancel_self_erasure(
+            id="er_550e8400e29b41d4a716446655440000",
+            id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+        )
+        """
+        _response = self._raw_client.cancel_self_erasure(id, id_token=id_token, request_options=request_options)
+        return _response.data
+
+    def get_pending_self_erasure(
+        self, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Returns the signed-in user's account deletion in this app that is still scheduled or running, so the app can show when it will happen and offer to cancel it. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The pending deletion.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.compliance.get_pending_self_erasure()
+        """
+        _response = self._raw_client.get_pending_self_erasure(request_options=request_options)
+        return _response.data
+
+    def request_self_erasure(
+        self, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Schedules the deletion of the signed-in user's own account in this app: their data in this app context and their access to it. Only this app is affected; other app contexts are other apps. The user's identity is removed too when this is the account's only app context. The deletion starts after the app's waiting period (`selfErasureGraceDays`, default 7 days), during which the user can cancel it, and the user is emailed when it is scheduled and when it completes (to the verified email in the ID token). Requires the user's own scoped token, a fresh ID token proving they just signed in, and account deletion turned on for this app (`allowSelfErasure` on the app context). Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token. The account owner cannot use it.
+
+        Parameters
+        ----------
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The deletion is scheduled.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.compliance.request_self_erasure(
+            id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+        )
+        """
+        _response = self._raw_client.request_self_erasure(id_token=id_token, request_options=request_options)
+        return _response.data
+
+    def get_self_erasure(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Returns one of the signed-in user's own account deletions in this app, in any status; once it has completed, with the certificate of what was removed. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The deletion request.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.compliance.get_self_erasure(
+            id="er_550e8400e29b41d4a716446655440000",
+        )
+        """
+        _response = self._raw_client.get_self_erasure(id, request_options=request_options)
         return _response.data
 
 
@@ -466,4 +602,171 @@ class AsyncComplianceClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.get_export(id, request_options=request_options)
+        return _response.data
+
+    async def cancel_self_erasure(
+        self, id: str, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Cancels the signed-in user's own scheduled account deletion in this app while its waiting period runs; nothing is deleted. Once the deletion has started it can no longer be cancelled. Like requesting it, cancelling needs a fresh ID token proving the user just signed in (not the one that requested the deletion), so a deletion the user asked for cannot be cancelled with an API key alone. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            Cancelled, or already cancelled (answered from its status, without checking the ID token).
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.compliance.cancel_self_erasure(
+                id="er_550e8400e29b41d4a716446655440000",
+                id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.cancel_self_erasure(id, id_token=id_token, request_options=request_options)
+        return _response.data
+
+    async def get_pending_self_erasure(
+        self, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Returns the signed-in user's account deletion in this app that is still scheduled or running, so the app can show when it will happen and offer to cancel it. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The pending deletion.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.compliance.get_pending_self_erasure()
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.get_pending_self_erasure(request_options=request_options)
+        return _response.data
+
+    async def request_self_erasure(
+        self, *, id_token: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Schedules the deletion of the signed-in user's own account in this app: their data in this app context and their access to it. Only this app is affected; other app contexts are other apps. The user's identity is removed too when this is the account's only app context. The deletion starts after the app's waiting period (`selfErasureGraceDays`, default 7 days), during which the user can cancel it, and the user is emailed when it is scheduled and when it completes (to the verified email in the ID token). Requires the user's own scoped token, a fresh ID token proving they just signed in, and account deletion turned on for this app (`allowSelfErasure` on the app context). Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token. The account owner cannot use it.
+
+        Parameters
+        ----------
+        id_token : str
+            An ID token from the identity provider registered for this app, issued by a sign-in the user completed within the last 5 minutes (ask the provider to re-authenticate, for example with `max_age=0` or Firebase's `reauthenticateWithCredential`). It must name the same user as the token making this request, carry `auth_time`, and be an ID token, not an access token. An ID token that requested a deletion cannot be used again, to request another or to cancel it.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The deletion is scheduled.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.compliance.request_self_erasure(
+                id_token="eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.eyJzdWIiOiJ1c2VyIn0.c2ln",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.request_self_erasure(id_token=id_token, request_options=request_options)
+        return _response.data
+
+    async def get_self_erasure(
+        self, id: str, *, request_options: typing.Optional[RequestOptions] = None
+    ) -> SelfErasureResponse:
+        """
+        Returns one of the signed-in user's own account deletions in this app, in any status; once it has completed, with the certificate of what was removed. Refused with 403 (`errorCode` says why) unless the request uses the signed-in user's own scoped token.
+
+        Parameters
+        ----------
+        id : str
+            The request's id.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        SelfErasureResponse
+            The deletion request.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.compliance.get_self_erasure(
+                id="er_550e8400e29b41d4a716446655440000",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.get_self_erasure(id, request_options=request_options)
         return _response.data

@@ -93,6 +93,14 @@ class SearchResult(UniversalBaseModel):
             description="When this item was added to the search index, as an ISO-8601 UTC timestamp. Usually the same moment the source item was created, but not always: if the item was re-indexed onto a new index entry at some later point, this reports that later time. Use the item's own `createdAt` from documents.get / records.get when you need the source creation time.",
         ),
     ] = None
+    distance_meters: typing_extensions.Annotated[
+        typing.Optional[float],
+        FieldMetadata(alias="distanceMeters"),
+        pydantic.Field(
+            alias="distanceMeters",
+            description="The great-circle distance in meters, rounded to 0.1 m, from the `$near` point to this item's location. Present only when the request has a `$near` filter.",
+        ),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

@@ -98,6 +98,22 @@ class AppContextResponse(UniversalBaseModel):
             description='Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Null means no context default is set, so the platform default applies and logging is OFF. Use it to tell an empty `GET /v1/admin/access-log` result that genuinely means "no one accessed this subject" from one that means "nothing was being recorded".',
         ),
     ] = None
+    allow_self_erasure: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="allowSelfErasure"),
+        pydantic.Field(
+            alias="allowSelfErasure",
+            description="Whether end users can delete their own account from this context's app (`/v1/me/erasure`). Absent means off.",
+        ),
+    ] = None
+    self_erasure_grace_days: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="selfErasureGraceDays"),
+        pydantic.Field(
+            alias="selfErasureGraceDays",
+            description="The days a self-requested account deletion waits before it runs (0 to 30). Absent means the default, 7.",
+        ),
+    ] = None
     identity_projection_claims: typing_extensions.Annotated[
         typing.Optional[typing.List[str]],
         FieldMetadata(alias="identityProjectionClaims"),

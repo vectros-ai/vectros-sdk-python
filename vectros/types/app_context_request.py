@@ -44,7 +44,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="meteringAxis"),
         pydantic.Field(
             alias="meteringAxis",
-            description="Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Omit to leave context-only accounting unchanged (the default). Only takes effect for an account with the corresponding feature enabled.",
+            description="Declares the per-principal metering axis for this app context — enables visibility into and (with `principalUsageCap`) enforcement of per-principal usage within this context. Either `user` (per end-user) or `scope:<namespace>` (per declared namespace, e.g. `scope:org`). Only takes effect for an account with the corresponding feature enabled. When creating, omit it to keep context-only accounting (the default). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.",
         ),
     ] = None
     principal_burst_limit: typing_extensions.Annotated[
@@ -52,7 +52,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="principalBurstLimit"),
         pydantic.Field(
             alias="principalBurstLimit",
-            description="Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature. Only takes effect for an account with that feature enabled. Omit to leave unset.",
+            description="Per-principal, per-minute request cap, for the opt-in per-principal burst-protection feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to leave it unset. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.",
         ),
     ] = None
     principal_usage_cap: typing_extensions.Annotated[
@@ -60,7 +60,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="principalUsageCap"),
         pydantic.Field(
             alias="principalUsageCap",
-            description="Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature. Omit to track per-principal usage without enforcing a cap. Only takes effect for an account with that feature enabled.",
+            description="Per-principal, per-billing-period operation cap, for the opt-in per-principal usage/quota feature, at least 1. Only takes effect for an account with that feature enabled. When creating, omit it to track per-principal usage without enforcing a cap. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.",
         ),
     ] = None
     read_access_log_default: typing_extensions.Annotated[
@@ -68,7 +68,23 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="readAccessLogDefault"),
         pydantic.Field(
             alias="readAccessLogDefault",
-            description="Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. Omit to leave unchanged.",
+            description="Whether read-access logging is on by default for this context. A schema that sets `capabilities.readAccessLog` overrides it; a schema that does not inherits it. When creating, omit it to leave no context default (read-access logging is then off unless a schema turns it on). When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current value.",
+        ),
+    ] = None
+    allow_self_erasure: typing_extensions.Annotated[
+        typing.Optional[bool],
+        FieldMetadata(alias="allowSelfErasure"),
+        pydantic.Field(
+            alias="allowSelfErasure",
+            description="Whether an end user can delete their own account from this context's app, with `/v1/me/erasure`. Off by default. An app that creates accounts and is listed in the Apple App Store or Google Play must offer in-app account deletion, and this is how a Vectros app offers it without a server. Applied on create, update and `?upsert=true` like the fields above; omit it to keep the current value. Changing it (or `selfErasureGraceDays`) needs a root API key or the provisioning capability; sending the current value back is accepted from any caller allowed to update the context.",
+        ),
+    ] = None
+    self_erasure_grace_days: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="selfErasureGraceDays"),
+        pydantic.Field(
+            alias="selfErasureGraceDays",
+            description="How many days a self-requested account deletion waits before it runs, so the user can cancel it: 0 to 30, default 7 when unset. 0 starts the deletion at once. Applied like `allowSelfErasure`.",
         ),
     ] = None
     identity_projection_claims: typing_extensions.Annotated[
@@ -76,7 +92,7 @@ class AppContextRequest(UniversalBaseModel):
         FieldMetadata(alias="identityProjectionClaims"),
         pydantic.Field(
             alias="identityProjectionClaims",
-            description="Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. Omit to leave unchanged; send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data.",
+            description="Declares which golden IdP-asserted identity claim names (from your issuer's `capturedClaims`) get projected, read-only, onto access profiles in this context. Filled in once per profile, the first time a sign-in for that principal can supply a value — usually at profile-creation, but for an invited member not until they actually accept and sign in, since there is nothing to project before that. Once filled, a profile's projection does not update again even if this declaration or the underlying identity data changes later — changing this declaration affects only profiles that haven't been filled yet. When creating, omit it to declare none. When the context already exists, it is applied only with `?upsert=true` (otherwise the existing context is returned unchanged); when updating, or with `?upsert=true`, omit it to keep the current declaration. Send an empty list to disable future projection. **Requires the platform provisioning capability** (the same authority your bootstrap credential already uses to declare namespaces and register trusted issuers) — an ordinary `app-contexts:u` credential may rename its own context but may not opt it into projecting IdP-golden identity data. Sending this field without that capability is refused even when the context already exists and nothing would be applied.",
         ),
     ] = None
 

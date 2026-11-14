@@ -10,6 +10,7 @@ IndexFailureCode = typing.Union[
         "INDEXING_FAILED",
         "VECTOR_LIMIT_EXCEEDED",
         "INTERNAL",
+        "LOCATION_NOT_INDEXED",
     ],
     typing.Any,
 ]
