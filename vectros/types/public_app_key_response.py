@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class PublicAppKeyResponse(UniversalBaseModel):
     """
-    A publishable app key. Each app context has at most two active keys: one, plus one more while you rotate.
+    A publishable app key. An app context holds at most two active keys, browser and server keys counted together.
     """
 
     key_id: typing_extensions.Annotated[
@@ -61,7 +61,7 @@ class PublicAppKeyResponse(UniversalBaseModel):
         FieldMetadata(alias="serverSecret"),
         pydantic.Field(
             alias="serverSecret",
-            description="A server key's secret, sent by your server in the `X-Vectros-Public-Server-Secret` header for higher rate limits. Returned ONCE, when the key is issued, and never stored by Vectros.",
+            description="A server key's secret, sent by your server in the `X-Vectros-Public-Server-Secret` header. Requests that carry it get a higher limit on uncached reads and searches, 10 times a browser key's. One address is still limited to 3,000 public requests per 5 minutes across all keys. Returned when the key is issued, and again to a retry that repeats the same `Idempotency-Key`. Never stored by Vectros and never listed.",
         ),
     ] = None
 

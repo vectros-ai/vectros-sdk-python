@@ -28,18 +28,68 @@ class ReadCalls(UniversalBaseModel):
     ] = None
     overage: typing.Optional[int] = pydantic.Field(default=None)
     """
-    Calls beyond the free allowance (billed)
+    Read-call equivalents beyond the free allowance (billed). Public cache hits share the allowance at a third of a read each, so three cache hits count as one read here.
     """
 
     overage_credits: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="overageCredits"),
-        pydantic.Field(alias="overageCredits", description="Credits charged for overage calls (rounded down)"),
+        pydantic.Field(
+            alias="overageCredits",
+            description="Credits charged for overage read calls made with your API keys (rounded down). Public reads and public cache hits past the allowance are charged under `credits.breakdown.publicAccess`.",
+        ),
     ] = None
     overage_credits_milli: typing_extensions.Annotated[
         typing.Optional[int],
         FieldMetadata(alias="overageCreditsMilli"),
         pydantic.Field(alias="overageCreditsMilli", description="overageCredits in milli-credit precision (exact)"),
+    ] = None
+    edge_hits: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="edgeHits"),
+        pydantic.Field(
+            alias="edgeHits",
+            description="Public responses (records and images) served from the edge cache this period. Each counts as a third of a read against the shared read allowance.",
+        ),
+    ] = None
+    units_used: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="unitsUsed"),
+        pydantic.Field(
+            alias="unitsUsed",
+            description="Read units used this period: three per read call plus one per public cache hit.",
+        ),
+    ] = None
+    units_allowance: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="unitsAllowance"),
+        pydantic.Field(
+            alias="unitsAllowance",
+            description="Read units included this period (three per included read call). Null means unlimited.",
+        ),
+    ] = None
+    units_remaining: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="unitsRemaining"),
+        pydantic.Field(
+            alias="unitsRemaining", description="Read units still included this period. Null means unlimited."
+        ),
+    ] = None
+    edge_hits_overage_credits: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="edgeHitsOverageCredits"),
+        pydantic.Field(
+            alias="edgeHitsOverageCredits",
+            description="Credits charged for public cache hits beyond the shared read allowance (rounded down)",
+        ),
+    ] = None
+    edge_hits_overage_credits_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="edgeHitsOverageCreditsMilli"),
+        pydantic.Field(
+            alias="edgeHitsOverageCreditsMilli",
+            description="edgeHitsOverageCredits in milli-credit precision (exact): 2 milli-credits per 3 hits",
+        ),
     ] = None
 
     if IS_PYDANTIC_V2:

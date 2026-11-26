@@ -1082,7 +1082,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> None:
         """
-        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. If users signed in through an issuer registered in the context, its issuerId is retired. Only the same provider can register it again: the same issuer, jwksUri, audience and subClaim. Each user must then be invited again to regain access. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 
         Parameters
         ----------
@@ -1613,7 +1613,7 @@ class AuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify` or, when it cannot be verified with a claim challenge, until an operator approves it (`POST /v1/auth/issuers/{issuerId}/request-approval`); it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -1694,11 +1694,49 @@ class AuthClient:
         )
         return _response.data
 
+    def request_issuer_approval(
+        self, issuer_id: str, *, note: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> IssuerResponse:
+        """
+        Asks a platform operator to approve a `pending_verification` registration that cannot be verified with a claim challenge: its users sign in through an identity provider you have no admin console for (for example Google sign-in for personal accounts), or the issuer publishes no OpenID Connect discovery document. Until the operator approves it, the registration accepts no tokens. The first request extends the challenge to 30 days from the request; repeating it updates the note. After a denial you may request once more. Requires a root API key or the provisioning capability. A credential confined to one app context can only request approval for an issuer registered in that context; any other issuerId returns 404.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        note : str
+            Who you are, why this issuer cannot be verified with a claim challenge, and how we can confirm you control it. Up to 2,000 characters.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        IssuerResponse
+            Approval requested.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.auth.request_issuer_approval(
+            issuer_id="auth0-prod",
+            note="note",
+        )
+        """
+        _response = self._raw_client.request_issuer_approval(issuer_id, note=note, request_options=request_options)
+        return _response.data
+
     def verify_issuer(
         self, issuer_id: str, *, token: str, request_options: typing.Optional[RequestOptions] = None
     ) -> IssuerResponse:
         """
-        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
+        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way; ask an operator to approve it instead with `POST /v1/auth/issuers/{issuerId}/request-approval`. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration, or 30 days after a request for operator approval; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
 
         Parameters
         ----------
@@ -1850,20 +1888,24 @@ class AuthClient:
     def create_public_app_key(
         self,
         *,
+        idempotency_key: typing.Optional[str] = None,
         context_id: typing.Optional[str] = OMIT,
         key_class: typing.Optional[CreatePublicAppKeyRequestKeyClass] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> PublicAppKeyResponse:
         """
-        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header. Requests that carry it get a higher limit on uncached reads and searches, 10 times a browser key's. One address is still limited to 3,000 public requests per 5 minutes across all keys. An app context holds at most two active keys, browser and server keys counted together. To replace a key without a gap, the context must hold only one active key: issue the new key, move your pages to it, then revoke the old one. If it already holds two, revoke the one you are replacing first; pages using it stop working until you issue its replacement. Send an `Idempotency-Key` header to retry safely: a retry returns the key the first request issued, with the same server secret for a server key. Requires the `public-keys:c` scope.
 
         Parameters
         ----------
+        idempotency_key : typing.Optional[str]
+            A value you generate per issue: 1 to 128 of `A-Za-z0-9._:-`. For at least 30 days, a retry with it returns the original key (and, for a server key, the same server secret).
+
         context_id : typing.Optional[str]
             The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
 
         key_class : typing.Optional[CreatePublicAppKeyRequestKeyClass]
-            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned in this response.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1884,7 +1926,7 @@ class AuthClient:
         client.auth.create_public_app_key()
         """
         _response = self._raw_client.create_public_app_key(
-            context_id=context_id, key_class=key_class, request_options=request_options
+            idempotency_key=idempotency_key, context_id=context_id, key_class=key_class, request_options=request_options
         )
         return _response.data
 
@@ -1892,7 +1934,7 @@ class AuthClient:
         self, key_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> RevokedPublicAppKeys:
         """
-        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted shortly after the revocation. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
 
         Parameters
         ----------
@@ -1939,7 +1981,7 @@ class AuthClient:
         scope : ScopeRequest
 
         user_id : typing.Optional[str]
-            The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID.
+            The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID. Where your account has the per-user controls enabled and the token's app context meters by user, the token's writes, searches and runs (not inference) count toward this user's per-user burst limit, and its writes count toward this user's monthly usage cap. On its own, `userId` does NOT make the token act as this user: records the token creates are not owned by the user, and `${{ self.userId }}` does not resolve, unless you also set `scope.identity.userId`. When both are set and differ, the per-user limits count the `scope.identity.userId` user.
 
         context_id : typing.Optional[str]
             The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.
@@ -3449,7 +3491,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> None:
         """
-        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+        Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. If users signed in through an issuer registered in the context, its issuerId is retired. Only the same provider can register it again: the same issuer, jwksUri, audience and subClaim. Each user must then be invited again to regain access. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 
         Parameters
         ----------
@@ -4074,7 +4116,7 @@ class AsyncAuthClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> IssuerResponse:
         """
-        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+        Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify` or, when it cannot be verified with a claim challenge, until an operator approves it (`POST /v1/auth/issuers/{issuerId}/request-approval`); it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 
         Parameters
         ----------
@@ -4163,11 +4205,59 @@ class AsyncAuthClient:
         )
         return _response.data
 
+    async def request_issuer_approval(
+        self, issuer_id: str, *, note: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> IssuerResponse:
+        """
+        Asks a platform operator to approve a `pending_verification` registration that cannot be verified with a claim challenge: its users sign in through an identity provider you have no admin console for (for example Google sign-in for personal accounts), or the issuer publishes no OpenID Connect discovery document. Until the operator approves it, the registration accepts no tokens. The first request extends the challenge to 30 days from the request; repeating it updates the note. After a denial you may request once more. Requires a root API key or the provisioning capability. A credential confined to one app context can only request approval for an issuer registered in that context; any other issuerId returns 404.
+
+        Parameters
+        ----------
+        issuer_id : str
+            The issuer's slug.
+
+        note : str
+            Who you are, why this issuer cannot be verified with a claim challenge, and how we can confirm you control it. Up to 2,000 characters.
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        IssuerResponse
+            Approval requested.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.auth.request_issuer_approval(
+                issuer_id="auth0-prod",
+                note="note",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.request_issuer_approval(
+            issuer_id, note=note, request_options=request_options
+        )
+        return _response.data
+
     async def verify_issuer(
         self, issuer_id: str, *, token: str, request_options: typing.Optional[RequestOptions] = None
     ) -> IssuerResponse:
         """
-        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
+        Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way; ask an operator to approve it instead with `POST /v1/auth/issuers/{issuerId}/request-approval`. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration, or 30 days after a request for operator approval; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
 
         Parameters
         ----------
@@ -4351,20 +4441,24 @@ class AsyncAuthClient:
     async def create_public_app_key(
         self,
         *,
+        idempotency_key: typing.Optional[str] = None,
         context_id: typing.Optional[str] = OMIT,
         key_class: typing.Optional[CreatePublicAppKeyRequestKeyClass] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> PublicAppKeyResponse:
         """
-        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+        Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header. Requests that carry it get a higher limit on uncached reads and searches, 10 times a browser key's. One address is still limited to 3,000 public requests per 5 minutes across all keys. An app context holds at most two active keys, browser and server keys counted together. To replace a key without a gap, the context must hold only one active key: issue the new key, move your pages to it, then revoke the old one. If it already holds two, revoke the one you are replacing first; pages using it stop working until you issue its replacement. Send an `Idempotency-Key` header to retry safely: a retry returns the key the first request issued, with the same server secret for a server key. Requires the `public-keys:c` scope.
 
         Parameters
         ----------
+        idempotency_key : typing.Optional[str]
+            A value you generate per issue: 1 to 128 of `A-Za-z0-9._:-`. For at least 30 days, a retry with it returns the original key (and, for a server key, the same server secret).
+
         context_id : typing.Optional[str]
             The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
 
         key_class : typing.Optional[CreatePublicAppKeyRequestKeyClass]
-            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+            `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned in this response.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -4393,7 +4487,7 @@ class AsyncAuthClient:
         asyncio.run(main())
         """
         _response = await self._raw_client.create_public_app_key(
-            context_id=context_id, key_class=key_class, request_options=request_options
+            idempotency_key=idempotency_key, context_id=context_id, key_class=key_class, request_options=request_options
         )
         return _response.data
 
@@ -4401,7 +4495,7 @@ class AsyncAuthClient:
         self, key_id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> RevokedPublicAppKeys:
         """
-        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+        Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted shortly after the revocation. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
 
         Parameters
         ----------
@@ -4456,7 +4550,7 @@ class AsyncAuthClient:
         scope : ScopeRequest
 
         user_id : typing.Optional[str]
-            The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID.
+            The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID. Where your account has the per-user controls enabled and the token's app context meters by user, the token's writes, searches and runs (not inference) count toward this user's per-user burst limit, and its writes count toward this user's monthly usage cap. On its own, `userId` does NOT make the token act as this user: records the token creates are not owned by the user, and `${{ self.userId }}` does not resolve, unless you also set `scope.identity.userId`. When both are set and differ, the per-user limits count the `scope.identity.userId` user.
 
         context_id : typing.Optional[str]
             The app context to mint the token into. Optional — omit it to inherit your own credential's context (a root API key defaults to `default`). Must reference an app context that already exists in your tenant (create one via `POST /v1/app-contexts`); an unrecognized value returns a uniform `404 not found`. Only meaningful for root API key callers — this endpoint is root-key-only, so there is no confined credential this could let reach a context it doesn't hold.

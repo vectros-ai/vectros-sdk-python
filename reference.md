@@ -1596,7 +1596,7 @@ client.auth.update_app_context(
 <dl>
 <dd>
 
-Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
+Permanently deletes an app context and everything in it — every record, document, folder, schema, role, access profile, and trusted-issuer registration belonging to the context. This is irreversible. If users signed in through an issuer registered in the context, its issuerId is retired. Only the same provider can register it again: the same issuer, jwksUri, audience and subClaim. Each user must then be invited again to regain access. The deletion runs asynchronously: the call returns 202 immediately and the context's data drains in the background. Poll the context's `status` field to observe when the teardown completes (`purging` while draining, then `deleted`). To guard against accidental deletion, you must echo the contextId back in the `confirm` query parameter (`?confirm={contextId}`). The reserved `default` and `vectros-admin` contexts cannot be deleted. This operation requires a root API key (one beginning with `sk_`): no scoped credential, not even one with full wildcard (`*`) scope, can trigger this teardown.
 </dd>
 </dl>
 </dd>
@@ -2583,7 +2583,7 @@ client.auth.list_issuers()
 <dl>
 <dd>
 
-Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`; it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
+Registers a trusted third-party IdP issuer that BYO-IdP token exchange (`POST /v1/auth/token/exchange`) may accept a `subject_token` from. Requires a root API key or the CLI bootstrap's provisioning capability — never an ordinary grantable scope. A credential authorized only via the provisioning capability may register only against the app context it is bound to; naming a different one returns 403. A root API key is unaffected and may register against any of its contexts. A registration without `restrictedToDomain` is created `pending_verification` with a one-time challenge (`verificationClaim`, `verificationNonce`, `verificationExpiresAt`) and accepts no token until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify` or, when it cannot be verified with a claim challenge, until an operator approves it (`POST /v1/auth/issuers/{issuerId}/request-approval`); it claims no `(issuer, audience)` pair until then, so registering never reveals whether another tenant holds one. A registration scoped to an already-verified domain with `restrictedToDomain` is `active` at once. Idempotent by `issuerId` within your tenant. If `issuerId` collides with a registration owned by a different app context than the one you're confined to, the request fails with 400 rather than returning that context's configuration. An app context may have at most one active issuer — deregister the existing one first if you need to replace it. One issuer MAY serve several contexts, each via its own registration row with a distinct `audience`. Optionally name `restrictedToDomain` to scope this registration's (issuer, audience) uniqueness to a specific VERIFIED domain rather than the bare pair — see that field's own description. A domain-scoped registration proves control of the DOMAIN, not of the issuer itself: it routes only tokens carrying that domain's `hd` claim.
 </dd>
 </dl>
 </dd>
@@ -2735,6 +2735,87 @@ client.auth.register_issuer(
 </dl>
 </details>
 
+<details><summary><code>client.auth.<a href="src/vectros/auth/client.py">request_issuer_approval</a>(...) -> IssuerResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Asks a platform operator to approve a `pending_verification` registration that cannot be verified with a claim challenge: its users sign in through an identity provider you have no admin console for (for example Google sign-in for personal accounts), or the issuer publishes no OpenID Connect discovery document. Until the operator approves it, the registration accepts no tokens. The first request extends the challenge to 30 days from the request; repeating it updates the note. After a denial you may request once more. Requires a root API key or the provisioning capability. A credential confined to one app context can only request approval for an issuer registered in that context; any other issuerId returns 404.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.auth.request_issuer_approval(
+    issuer_id="auth0-prod",
+    note="note",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**issuer_id:** `str` — The issuer's slug.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**note:** `str` — Who you are, why this issuer cannot be verified with a claim challenge, and how we can confirm you control it. Up to 2,000 characters.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 <details><summary><code>client.auth.<a href="src/vectros/auth/client.py">verify_issuer</a>(...) -> IssuerResponse</code></summary>
 <dl>
 <dd>
@@ -2747,7 +2828,7 @@ client.auth.register_issuer(
 <dl>
 <dd>
 
-Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
+Proves you administer the IdP application a `pending_verification` registration names, activating it. A registration created without `restrictedToDomain` accepts no tokens until this succeeds. Configure your IdP, with an admin-controlled rule (an Auth0 Action, an Okta inline hook, an Entra claims-mapping policy, a Keycloak protocol mapper), to add the registration's `verificationClaim` to the tokens it issues, set to its `verificationNonce`; sign in once; and send that token here. The `jwksUri` you registered must be exactly the `jwks_uri` your issuer's OpenID Connect discovery document (`<issuer>/.well-known/openid-configuration`) publishes, and the token must verify against that key set — an issuer that publishes no discovery document cannot be verified this way; ask an operator to approve it instead with `POST /v1/auth/issuers/{issuerId}/request-approval`. The token is checked and discarded; it is never stored. The `(issuer, audience)` pair is claimed at this moment, so a pair another registration already holds is refused with 400. A challenge expires 7 days after registration, or 30 days after a request for operator approval; an expired registration cannot be verified — delete it and register again. Requires a root API key or the bootstrap's provisioning capability, gated identically to every other operation on this surface. A credential confined to one app context may only verify an issuer registered in that context; naming one registered in another context returns 404, identically to a nonexistent issuerId.
 </dd>
 </dl>
 </dd>
@@ -3056,7 +3137,7 @@ client.auth.list_public_app_keys()
 <dl>
 <dd>
 
-Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned once in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header for higher rate limits. An app context has at most two active keys: issue the new one, move your clients to it, then revoke the old one. Requires the `public-keys:c` scope.
+Issues a publishable app key for one app context. Anonymous visitors send it as the `k` query parameter to read that context's public views; it grants nothing else. A browser key (`pub`) is meant to ship in web pages. A server key (`pubs`) also gets a server secret, returned in this response, which your server sends in the `X-Vectros-Public-Server-Secret` header. Requests that carry it get a higher limit on uncached reads and searches, 10 times a browser key's. One address is still limited to 3,000 public requests per 5 minutes across all keys. An app context holds at most two active keys, browser and server keys counted together. To replace a key without a gap, the context must hold only one active key: issue the new key, move your pages to it, then revoke the old one. If it already holds two, revoke the one you are replacing first; pages using it stop working until you issue its replacement. Send an `Idempotency-Key` header to retry safely: a retry returns the key the first request issued, with the same server secret for a server key. Requires the `public-keys:c` scope.
 </dd>
 </dl>
 </dd>
@@ -3094,6 +3175,14 @@ client.auth.create_public_app_key()
 <dl>
 <dd>
 
+**idempotency_key:** `typing.Optional[str]` — A value you generate per issue: 1 to 128 of `A-Za-z0-9._:-`. For at least 30 days, a retry with it returns the original key (and, for a server key, the same server secret).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **context_id:** `typing.Optional[str]` — The app context the key serves. Defaults to your credential's own context. A credential confined to one context can issue keys only for that context.
     
 </dd>
@@ -3102,7 +3191,7 @@ client.auth.create_public_app_key()
 <dl>
 <dd>
 
-**key_class:** `typing.Optional[CreatePublicAppKeyRequestKeyClass]` — `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned once, in this response.
+**key_class:** `typing.Optional[CreatePublicAppKeyRequestKeyClass]` — `pub` (the default) for a browser key that ships in web pages, or `pubs` for a server key whose server secret is returned in this response.
     
 </dd>
 </dl>
@@ -3134,7 +3223,7 @@ client.auth.create_public_app_key()
 <dl>
 <dd>
 
-Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted by the API within about 30 seconds, and at the edge within the edge's propagation time. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
+Revokes a publishable app key. Revoking a key also revokes every older key of the same app context, because a revocation applies to every key version below a minimum: the response lists every key it covers. Revoked keys stop being accepted shortly after the revocation. Revocation is permanent; issue a new key to replace it. Revoking an already revoked key repeats the revocation and returns the same list. Requires the `public-keys:d` scope.
 </dd>
 </dl>
 </dd>
@@ -3269,7 +3358,7 @@ client.auth.mint_token(
 <dl>
 <dd>
 
-**user_id:** `typing.Optional[str]` — The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID.
+**user_id:** `typing.Optional[str]` — The Vectros user ID of the end user this token is minted for. This is the UUID returned when you created the user via `POST /v1/users`. Optional — omit it for service-to-service tokens that have no specific user context. If provided, it must reference a real user in your account. Use `GET /v1/users?externalId={yourId}` to resolve your own system's user ID to the Vectros user ID. Where your account has the per-user controls enabled and the token's app context meters by user, the token's writes, searches and runs (not inference) count toward this user's per-user burst limit, and its writes count toward this user's monthly usage cap. On its own, `userId` does NOT make the token act as this user: records the token creates are not owned by the user, and `${{ self.userId }}` does not resolve, unless you also set `scope.identity.userId`. When both are set and differ, the per-user limits count the `scope.identity.userId` user.
     
 </dd>
 </dl>
@@ -5556,7 +5645,7 @@ client.documents.lookup_documents_by_body(
 <dl>
 <dd>
 
-Returns a short-lived presigned S3 GET URL for the original uploaded file. Only available for file-backed documents (created via POST /v1/documents/upload); text-only documents return 400. Requires the `documents:r` scope.
+Returns a short-lived presigned S3 GET URL for the original uploaded file. Only available for file-backed documents (created via POST /v1/documents/upload); text-only documents return 400. For a document of a type with `fileProfile: PUBLIC_MEDIA`, the link is to a private copy of the processed image, whether or not the image is public. For an image, the uploaded file is deleted once the image is processed, and the processed image carries no location data. A private copy of the processed image is kept with the document and deleted with it. A rejected image has no download. An image still being processed has no download yet. A taken-down image has no download. Each of these answers `409` with `errorCode` `NO_DOWNLOAD_FOR_MEDIA`. Requires the `documents:r` scope.
 </dd>
 </dl>
 </dd>
@@ -5796,7 +5885,7 @@ client.documents.get_document_versions(
 <dl>
 <dd>
 
-Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Any type of file can be uploaded. Text is extracted only from document formats (plain text, CSV, TSV, Markdown, JSON, YAML, HTML, XML, PDF, RTF, Word, Excel, PowerPoint, Outlook messages, OpenDocument, EPUB, e-mail messages and mbox exports, WordPerfect, Visio, Publisher, OneNote and Apple iWork), and which format a file is in is decided from its content, not from `fileType`. Any other file (audio, video, images, archives such as zip) is stored and can be downloaded, but is not read: its `extraction.outcome` is `NOT_EXTRACTED`. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. For a document of a public-media type the file is never replaced: while its upload is still pending, the same request issues a URL for the SAME object instead, and once the upload has arrived it is refused (`409`, errorCode `PUBLIC_MEDIA_IMMUTABLE`). The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST include the header named in the response's `requiredHeaderName`, set to `requiredHeaderValue` exactly.** It is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting it, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending it correctly makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key (for a pending public-media document, its not-yet-written object), so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call targets a new key (for a public-media document, see above), so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant. **Send `size`, the exact length of the file in bytes.** The upload is then bound: the file's media type and its length are part of `uploadUrl`'s signature, so a PUT with another `Content-Type` or another length is refused with `403 SignatureDoesNotMatch` before anything is stored. Send every header in the response's `requiredHeaders`, with its value unchanged. `size` is required for a document of a public-media type and optional for every other upload.
+Starts a file-based document by returning a short-lived presigned S3 PUT URL. Upload the file bytes directly to `uploadUrl`; the document is then automatically queued for text extraction and asynchronous indexing. Any type of file can be uploaded. Text is extracted only from document formats (plain text, CSV, TSV, Markdown, JSON, YAML, HTML, XML, PDF, RTF, Word, Excel, PowerPoint, Outlook messages, OpenDocument, EPUB, e-mail messages and mbox exports, WordPerfect, Visio, Publisher, OneNote and Apple iWork), and which format a file is in is decided from its content, not from `fileType`. Any other file (audio, video, images, archives such as zip) is stored and can be downloaded, but is not read: its `extraction.outcome` is `NOT_EXTRACTED`. Supplying an `externalId` makes this idempotent — re-initiating an upload with the same `externalId` re-issues a fresh presigned URL for the SAME existing document, targeting a newly-staged object rather than the document's current one — your PUT lands there first, and the document only adopts it once the upload is validated (so a re-upload inherently replaces the file body) rather than creating a duplicate. For a document of a public-media type the file is never replaced: while its upload is still pending, the same request issues a URL for the SAME object instead, and once the upload has arrived it is refused (`409`, errorCode `PUBLIC_MEDIA_IMMUTABLE`). An image uploaded as a document of a public-media type is re-encoded: to PNG when it has transparency, otherwise to JPEG, with its longest edge at most 2048 pixels; an animated GIF or WebP keeps only its first frame. The response's `created` field (and the HTTP status — 201 when a new document was minted, 200 when an existing one was matched) tells the two apart. With `?upsert=true`, the submitted `payload`/`title` are also applied to the matched document (file-body divergence cannot be diffed at upload-init — the bytes have not arrived yet — so the re-upload itself replaces the body). Creating a NEW document requires the `documents:c` scope. Re-uploading over an EXISTING document overwrites (and re-indexes) its body, so it is an update: it requires the `documents:u` scope (as does `?upsert=true` for the metadata). **Your PUT to `uploadUrl` MUST send every header in the response's `requiredHeaders`, with its value unchanged** (`Content-Type` and `If-None-Match`; older clients read the latter from `requiredHeaderName` and `requiredHeaderValue`). Each is a signed part of the presigned request — the PUT never reaches this service either way, so neither failure uses this API's JSON error shape. Omitting one, or sending a different value, invalidates the request's signature and S3 rejects it with a 403 `SignatureDoesNotMatch`. Sending `If-None-Match: *` makes the URL single-use: `requiredHeaderName` is always `If-None-Match` and `requiredHeaderValue` is always `*` — a create, a recovery upload for a document whose earlier file is missing, and a re-upload ALL target a freshly-minted, never-written key (for a pending public-media document, its not-yet-written object), so the same S3 conditional-write precondition applies uniformly (S3's own documented conditional-write behavior): a replay after the object already exists (from your own completed PUT, or anyone else's) fails with `412 Precondition Failed`; a replay after the object was deleted and never re-created finds an absent key again and can succeed — single-use is a property of the object's existence, not a one-time token. **Either precondition can also fail with `409 Conflict` if your PUT genuinely races a concurrent delete on the same object.** Whichever of `412` or `409` you receive, the remedy is the same: call this endpoint again for a fresh URL rather than retrying the same PUT — a fresh call targets a new key (for a public-media document, see above), so it is never subject to whatever raced the previous one. Supplying `externalId` WITHOUT `schemaId` is refused (`400`) unless you also pass `confirmUntyped=true` — externalId uniqueness is scoped per schema, so omitting `schemaId` by mistake would otherwise silently create a separate untyped document instead of targeting the typed one you likely meant. **`size`, the exact length of the file in bytes, is required** (without it, `400` with errorCode `SIZE_REQUIRED`). The upload is bound: the file's media type and its length are part of `uploadUrl`'s signature, so a PUT with another `Content-Type` or another length is refused with `403 SignatureDoesNotMatch` before anything is stored. An empty file cannot be uploaded. For a public-media type, a `429` with errorCode `PUBLIC_MEDIA_BACKLOG_FULL` means too many images in this app context are waiting to be set on a record: set or delete some, then try again (no `Retry-After`).
 </dd>
 </dl>
 </dd>
@@ -5820,6 +5909,7 @@ client = VectrosApi(
 
 client.documents.upload_document(
     file_name="patient_intake_2024_01_15.pdf",
+    size=48213,
 )
 
 ```
@@ -5844,6 +5934,14 @@ client.documents.upload_document(
 <dl>
 <dd>
 
+**size:** `int` — The exact length of the file in bytes, at least 1. Required: without it the request is refused (`400`, errorCode `SIZE_REQUIRED`), so an empty file cannot be uploaded. The upload is bound: the file's media type and this length become part of `uploadUrl`'s signature, so the storage service refuses a PUT whose `Content-Type` differs from the one in the response's `requiredHeaders` or whose length differs from `size` (`403 SignatureDoesNotMatch`), before anything is stored. Send the exact number of bytes you will upload (in a browser, `File.size`); your HTTP client sets `Content-Length` from the body. A file can be at most 104857600 bytes (100 MiB); for a document of a public-media type, at most 10485760 bytes (10 MiB), or less if the type sets a lower `maxBytes` (`400` `MEDIA_TOO_LARGE`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
 **upsert:** `typing.Optional[bool]` — When `true` and a document with the same `externalId` already exists, apply the submitted `payload`/`title` to that existing document (a metadata upsert) before re-issuing the presigned URL. The file body is replaced inherently by the re-upload; it cannot be diffed at upload-init. Defaults to `false`. Requires the `documents:u` scope in addition to `documents:c`.
     
 </dd>
@@ -5860,15 +5958,7 @@ client.documents.upload_document(
 <dl>
 <dd>
 
-**file_type:** `typing.Optional[str]` — Media type of the file being uploaded, as `type/subtype`. Any valid media type is accepted. It is stored lower case and without parameters (`text/plain; charset=utf-8` is stored as `text/plain`), and when it is omitted or `application/octet-stream` it is inferred from the extension of `fileName`. Without `size` it is a label only: it does not set the Content-Type of the stored file (your PUT to `uploadUrl` does). With `size`, `uploadUrl` is signed for this type in its stored form, and your PUT must send it as given in the response's `requiredHeaders`. For a document of a public-media type it must be a type that document type accepts. Whether text is extracted is decided from the file's content (see `detectedType` on the document).
-    
-</dd>
-</dl>
-
-<dl>
-<dd>
-
-**size:** `typing.Optional[int]` — The exact length of the file in bytes, at least 1. When you send it, the upload is bound: the file's media type and this length become part of `uploadUrl`'s signature, so the storage service refuses a PUT whose `Content-Type` differs from the one in the response's `requiredHeaders` or whose length differs from `size` (`403 SignatureDoesNotMatch`), before anything is stored. Send the exact number of bytes you will upload (in a browser, `File.size`); your HTTP client sets `Content-Length` from the body. A file can be at most 104857600 bytes (100 MiB). Required for a document of a public-media type. Optional for every other upload.
+**file_type:** `typing.Optional[str]` — Media type of the file being uploaded, as `type/subtype`. Any valid media type is accepted. It is stored lower case and without parameters (`text/plain; charset=utf-8` is stored as `text/plain`), and when it is omitted or `application/octet-stream` it is inferred from the extension of `fileName`. `uploadUrl` is signed for this type in its stored form, and your PUT must send it as given in the response's `requiredHeaders`. For a document of a public-media type it must be a type that document type accepts. Whether text is extracted is decided from the file's content (see `detectedType` on the document).
     
 </dd>
 </dl>
@@ -9091,7 +9181,7 @@ client.inference.list_inference_models()
 <dl>
 <dd>
 
-Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A per-call platform fee is charged to your monthly credit allowance, except when the call fails on the server side: 0.2 credits for a call of up to 60 seconds, then 1 credit per 5 minutes of the call's duration. Requires the `inference:r` scope.
+Streams a model response as Server-Sent Events (SSE). Send the full conversation history in the `messages` array; a message with role `system` is extracted and used as the system prompt. On a pre-paid account, token cost is debited from your inference balance; usage-billed accounts accrue it for post-billing. A request routed through your own `providerAlias` incurs no Vectros token cost. A per-call platform fee is charged to your monthly credit allowance, except when the call fails before any output is streamed: 0.2 credits for a call of up to 60 seconds, then 1 credit per 5 minutes of the call's duration. Requires the `inference:r` scope.
 </dd>
 </dl>
 </dd>
@@ -9184,7 +9274,7 @@ client.inference.chat_inference(
 <dl>
 <dd>
 
-**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of the platform — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by the platform — this field is entirely additive.
     
 </dd>
 </dl>
@@ -9321,7 +9411,7 @@ client.inference.document_ask(
 <dl>
 <dd>
 
-**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of the platform — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by the platform — this field is entirely additive.
     
 </dd>
 </dl>
@@ -9457,7 +9547,7 @@ client.inference.rag_inference(
 <dl>
 <dd>
 
-**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of platform-hosted Bedrock — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by platform-hosted Bedrock — this field is entirely additive.
+**provider_alias:** `typing.Optional[str]` — Route this request through a BYO (bring-your-own) model provider config instead of the platform — the alias of a provider config your account has activated (a customer-supplied Anthropic key or OpenAI-compatible endpoint). Requires the corresponding risk waiver on your account and, if the account has accepted the Business Associate Agreement in the developer portal (or Vectros cannot establish whether it has), a current attestation on that provider config; otherwise, or if the alias is unknown or inactive, the request is rejected with 403. The request is sent to the endpoint on that config: `allowGlobalRegion` and your residency settings do not apply, and the provider determines where it is processed. If neither `model` nor the config's default model is set, the request is rejected with 400. When omitted, the request is served by the platform — this field is entirely additive.
     
 </dd>
 </dl>
@@ -9640,7 +9730,9 @@ client.records.batch_lookup_records()
 
 Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
-`atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+`atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens. Each `externalId` and each value of a `unique` lookup field counts as one more row per record: up to 49 records that each carry an `externalId` fit in one `all_or_nothing` batch, and about 32 when each also carries one `unique` value.
+
+Within one `all_or_nothing` batch a unique value cannot move from one record to another: an item that takes an `externalId` or `unique` value another item in the same batch releases is refused with the whole batch. Send the two writes in separate requests.
 
 The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 </dd>
@@ -9696,7 +9788,7 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-**atomicity:** `typing.Optional[BatchWriteRequestAtomicity]` — Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
+**atomicity:** `typing.Optional[BatchWriteRequestAtomicity]` — Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens (each `externalId` and each `unique` lookup value is one more row: up to 49 records that each carry an `externalId` fit, about 32 when each also carries one `unique` value). Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
     
 </dd>
 </dl>
@@ -9736,7 +9828,7 @@ client.records.batch_write_records()
 <dl>
 <dd>
 
-Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads. A page can hold fewer than `limit` records (or none) while `nextCursor` is set: page until it is null.
 </dd>
 </dl>
 </dd>
@@ -9780,7 +9872,7 @@ client.records.list_records(
 <dl>
 <dd>
 
-**type:** `typing.Optional[str]` — The record type to list, e.g. `intake_form`. Required unless `folderId` or `recent=true` is given.
+**type:** `typing.Optional[str]` — The record type to list, e.g. `intake_form`: only records of that type are returned. Required unless `folderId` or `recent=true` is given.
     
 </dd>
 </dl>
@@ -9962,7 +10054,7 @@ client.records.create_record(
 <dl>
 <dd>
 
-Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence.
+Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence. By default the read is eventually consistent: a write that completed moments ago may not be visible yet. Pass `consistent=true` for a strongly consistent read that always reflects every write completed before the request.
 </dd>
 </dl>
 </dd>
@@ -10003,6 +10095,14 @@ client.records.get_record(
 <dd>
 
 **id:** `str` — The Vectros-assigned UUID of the record to retrieve.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**consistent:** `typing.Optional[bool]` — When `true`, the record is read with strong consistency: the response reflects every write to this record that completed before this request started. Use it when a decision depends on the record's latest state. It is metered as one ordinary read, but it is slower and uses more database capacity than the default, so use it only where you need it. `false` (the default) is the ordinary read; any other value is rejected with 400, as is the parameter on the other data endpoints. It does not replace `expectedVersion` on an update: a write that lands between this read and your update is still caught only by the version check.
     
 </dd>
 </dl>
@@ -10626,6 +10726,87 @@ You may supply fewer values than the lookup declares, as long as they are a lead
 </dl>
 </details>
 
+<details><summary><code>client.records.<a href="src/vectros/records/client.py">geocode_record</a>(...) -> GeocodeQueuedResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Looks up the address of one `geo` field filled from an address (`geocode.from`) again, even though the address has not changed. The field becomes PENDING and its coordinates are removed at once, on the record and on any public copy; they are filled again only if the new lookup finds the address (status OK). Follow it with `geocodeStatus` on a read of the record. Charged 1 credit when the new result is saved on the record, like any address lookup, and counted toward the tenant's daily geocoding limit. If the record has a public view, the re-check also updates its public copy up to twice (when the old location is cleared and when the new result is saved); each of those updates is charged at the normal write rate, in addition to the 1 credit. Note that each request after the field settles starts a new, charged lookup. It is refused for a field whose coordinates you supplied, a field with no address, and a field already `PENDING`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.records.geocode_record(
+    id="id",
+    field="location",
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**field:** `str` — The id of a `geo` field of the record's schema that is filled from an address (`geocode.from`).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
 <details><summary><code>client.records.<a href="src/vectros/records/client.py">get_record_public_view</a>(...) -> PublicViewCopyResponse</code></summary>
 <dl>
 <dd>
@@ -10831,6 +11012,113 @@ client.records.get_record_versions(
 <dd>
 
 **start_from:** `typing.Optional[str]` — Pagination cursor. Pass the `nextCursor` from the previous page; omit it for the first page.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**request_options:** `typing.Optional[RequestOptions]` — Request-specific configuration.
+    
+</dd>
+</dl>
+</dd>
+</dl>
+
+
+</dd>
+</dl>
+</details>
+
+<details><summary><code>client.records.<a href="src/vectros/records/client.py">increment_record</a>(...) -> RecordIncrementResponse</code></summary>
+<dl>
+<dd>
+
+#### 📝 Description
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+Keep a counter on its own lean record type: `indexMode` `NONE`, small, the counted field `inline: true`, no `rangeEnabled`/`allowOverflow` lookups. On a searchable type every increment re-indexes the record (and may embed it again), and lookups that copy the record are each updated too: that cost is accepted by whoever keeps a counter there. Adds `by` to one `number` field of a record as a single database operation, so concurrent requests never overwrite each other's change: each one is applied to the value as it is at that moment, with no version to match. Under heavy contention a request can still be answered `409` without an error code; retry it. Send an `Idempotency-Key` to make a retry safe: retry a `5xx` or a lost response with the same key and it is not added again (short of a fault in the platform's own key store right after the increment). The result must stay within plus or minus 9007199254740991. Optional limits in `where` are checked against the NEW value in the same operation; if one does not hold, nothing changes and the request is refused with `INCREMENT_CONDITION_NOT_MET`. The field's own schema `validation.min`/`max` always apply too. A field with no value counts as 0. The record's `version` and update time change as for any update, and it records a version-history entry and fires the type's update triggers. On a type whose `indexMode` is not `NONE` it re-indexes the record for search (and may embed it again), as any write does; keep a busy counter on a type with `indexMode` `NONE`. Allowed only for a `number` field that is not sensitive, searchable or filterable, not a lookup field or a lookup's `sortBy`, not an address source of a `geo` field and not copied into a public view (otherwise `400` `INCREMENT_FIELD_NOT_ELIGIBLE`). A lookup that keeps a copy of the record (`rangeEnabled`, `allowOverflow`) is updated in the same operation. When the record's payload is stored externally (under storageProfile STANDARD, at 4096 bytes or more: see `payloadExternalized` on the record), only a field declared `inline: true` can be incremented; any other is `400` `INCREMENT_PAYLOAD_EXTERNALIZED`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record. Charged as a record update.
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### 🔌 Usage
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+```python
+from vectros import VectrosApi
+
+client = VectrosApi(
+    token="<token>",
+    base_url="https://yourhost.com/path/to/api",
+)
+
+client.records.increment_record(
+    id="id",
+    idempotency_key="booking-8412",
+    field="booked",
+    by=1,
+)
+
+```
+</dd>
+</dl>
+</dd>
+</dl>
+
+#### ⚙️ Parameters
+
+<dl>
+<dd>
+
+<dl>
+<dd>
+
+**id:** `str` 
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**field:** `str` — The id of a `number` field of the record's schema. It must not be sensitive, searchable or filterable, a lookup field, a lookup's `sortBy`, an address source of a `geo` field, or part of a public view.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**by:** `int` — The whole number to add; negative to subtract. Not 0. A field with no value counts as 0.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**idempotency_key:** `typing.Optional[str]` — Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without adding again, when that attempt succeeded or ended `INCREMENT_OUTCOME_UNKNOWN`; a refused attempt is not remembered, so a retry is decided again. The body is compared byte for byte; the same key with a different request is `422`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**where:** `typing.Optional[RecordIncrementLimits]` 
     
 </dd>
 </dl>
@@ -11538,9 +11826,9 @@ Runs a script you previously pushed to `POST /v1/scripts`, under your own creden
 
 **Input.** Your script sees `input.event` (the literal `"execute"`), `input.userId` (your credential's user id, or null), and `input.params` (the `input` object you sent, verbatim). That is the same `input` grammar a trigger rule uses, so one script can serve both by branching on `input.event`. When the script version declares an `inputSchema`, your `input` is checked against it before anything runs (a `400` naming every problem, the same words a script tool's call gets) and an optional member sent as null is removed; a version without one gets `params` unvalidated, and a script that needs a shape checks for it and throws. The script's `declaredInputContract` is documentation for readers and is not enforced.
 
-**Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 3 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field. So "create a folder and file N documents" holds up to 97 plain documents, 48 with one range field or one reference, 32 with both; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
+**Budget.** Seconds of useful work: the script has 15 s of wall clock (never more than 16) and a bounded number of statements and host calls; a runaway script is stopped early with `RESOURCE_LIMIT_EXCEEDED`. The transaction is bounded by the number of underlying storage rows it writes — 100 rows after merging — rather than by the number of entities: creating a folder costs 4 rows; creating a plain text document or a record costs 1 row plus one per range-indexed lookup field plus one per `reference` field, plus one for an `externalId` and one per value of a `unique` lookup field. So "create a folder and file N documents" holds up to 96 plain documents, 48 with one range field or one reference, 32 with both, and 48 plain documents that each carry an `externalId`; if a script exceeds the limit the error says so (`WRITE_BUFFER_CAP_EXCEEDED`, with `total` and `limit`) and nothing is committed. This request takes the write-path limits (burst, credit ceiling, principal quota) once, before the script runs — there is no free-read allowance here, so an account over its credit ceiling is refused even for a read-only script. Reads the script performs are metered as reads, writes as writes, and execution time beyond what those operations include is charged as script execution time (see `GET /v1/usage`).
 
-**Reads inside the script.** A `get` sees the script's own staged writes. A list, query or lookup never shows a row the script has deleted, shows a row it re-saved with the updated content, and does not show a row it created — you hold that row's id from `create()`.
+**Reads inside the script.** A `get` sees the script's own staged writes. A list, query or lookup never shows a row the script has deleted, shows a row it re-saved with the updated content, and does not show a row it created — you hold that row's id from `create()`. A `get`, list, query or lookup can trail a write another request just committed by a moment, unless it is a `records.get(id, { consistent: true })`; an `update` reads the item it changes with a consistent read (or this execution's own pending write to it).
 
 **Retries.** Send an optional `Idempotency-Key` header (1–128 characters of letters, digits, `.`, `_`, `:` or `-`) to make a retry safe: a request repeated under the same key within 24 hours receives the same response as the first attempt without executing again — when that first attempt SUCCEEDED (a duplicate still in flight is refused with `409 IDEMPOTENCY_IN_PROGRESS`; the same key on a different request is refused with `422 IDEMPOTENCY_KEY_REUSED`). A first attempt that FAILED with any other status is not remembered: the same key is free to try again, so a retry after a `400` or a `429` executes. If an execution's outcome cannot be determined — the script did not finish inside the budget while its writes may have committed — the response is `500 EXECUTION_OUTCOME_UNKNOWN` carrying `execution.id`, and a keyed retry receives that same answer: inspect what the script would have written, then use a NEW key for a new attempt. When a key is present the serialised `result` is capped at 16 KB instead of 256 KB. Without a key, a lost response cannot be distinguished from a failed one; re-read before retrying.
 </dd>
@@ -12077,7 +12365,7 @@ client.search.content()
 <dl>
 <dd>
 
-**query:** `typing.Optional[str]` — The search query, expressed in natural language or as keywords. Required, unless `filters` contains a `$near` filter: a `$near` with no query returns the matches within the radius, nearest first, and is billed as a `TEXT` search whatever `mode` says.
+**query:** `typing.Optional[str]` — The search query, expressed in natural language or as keywords. Required, unless `filters` holds at least one filter or `sortBy` names a field. With no query: a `$near` filter returns the matches within the radius, nearest first; a `sortBy` field returns the matches of the filters in that field's order; any other filter returns its matches in a fixed order, the same on every page. A filter has to narrow the results to count: an empty value (`""`, a blank string or `[]`) narrows nothing, and a filter on `context_id` or `tenant_id` does not count either, because every search already applies those. If no filter counts, the request fails with `400`. A search with no query is billed as a `TEXT` search whatever `mode` says. When more than 2,000 index entries match, the response carries `incompleteResults: true`.
     
 </dd>
 </dl>
@@ -12229,7 +12517,7 @@ client.search.content()
 <dl>
 <dd>
 
-**require_complete:** `typing.Optional[bool]` — A fail-closed override. When true, the request returns HTTP 503 instead of partial results if one of the search engines is unavailable. Defaults to false, in which case an outage degrades to the surviving engine and the response carries `degraded: true` along with the failed engines in `degradedLegs`. Set this to true only when complete results are required and a degraded answer is unacceptable. It also returns a 503 instead of a search ordered by distance that would carry `incompleteResults: true`.
+**require_complete:** `typing.Optional[bool]` — A fail-closed override. When true, the request returns HTTP 503 instead of partial results if one of the search engines is unavailable. Defaults to false, in which case an outage degrades to the surviving engine and the response carries `degraded: true` along with the failed engines in `degradedLegs`. Set this to true only when complete results are required and a degraded answer is unacceptable. It also returns a 503 instead of a search ordered by distance or by a field, or a search with filters and no query, that would carry `incompleteResults: true`.
     
 </dd>
 </dl>
@@ -12237,7 +12525,15 @@ client.search.content()
 <dl>
 <dd>
 
-**sort_by:** `typing.Optional[SearchRequestSortBy]` — The result order. Omit it for relevance order. `distance` orders results nearest first; it requires a `$near` filter, and either no `query` or `mode` TEXT (it is rejected with a 400 for HYBRID and SEMANTIC). A `TEXT` search with a `$near` (ordered by distance or not) returns no keyword-highlighted snippet: `snippet` falls back to an excerpt of the item. A search with no `query` runs as a keyword-index search whatever `mode` says, so content indexed for semantic search only is not found by it, nor by a `TEXT` search ordered by distance. A search ordered by distance returns at most one result per item (`uniqueDocuments` does not apply).
+**sort_by:** `typing.Optional[str]` — The result order. Omit it for relevance order. `distance` orders results nearest first; it requires a `$near` filter, and either no `query` or `mode` TEXT (it is rejected with a 400 for HYBRID and SEMANTIC). Any other value is the id of a field to order by: a `number` or `date` field that a schema of `typeName` declares `filterable` and not `sensitive`. It requires `typeName`, and a field no schema of that type declares so is a 400 (not checked when no schema of that type exists in the caller's app context, or for a key that reaches every app context: a field that is not sortable then orders nothing, and ties decide the order). With a `query`, a field order needs `mode` TEXT (a 400 for HYBRID and SEMANTIC); with no `query` it runs as a keyword-index search whatever `mode` says. Items without a value in that field come last, in either direction; ties are ordered by distance when a `$near` filter is present, then by relevance. A record is ordered by a field only once it has been indexed with that field filterable. A `TEXT` search with a `$near` (ordered by distance or not) returns no keyword-highlighted snippet: `snippet` falls back to an excerpt of the item. A search with no `query` runs as a keyword-index search whatever `mode` says, so content indexed for semantic search only is not found by it, nor by a `TEXT` search ordered by distance or by a field. A search ordered by distance or by a field returns at most one result per item (`uniqueDocuments` does not apply) and runs within fixed per-request limits. A field order considers at most 2,000 matches (with a `query`, the 2,000 most relevant; with none, 2,000 in no particular order): when more match, or a limit is reached, the response carries `incompleteResults: true`, and items that belong earlier may be missing.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**order:** `typing.Optional[SearchRequestOrder]` — The direction of a `sortBy` field order: `asc` (the default) or `desc`. `distance` is ascending only.
     
 </dd>
 </dl>
@@ -12270,7 +12566,7 @@ client.search.content()
 <dl>
 <dd>
 
-Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404.
 </dd>
 </dl>
 </dd>
@@ -12360,7 +12656,7 @@ client.public.get_public_record(
 <dl>
 <dd>
 
-Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value: such a type lists all of its published records, and filtering them (by category, location or text) is not available on this route. For a type published as a projection, the field must also be one the type publishes; any other field returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value. A type published as a projection can also be listed by another lookup field it publishes, and lists only its published records; a field it does not publish returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. On a `projection` type listed by a lookup field, a page can come back shorter than `limit` only because of a record that is no longer public, never because of one that was not published.
 </dd>
 </dl>
 </dd>
@@ -12457,7 +12753,7 @@ client.public.list_public_records(
 <dl>
 <dd>
 
-Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters. There is no total count: page with `offset` while `hasMore` is true. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first (charged as a text search, and the type must offer `text`); with a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search is enabled per account on request. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters; on a `date` field the value is a calendar day `YYYY-MM-DD` in UTC and matches that whole day. On an `instant` field the value is a moment in UTC to the millisecond, `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2026-11-20T09:30:00.000Z`), and matches that exact moment. On an `array` field an exact filter matches a record when any element matches, an element of a `date` array as a calendar day; a set matches the same way on an array of `string`, `number` or `instant` elements; a range on an `array` field is refused. To filter a filterable `number`, `date` or `instant` field by a range, send `filter.<field>.from` and/or `filter.<field>.to` instead (both inclusive; either alone is open on the other side): a number as a plain decimal in its shortest form (no leading or trailing zero, no plus sign, no `-0`, no exponent), at most 15 digits before and after the point (for example `filter.price.from=10&filter.price.to=20.5`), a date as a calendar day `YYYY-MM-DD` in UTC (for example `filter.day.from=2026-01-01&filter.day.to=2026-01-31`, which includes the whole of January 31), an instant as a moment in that one spelling (for example `filter.startsAt.from=2026-11-20T00:00:00.000Z&filter.startsAt.to=2026-11-20T23:59:59.999Z`, which matches the whole of 20 November: both bounds are inclusive, and a moment cannot be finer than a millisecond). To match any of several values of a filterable string, enum, number or instant field, send `filter.<field>.in` with 1 to 10 comma-separated values, each at most 128 characters and without a comma, unique and in ascending order (by value when every value is a plain decimal in that shortest form, otherwise in character-code order: `9,010` is in character order, so it is sent `010,9`; for example `filter.city.in=Leeds,York` or `filter.zip.in=9,10`). At most three fields can have a range or a set, and not together with an exact `filter.<field>` or each other on the same field, nor on the field a `record`-mode public view publishes by (`publishWhen.field`). There is no total count: page with `offset` while `hasMore` is true. To list the records that match your filters without searching for text, leave out `q` and send at least one filter. While at most 2,000 index entries match, the results come in a fixed order, the same on every page. If more match, or a search limit stops it, the page carries `incompleteResults: true`. It is billed as one text search and uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. `mode` must be left out or be `text`, and the type must offer `text`. Search, with or without `q`, reaches at most the first 240 results of a request; to read every published record of a type, use its public list (by a lookup field; on a type that publishes by a field, by that field, once per published value), which pages with a cursor. To put the results in the order of a field, send `sortBy` with the id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes, and optionally `order`: `asc` (the default) or `desc`. Records without a value for the field come last in either direction. With no `q`, records with the same value come in the same order on every page. With a `q`, they are ordered by relevance. For example, `filter.startsAt.from=2026-11-20T09:00:00.000Z&sortBy=startsAt` lists the records that start from that moment, soonest first. `q` is optional with `sortBy`. With `sortBy`, `mode` must be left out or be `text`, and the type must offer `text`. An ordered search is billed as one text search. It uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. It puts at most 2,000 matching index entries in order. With a `q`, these are the most relevant. If more match, or a search limit stops it, the page carries `incompleteResults: true`. Records that belong on the page may then be missing. `sortBy` cannot be sent with `near.lat`, `near.lon` and `near.radius`. In JavaScript, `new Date().toISOString()` gives a moment in this spelling, and `new Date('2026-11-20T00:00:00.000Z').toISOString()` is the first moment of 20 November UTC; the last is `2026-11-20T23:59:59.999Z`. If the type sets `publicView.cacheSeconds` above 0, the edge cache keeps the answer to an identical search for up to that long. A page flagged `incompleteResults` that has no results, or that a search limit cut short, is not cached. A bound that changes on every request, such as the current millisecond, makes every search different, so it never hits the cache. Round such a bound, for example to the start of the hour. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first. It is billed as one text search. A flagged page with no results is not billed. The type must offer `text`. With a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search needs the Geocoding waiver, signed for the tenant by an owner of the account in the developer portal.
 </dd>
 </dl>
 </dd>
@@ -12517,7 +12813,7 @@ client.public.search_public_records(
 <dl>
 <dd>
 
-**q:** `typing.Optional[str]` — The text to search for, at most 256 characters. Required, except with `near.*`: then leave it out to list the records near a place, nearest first.
+**q:** `typing.Optional[str]` — The text to search for, at most 256 characters. Required, except with `near.*`, a filter or `sortBy`: with `near.*`, leave it out to list the records near a place, nearest first; with at least one `filter.<field>`, leave it out to list the records that match the filters; with `sortBy` and no filter, leave it out to list the type's records in that field's order.
     
 </dd>
 </dl>
@@ -12525,7 +12821,7 @@ client.public.search_public_records(
 <dl>
 <dd>
 
-**mode:** `typing.Optional[str]` — `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows.
+**mode:** `typing.Optional[str]` — `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows. With `sortBy` it is `text`.
     
 </dd>
 </dl>
@@ -12542,6 +12838,22 @@ client.public.search_public_records(
 <dd>
 
 **limit:** `typing.Optional[int]` — The page size, 1 to 40 (default 20).
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**sort_by:** `typing.Optional[str]` — The id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes. Results come in that field's order, records without a value last. `q` is optional with it. `mode` must be left out or be `text`, and the type must offer `text`.
+    
+</dd>
+</dl>
+
+<dl>
+<dd>
+
+**order:** `typing.Optional[str]` — `asc` (the default) or `desc`. Needs `sortBy`.
     
 </dd>
 </dl>

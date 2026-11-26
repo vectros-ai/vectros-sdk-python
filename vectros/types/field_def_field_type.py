@@ -4,7 +4,18 @@ import typing
 
 FieldDefFieldType = typing.Union[
     typing.Literal[
-        "string", "number", "boolean", "date", "enum", "array", "object", "reference", "geo", "asset", "assets"
+        "string",
+        "number",
+        "boolean",
+        "date",
+        "enum",
+        "array",
+        "object",
+        "reference",
+        "geo",
+        "asset",
+        "assets",
+        "instant",
     ],
     typing.Any,
 ]

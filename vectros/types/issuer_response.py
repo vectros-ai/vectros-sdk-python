@@ -59,7 +59,7 @@ class IssuerResponse(UniversalBaseModel):
     ] = None
     status: typing.Optional[str] = pydantic.Field(default=None)
     """
-    `active`, `suspended` or `pending_verification`. A suspended issuer is registered but its tokens are no longer accepted for exchange. A registration created WITHOUT `restrictedToDomain` starts as `pending_verification`: it accepts no tokens until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify` (see the `verification*` fields). A registration scoped to a verified domain is `active` at once.
+    `active`, `suspended` or `pending_verification`. A suspended issuer is registered but its tokens are no longer accepted for exchange. A registration created WITHOUT `restrictedToDomain` starts as `pending_verification`: it accepts no tokens until you prove you control the issuer with `POST /v1/auth/issuers/{issuerId}/verify`, or an operator approves it (see the `verification*` fields). A registration scoped to a verified domain is `active` at once.
     """
 
     created_at: typing_extensions.Annotated[
@@ -128,6 +128,29 @@ class IssuerResponse(UniversalBaseModel):
         pydantic.Field(
             alias="verificationExpiresAt",
             description="Present only while `status` is `pending_verification`. When the challenge expires, as an ISO-8601 UTC timestamp. An expired registration can no longer be verified; delete it and register again.",
+        ),
+    ] = None
+    approval_status: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="approvalStatus"),
+        pydantic.Field(
+            alias="approvalStatus", description="Set once approval was requested: `requested`, `approved` or `denied`."
+        ),
+    ] = None
+    approval_requested_at: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="approvalRequestedAt"),
+        pydantic.Field(
+            alias="approvalRequestedAt",
+            description="When approval was requested, as an ISO-8601 UTC timestamp. Set once requested.",
+        ),
+    ] = None
+    approval_deny_reason: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="approvalDenyReason"),
+        pydantic.Field(
+            alias="approvalDenyReason",
+            description="Why the operator denied the request. Set only when `approvalStatus` is `denied`.",
         ),
     ] = None
 

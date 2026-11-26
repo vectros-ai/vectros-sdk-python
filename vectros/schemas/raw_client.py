@@ -29,6 +29,7 @@ from ..types.schema_request_file_profile import SchemaRequestFileProfile
 from ..types.schema_request_index_mode import SchemaRequestIndexMode
 from ..types.schema_request_storage_profile import SchemaRequestStorageProfile
 from ..types.schema_response import SchemaResponse
+from ..types.write_policy import WritePolicy
 from pydantic import ValidationError
 
 # this is used as the default value for optional parameters
@@ -147,6 +148,7 @@ class RawSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -213,6 +215,8 @@ class RawSchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -254,6 +258,9 @@ class RawSchemasClient:
                 "basedOn": based_on,
                 "publicView": convert_and_respect_annotation_metadata(
                     object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
+                "writePolicy": convert_and_respect_annotation_metadata(
+                    object_=write_policy, annotation=WritePolicy, direction="write"
                 ),
             },
             headers={
@@ -424,6 +431,7 @@ class RawSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[SchemaResponse]:
         """
@@ -490,6 +498,8 @@ class RawSchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -528,6 +538,9 @@ class RawSchemasClient:
                 "basedOn": based_on,
                 "publicView": convert_and_respect_annotation_metadata(
                     object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
+                "writePolicy": convert_and_respect_annotation_metadata(
+                    object_=write_policy, annotation=WritePolicy, direction="write"
                 ),
             },
             headers={
@@ -1016,6 +1029,7 @@ class AsyncRawSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -1082,6 +1096,8 @@ class AsyncRawSchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1123,6 +1139,9 @@ class AsyncRawSchemasClient:
                 "basedOn": based_on,
                 "publicView": convert_and_respect_annotation_metadata(
                     object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
+                "writePolicy": convert_and_respect_annotation_metadata(
+                    object_=write_policy, annotation=WritePolicy, direction="write"
                 ),
             },
             headers={
@@ -1293,6 +1312,7 @@ class AsyncRawSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[SchemaResponse]:
         """
@@ -1359,6 +1379,8 @@ class AsyncRawSchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1397,6 +1419,9 @@ class AsyncRawSchemasClient:
                 "basedOn": based_on,
                 "publicView": convert_and_respect_annotation_metadata(
                     object_=public_view, annotation=PublicViewDef, direction="write"
+                ),
+                "writePolicy": convert_and_respect_annotation_metadata(
+                    object_=write_policy, annotation=WritePolicy, direction="write"
                 ),
             },
             headers={

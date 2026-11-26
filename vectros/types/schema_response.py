@@ -14,6 +14,7 @@ from .schema_response_allowed_surfaces_item import SchemaResponseAllowedSurfaces
 from .schema_response_file_profile import SchemaResponseFileProfile
 from .schema_response_index_mode import SchemaResponseIndexMode
 from .schema_response_storage_profile import SchemaResponseStorageProfile
+from .write_policy import WritePolicy
 
 
 class SchemaResponse(UniversalBaseModel):
@@ -137,6 +138,9 @@ class SchemaResponse(UniversalBaseModel):
     ] = None
     public_view: typing_extensions.Annotated[
         typing.Optional[PublicViewDef], FieldMetadata(alias="publicView"), pydantic.Field(alias="publicView")
+    ] = None
+    write_policy: typing_extensions.Annotated[
+        typing.Optional[WritePolicy], FieldMetadata(alias="writePolicy"), pydantic.Field(alias="writePolicy")
     ] = None
     schema_version: typing_extensions.Annotated[
         typing.Optional[int],

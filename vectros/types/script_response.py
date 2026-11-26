@@ -68,6 +68,11 @@ class ScriptResponse(UniversalBaseModel):
             description="The operation names this version declares, sorted; empty when it declares none.",
         ),
     ] = None
+    seal: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    The seal of this script version: a SHA-256 over its source, its declared operations and its input schema. A record schema's `writePolicy` admits a script version by this value. Null when the version cannot be sealed, and a null seal is admitted by no write policy.
+    """
+
     provisioned_by: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="provisionedBy"),

@@ -2,4 +2,6 @@
 
 import typing
 
-GeocodeStatusViewStatus = typing.Union[typing.Literal["SUPPLIED", "PENDING", "OK", "NOT_FOUND", "FAILED"], typing.Any]
+GeocodeStatusViewStatus = typing.Union[
+    typing.Literal["SUPPLIED", "PENDING", "OK", "NOT_FOUND", "LOW_CONFIDENCE", "FAILED"], typing.Any
+]

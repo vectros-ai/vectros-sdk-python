@@ -107,6 +107,7 @@ if typing.TYPE_CHECKING:
     from .export_request_response_status import ExportRequestResponseStatus
     from .field_def import FieldDef
     from .field_def_field_type import FieldDefFieldType
+    from .field_def_item_type import FieldDefItemType
     from .file_upload_response import FileUploadResponse
     from .filter_condition import FilterCondition
     from .filter_value import FilterValue
@@ -115,8 +116,10 @@ if typing.TYPE_CHECKING:
     from .folder_request import FolderRequest
     from .folder_response import FolderResponse
     from .geocode_def import GeocodeDef
+    from .geocode_queued_response import GeocodeQueuedResponse
     from .geocode_status_view import GeocodeStatusView
     from .geocode_status_view_status import GeocodeStatusViewStatus
+    from .geocoding_section import GeocodingSection
     from .identity_lookup_request import IdentityLookupRequest
     from .identity_lookup_request_order import IdentityLookupRequestOrder
     from .identity_section import IdentitySection
@@ -181,6 +184,8 @@ if typing.TYPE_CHECKING:
     from .reads_section import ReadsSection
     from .reasoning_delta_event import ReasoningDeltaEvent
     from .reasoning_delta_event_event import ReasoningDeltaEventEvent
+    from .record_increment_limits import RecordIncrementLimits
+    from .record_increment_response import RecordIncrementResponse
     from .record_lookup_page import RecordLookupPage
     from .record_page import RecordPage
     from .record_request import RecordRequest
@@ -288,6 +293,9 @@ if typing.TYPE_CHECKING:
     from .user_response import UserResponse
     from .user_response_status import UserResponseStatus
     from .user_response_type import UserResponseType
+    from .write_policy import WritePolicy
+    from .write_policy_entry import WritePolicyEntry
+    from .write_policy_operation import WritePolicyOperation
     from .write_stats import WriteStats
 _dynamic_imports: typing.Dict[str, str] = {
     "AccessProfilePage": ".access_profile_page",
@@ -387,6 +395,7 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ExportRequestResponseStatus": ".export_request_response_status",
     "FieldDef": ".field_def",
     "FieldDefFieldType": ".field_def_field_type",
+    "FieldDefItemType": ".field_def_item_type",
     "FileUploadResponse": ".file_upload_response",
     "FilterCondition": ".filter_condition",
     "FilterValue": ".filter_value",
@@ -395,8 +404,10 @@ _dynamic_imports: typing.Dict[str, str] = {
     "FolderRequest": ".folder_request",
     "FolderResponse": ".folder_response",
     "GeocodeDef": ".geocode_def",
+    "GeocodeQueuedResponse": ".geocode_queued_response",
     "GeocodeStatusView": ".geocode_status_view",
     "GeocodeStatusViewStatus": ".geocode_status_view_status",
+    "GeocodingSection": ".geocoding_section",
     "IdentityLookupRequest": ".identity_lookup_request",
     "IdentityLookupRequestOrder": ".identity_lookup_request_order",
     "IdentitySection": ".identity_section",
@@ -459,6 +470,8 @@ _dynamic_imports: typing.Dict[str, str] = {
     "ReadsSection": ".reads_section",
     "ReasoningDeltaEvent": ".reasoning_delta_event",
     "ReasoningDeltaEventEvent": ".reasoning_delta_event_event",
+    "RecordIncrementLimits": ".record_increment_limits",
+    "RecordIncrementResponse": ".record_increment_response",
     "RecordLookupPage": ".record_lookup_page",
     "RecordPage": ".record_page",
     "RecordRequest": ".record_request",
@@ -564,6 +577,9 @@ _dynamic_imports: typing.Dict[str, str] = {
     "UserResponse": ".user_response",
     "UserResponseStatus": ".user_response_status",
     "UserResponseType": ".user_response_type",
+    "WritePolicy": ".write_policy",
+    "WritePolicyEntry": ".write_policy_entry",
+    "WritePolicyOperation": ".write_policy_operation",
     "WriteStats": ".write_stats",
 }
 
@@ -687,6 +703,7 @@ __all__ = [
     "ExportRequestResponseStatus",
     "FieldDef",
     "FieldDefFieldType",
+    "FieldDefItemType",
     "FileUploadResponse",
     "FilterCondition",
     "FilterValue",
@@ -695,8 +712,10 @@ __all__ = [
     "FolderRequest",
     "FolderResponse",
     "GeocodeDef",
+    "GeocodeQueuedResponse",
     "GeocodeStatusView",
     "GeocodeStatusViewStatus",
+    "GeocodingSection",
     "IdentityLookupRequest",
     "IdentityLookupRequestOrder",
     "IdentitySection",
@@ -759,6 +778,8 @@ __all__ = [
     "ReadsSection",
     "ReasoningDeltaEvent",
     "ReasoningDeltaEventEvent",
+    "RecordIncrementLimits",
+    "RecordIncrementResponse",
     "RecordLookupPage",
     "RecordPage",
     "RecordRequest",
@@ -864,5 +885,8 @@ __all__ = [
     "UserResponse",
     "UserResponseStatus",
     "UserResponseType",
+    "WritePolicy",
+    "WritePolicyEntry",
+    "WritePolicyOperation",
     "WriteStats",
 ]

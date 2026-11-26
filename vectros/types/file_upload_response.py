@@ -6,6 +6,7 @@ import pydantic
 import typing_extensions
 from ..core.pydantic_utilities import IS_PYDANTIC_V2, UniversalBaseModel
 from ..core.serialization import FieldMetadata
+from .document_media import DocumentMedia
 
 
 class FileUploadResponse(UniversalBaseModel):
@@ -28,7 +29,7 @@ class FileUploadResponse(UniversalBaseModel):
         FieldMetadata(alias="uploadUrl"),
         pydantic.Field(
             alias="uploadUrl",
-            description="Presigned upload URL. Upload the raw file bytes directly to this URL with an HTTP PUT request. The Content-Type header of your PUT is stored with the file and served back on download. When the request sent `size`, it must be the `Content-Type` in `requiredHeaders` and the body must be exactly `size` bytes, or the PUT is refused; without `size`, setting it to the `fileType` you provided is recommended, but it is not checked. No Authorization header is needed — the URL is self-authenticating. Your PUT MUST also send every header in `requiredHeaders` (which includes the header named in `requiredHeaderName`, set to `requiredHeaderValue`) exactly — the URL is single-use and this header is part of what makes it so; omitting it fails the request.",
+            description="Presigned upload URL. Upload the raw file bytes directly to this URL with an HTTP PUT request, with no Authorization header (the URL is self-authenticating and single-use). Send every header in `requiredHeaders` with its exact value, and a body of exactly `size` bytes, or the PUT is refused; the `Content-Type` you send is stored with the file and served back on download.",
         ),
     ] = None
     expires_at: typing_extensions.Annotated[
@@ -62,12 +63,13 @@ class FileUploadResponse(UniversalBaseModel):
             alias="requiredHeaderValue", description="The exact value to send for `requiredHeaderName`, verbatim."
         ),
     ] = None
+    media: typing.Optional[DocumentMedia] = None
     required_headers: typing_extensions.Annotated[
         typing.Optional[typing.Dict[str, str]],
         FieldMetadata(alias="requiredHeaders"),
         pydantic.Field(
             alias="requiredHeaders",
-            description="Every header your PUT to `uploadUrl` MUST send, with the exact value to send, as a map of header name to value. It always holds `If-None-Match`. When the request sent `size` it also holds `Content-Type`, set to the media type the URL was signed for, which may be written differently from the `fileType` you sent: send this value, not your own. Do not set `Content-Length` yourself; your HTTP client sets it from the body, which must be exactly `size` bytes. A missing header or a different value fails the PUT with `403 SignatureDoesNotMatch`.",
+            description="Every header your PUT to `uploadUrl` MUST send, with the exact value to send, as a map of header name to value. It holds `If-None-Match` and `Content-Type`, set to the media type the URL was signed for, which may be written differently from the `fileType` you sent: send this value, not your own. Do not set `Content-Length` yourself; your HTTP client sets it from the body, which must be exactly `size` bytes. A missing header or a different value fails the PUT with `403 SignatureDoesNotMatch`.",
         ),
     ] = None
 

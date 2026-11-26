@@ -16,6 +16,7 @@ from ..types.schema_request_file_profile import SchemaRequestFileProfile
 from ..types.schema_request_index_mode import SchemaRequestIndexMode
 from ..types.schema_request_storage_profile import SchemaRequestStorageProfile
 from ..types.schema_response import SchemaResponse
+from ..types.write_policy import WritePolicy
 from .raw_client import AsyncRawSchemasClient, RawSchemasClient
 
 # this is used as the default value for optional parameters
@@ -129,6 +130,7 @@ class SchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -195,6 +197,8 @@ class SchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -258,6 +262,7 @@ class SchemasClient:
             scopes=scopes,
             based_on=based_on,
             public_view=public_view,
+            write_policy=write_policy,
             request_options=request_options,
         )
         return _response.data
@@ -317,6 +322,7 @@ class SchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -383,6 +389,8 @@ class SchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -424,6 +432,7 @@ class SchemasClient:
             scopes=scopes,
             based_on=based_on,
             public_view=public_view,
+            write_policy=write_policy,
             request_options=request_options,
         )
         return _response.data
@@ -684,6 +693,7 @@ class AsyncSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -749,6 +759,8 @@ class AsyncSchemasClient:
             The id of an existing schema this one is a CUSTOMIZATION of, when a schema named `typeName` already exists in this context — required in that case (a same-named schema without it is rejected: "specify basedOn"), and must be omitted when this create is the FIRST schema under that name (it becomes that name's shared base, and must be created with no `userId`/`scopes` — a root/unscoped credential). Must point directly at the base (one hop); a schema that itself declares `basedOn` is rejected. Immutable once set.
 
         public_view : typing.Optional[PublicViewDef]
+
+        write_policy : typing.Optional[WritePolicy]
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -821,6 +833,7 @@ class AsyncSchemasClient:
             scopes=scopes,
             based_on=based_on,
             public_view=public_view,
+            write_policy=write_policy,
             request_options=request_options,
         )
         return _response.data
@@ -888,6 +901,7 @@ class AsyncSchemasClient:
         scopes: typing.Optional[typing.Sequence[str]] = OMIT,
         based_on: typing.Optional[str] = OMIT,
         public_view: typing.Optional[PublicViewDef] = OMIT,
+        write_policy: typing.Optional[WritePolicy] = OMIT,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> SchemaResponse:
         """
@@ -954,6 +968,8 @@ class AsyncSchemasClient:
 
         public_view : typing.Optional[PublicViewDef]
 
+        write_policy : typing.Optional[WritePolicy]
+
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
 
@@ -1003,6 +1019,7 @@ class AsyncSchemasClient:
             scopes=scopes,
             based_on=based_on,
             public_view=public_view,
+            write_policy=write_policy,
             request_options=request_options,
         )
         return _response.data

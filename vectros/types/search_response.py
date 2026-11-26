@@ -58,7 +58,7 @@ class SearchResponse(UniversalBaseModel):
         FieldMetadata(alias="incompleteResults"),
         pydantic.Field(
             alias="incompleteResults",
-            description="Present and true only on a search ordered by distance (`sortBy` `distance`, or a `$near` with no query) that reached its fixed per-request limits before it could confirm the page. The results are still in exact distance order, but nearer matches may exist that were not returned: narrow the radius or add filters. For such a search, `totalResults` is a lower bound.",
+            description="Present and true only on a search ordered by distance (`sortBy` `distance`, or a `$near` with no query), by a field (`sortBy` naming a field), or a search with filters and no query, that reached its fixed per-request limits before it could confirm the page. The results are still in exact order, but matches that belong earlier may exist that were not returned: add filters (or narrow the radius). For such a search, `totalResults` is a lower bound.",
         ),
     ] = None
 

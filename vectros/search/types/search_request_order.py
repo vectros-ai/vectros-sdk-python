@@ -2,4 +2,4 @@
 
 import typing
 
-SearchRequestSortBy = typing.Union[typing.Literal["distance"], typing.Any]
+SearchRequestOrder = typing.Union[typing.Literal["asc", "desc"], typing.Any]

@@ -136,7 +136,7 @@ class RecordResponse(UniversalBaseModel):
         FieldMetadata(alias="geocodeStatus"),
         pydantic.Field(
             alias="geocodeStatus",
-            description="Read-only. For each `geo` field that is filled from an address (`geocode.from` on the schema), how its coordinates were obtained, keyed by field id. Absent when the record's type fills no field from an address. Geocoding is part of the geo pilot.",
+            description="Read-only. For each `geo` field that is filled from an address (`geocode.from` on the schema), how its coordinates were obtained, keyed by field id. Absent when the record's type fills no field from an address. Geocoding runs only while the Geocoding waiver is signed for the tenant.",
         ),
     ] = None
     created_by: typing_extensions.Annotated[

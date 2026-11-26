@@ -29,7 +29,7 @@ class RawPublicClient:
         self, type: str, public_id: str, *, k: str, request_options: typing.Optional[RequestOptions] = None
     ) -> HttpResponse[PublicRecordResponse]:
         """
-        Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404.
 
         Parameters
         ----------
@@ -142,7 +142,7 @@ class RawPublicClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[PublicRecordPage]:
         """
-        Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value: such a type lists all of its published records, and filtering them (by category, location or text) is not available on this route. For a type published as a projection, the field must also be one the type publishes; any other field returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value. A type published as a projection can also be listed by another lookup field it publishes, and lists only its published records; a field it does not publish returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. On a `projection` type listed by a lookup field, a page can come back shorter than `limit` only because of a record that is no longer public, never because of one that was not published.
 
         Parameters
         ----------
@@ -259,13 +259,15 @@ class RawPublicClient:
         mode: typing.Optional[str] = None,
         offset: typing.Optional[int] = None,
         limit: typing.Optional[int] = None,
+        sort_by: typing.Optional[str] = None,
+        order: typing.Optional[str] = None,
         near_lat: typing.Optional[str] = None,
         near_lon: typing.Optional[str] = None,
         near_radius: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> HttpResponse[PublicSearchPage]:
         """
-        Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters. There is no total count: page with `offset` while `hasMore` is true. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first (charged as a text search, and the type must offer `text`); with a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search is enabled per account on request. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters; on a `date` field the value is a calendar day `YYYY-MM-DD` in UTC and matches that whole day. On an `instant` field the value is a moment in UTC to the millisecond, `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2026-11-20T09:30:00.000Z`), and matches that exact moment. On an `array` field an exact filter matches a record when any element matches, an element of a `date` array as a calendar day; a set matches the same way on an array of `string`, `number` or `instant` elements; a range on an `array` field is refused. To filter a filterable `number`, `date` or `instant` field by a range, send `filter.<field>.from` and/or `filter.<field>.to` instead (both inclusive; either alone is open on the other side): a number as a plain decimal in its shortest form (no leading or trailing zero, no plus sign, no `-0`, no exponent), at most 15 digits before and after the point (for example `filter.price.from=10&filter.price.to=20.5`), a date as a calendar day `YYYY-MM-DD` in UTC (for example `filter.day.from=2026-01-01&filter.day.to=2026-01-31`, which includes the whole of January 31), an instant as a moment in that one spelling (for example `filter.startsAt.from=2026-11-20T00:00:00.000Z&filter.startsAt.to=2026-11-20T23:59:59.999Z`, which matches the whole of 20 November: both bounds are inclusive, and a moment cannot be finer than a millisecond). To match any of several values of a filterable string, enum, number or instant field, send `filter.<field>.in` with 1 to 10 comma-separated values, each at most 128 characters and without a comma, unique and in ascending order (by value when every value is a plain decimal in that shortest form, otherwise in character-code order: `9,010` is in character order, so it is sent `010,9`; for example `filter.city.in=Leeds,York` or `filter.zip.in=9,10`). At most three fields can have a range or a set, and not together with an exact `filter.<field>` or each other on the same field, nor on the field a `record`-mode public view publishes by (`publishWhen.field`). There is no total count: page with `offset` while `hasMore` is true. To list the records that match your filters without searching for text, leave out `q` and send at least one filter. While at most 2,000 index entries match, the results come in a fixed order, the same on every page. If more match, or a search limit stops it, the page carries `incompleteResults: true`. It is billed as one text search and uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. `mode` must be left out or be `text`, and the type must offer `text`. Search, with or without `q`, reaches at most the first 240 results of a request; to read every published record of a type, use its public list (by a lookup field; on a type that publishes by a field, by that field, once per published value), which pages with a cursor. To put the results in the order of a field, send `sortBy` with the id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes, and optionally `order`: `asc` (the default) or `desc`. Records without a value for the field come last in either direction. With no `q`, records with the same value come in the same order on every page. With a `q`, they are ordered by relevance. For example, `filter.startsAt.from=2026-11-20T09:00:00.000Z&sortBy=startsAt` lists the records that start from that moment, soonest first. `q` is optional with `sortBy`. With `sortBy`, `mode` must be left out or be `text`, and the type must offer `text`. An ordered search is billed as one text search. It uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. It puts at most 2,000 matching index entries in order. With a `q`, these are the most relevant. If more match, or a search limit stops it, the page carries `incompleteResults: true`. Records that belong on the page may then be missing. `sortBy` cannot be sent with `near.lat`, `near.lon` and `near.radius`. In JavaScript, `new Date().toISOString()` gives a moment in this spelling, and `new Date('2026-11-20T00:00:00.000Z').toISOString()` is the first moment of 20 November UTC; the last is `2026-11-20T23:59:59.999Z`. If the type sets `publicView.cacheSeconds` above 0, the edge cache keeps the answer to an identical search for up to that long. A page flagged `incompleteResults` that has no results, or that a search limit cut short, is not cached. A bound that changes on every request, such as the current millisecond, makes every search different, so it never hits the cache. Round such a bound, for example to the start of the hour. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first. It is billed as one text search. A flagged page with no results is not billed. The type must offer `text`. With a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search needs the Geocoding waiver, signed for the tenant by an owner of the account in the developer portal.
 
         Parameters
         ----------
@@ -276,16 +278,22 @@ class RawPublicClient:
             The record type to search.
 
         q : typing.Optional[str]
-            The text to search for, at most 256 characters. Required, except with `near.*`: then leave it out to list the records near a place, nearest first.
+            The text to search for, at most 256 characters. Required, except with `near.*`, a filter or `sortBy`: with `near.*`, leave it out to list the records near a place, nearest first; with at least one `filter.<field>`, leave it out to list the records that match the filters; with `sortBy` and no filter, leave it out to list the type's records in that field's order.
 
         mode : typing.Optional[str]
-            `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows.
+            `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows. With `sortBy` it is `text`.
 
         offset : typing.Optional[int]
             How many results to skip, 0 to 200 (default 0).
 
         limit : typing.Optional[int]
             The page size, 1 to 40 (default 20).
+
+        sort_by : typing.Optional[str]
+            The id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes. Results come in that field's order, records without a value last. `q` is optional with it. `mode` must be left out or be `text`, and the type must offer `text`.
+
+        order : typing.Optional[str]
+            `asc` (the default) or `desc`. Needs `sortBy`.
 
         near_lat : typing.Optional[str]
             The latitude of the place to search near, -90 to 90, written as a plain decimal with at most 6 decimal places (for example `38.7223` or `-0.5`; no exponent, no leading `+`, and not `-0`). Send with `near.lon` and `near.radius`.
@@ -314,6 +322,8 @@ class RawPublicClient:
                 "mode": mode,
                 "offset": offset,
                 "limit": limit,
+                "sortBy": sort_by,
+                "order": order,
                 "near.lat": near_lat,
                 "near.lon": near_lon,
                 "near.radius": near_radius,
@@ -403,7 +413,7 @@ class AsyncRawPublicClient:
         self, type: str, public_id: str, *, k: str, request_options: typing.Optional[RequestOptions] = None
     ) -> AsyncHttpResponse[PublicRecordResponse]:
         """
-        Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Returns one public record of an app context, anonymously, by its public identifier. Send a publishable app key as the `k` query parameter; no other credential is accepted. Only the record's public fields are returned. A record that does not exist, is not published, or belongs to another app context returns the same 404.
 
         Parameters
         ----------
@@ -516,7 +526,7 @@ class AsyncRawPublicClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[PublicRecordPage]:
         """
-        Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value: such a type lists all of its published records, and filtering them (by category, location or text) is not available on this route. For a type published as a projection, the field must also be one the type publishes; any other field returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Lists the public records of a type, anonymously, by one lookup field: send the field's name as a query parameter and the value to list by as its value (for example `city=Lisbon`). The field must be a lookup field the type declares; its name is not a fixed parameter of this operation. For a type published by a field's value, list by that field and a published value. A type published as a projection can also be listed by another lookup field it publishes, and lists only its published records; a field it does not publish returns the same 404 as a type with no public records. Send a publishable app key as the `k` query parameter. A page can be shorter than `limit` while `nextCursor` is not null: keep paging, passing `nextCursor` as `cursor`, until it is null. On a `projection` type listed by a lookup field, a page can come back shorter than `limit` only because of a record that is no longer public, never because of one that was not published.
 
         Parameters
         ----------
@@ -633,13 +643,15 @@ class AsyncRawPublicClient:
         mode: typing.Optional[str] = None,
         offset: typing.Optional[int] = None,
         limit: typing.Optional[int] = None,
+        sort_by: typing.Optional[str] = None,
+        order: typing.Optional[str] = None,
         near_lat: typing.Optional[str] = None,
         near_lon: typing.Optional[str] = None,
         near_radius: typing.Optional[int] = None,
         request_options: typing.Optional[RequestOptions] = None,
     ) -> AsyncHttpResponse[PublicSearchPage]:
         """
-        Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters. There is no total count: page with `offset` while `hasMore` is true. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first (charged as a text search, and the type must offer `text`); with a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search is enabled per account on request. Where public serving is not open, it answers `503` `PUBLIC_ACCESS_NOT_LAUNCHED` for an account whose public access is otherwise ready; an account that is not ready gets the `503` code for what is missing first (see `errorCode`).
+        Searches the public records of one type, anonymously. Send a publishable app key as the `k` query parameter; no other credential is accepted. The type must offer public search in the requested `mode`, and only published records are returned, with their public fields only. To filter by a field the type marks filterable, send it as `filter.<field>` (for example `filter.city=Lisbon`), once per field, with a value of at most 128 characters; on a `date` field the value is a calendar day `YYYY-MM-DD` in UTC and matches that whole day. On an `instant` field the value is a moment in UTC to the millisecond, `YYYY-MM-DDTHH:MM:SS.sssZ` (for example `2026-11-20T09:30:00.000Z`), and matches that exact moment. On an `array` field an exact filter matches a record when any element matches, an element of a `date` array as a calendar day; a set matches the same way on an array of `string`, `number` or `instant` elements; a range on an `array` field is refused. To filter a filterable `number`, `date` or `instant` field by a range, send `filter.<field>.from` and/or `filter.<field>.to` instead (both inclusive; either alone is open on the other side): a number as a plain decimal in its shortest form (no leading or trailing zero, no plus sign, no `-0`, no exponent), at most 15 digits before and after the point (for example `filter.price.from=10&filter.price.to=20.5`), a date as a calendar day `YYYY-MM-DD` in UTC (for example `filter.day.from=2026-01-01&filter.day.to=2026-01-31`, which includes the whole of January 31), an instant as a moment in that one spelling (for example `filter.startsAt.from=2026-11-20T00:00:00.000Z&filter.startsAt.to=2026-11-20T23:59:59.999Z`, which matches the whole of 20 November: both bounds are inclusive, and a moment cannot be finer than a millisecond). To match any of several values of a filterable string, enum, number or instant field, send `filter.<field>.in` with 1 to 10 comma-separated values, each at most 128 characters and without a comma, unique and in ascending order (by value when every value is a plain decimal in that shortest form, otherwise in character-code order: `9,010` is in character order, so it is sent `010,9`; for example `filter.city.in=Leeds,York` or `filter.zip.in=9,10`). At most three fields can have a range or a set, and not together with an exact `filter.<field>` or each other on the same field, nor on the field a `record`-mode public view publishes by (`publishWhen.field`). There is no total count: page with `offset` while `hasMore` is true. To list the records that match your filters without searching for text, leave out `q` and send at least one filter. While at most 2,000 index entries match, the results come in a fixed order, the same on every page. If more match, or a search limit stops it, the page carries `incompleteResults: true`. It is billed as one text search and uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. `mode` must be left out or be `text`, and the type must offer `text`. Search, with or without `q`, reaches at most the first 240 results of a request; to read every published record of a type, use its public list (by a lookup field; on a type that publishes by a field, by that field, once per published value), which pages with a cursor. To put the results in the order of a field, send `sortBy` with the id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes, and optionally `order`: `asc` (the default) or `desc`. Records without a value for the field come last in either direction. With no `q`, records with the same value come in the same order on every page. With a `q`, they are ordered by relevance. For example, `filter.startsAt.from=2026-11-20T09:00:00.000Z&sortBy=startsAt` lists the records that start from that moment, soonest first. `q` is optional with `sortBy`. With `sortBy`, `mode` must be left out or be `text`, and the type must offer `text`. An ordered search is billed as one text search. It uses 12 tokens of the key's rate limit, plus 1 for each 40 of `offset`. If its page is flagged `incompleteResults` and has no results, it is not billed. It puts at most 2,000 matching index entries in order. With a `q`, these are the most relevant. If more match, or a search limit stops it, the page carries `incompleteResults: true`. Records that belong on the page may then be missing. `sortBy` cannot be sent with `near.lat`, `near.lon` and `near.radius`. In JavaScript, `new Date().toISOString()` gives a moment in this spelling, and `new Date('2026-11-20T00:00:00.000Z').toISOString()` is the first moment of 20 November UTC; the last is `2026-11-20T23:59:59.999Z`. If the type sets `publicView.cacheSeconds` above 0, the edge cache keeps the answer to an identical search for up to that long. A page flagged `incompleteResults` that has no results, or that a search limit cut short, is not cached. A bound that changes on every request, such as the current millisecond, makes every search different, so it never hits the cache. Round such a bound, for example to the start of the hour. To search near a place, send `near.lat`, `near.lon` and `near.radius` together, on a type that publishes one location field: with no `q`, the type's published records within the radius are returned nearest first. It is billed as one text search. A flagged page with no results is not billed. The type must offer `text`. With a `q`, the radius filters the results, which keep their usual order. Each result then carries `distanceMeters`. The centre is rounded to 3 decimal places (about 110 m) and the radius up to the next of 1, 2, 5, 10, 25, 50, 100 or 200 km. Location search needs the Geocoding waiver, signed for the tenant by an owner of the account in the developer portal.
 
         Parameters
         ----------
@@ -650,16 +662,22 @@ class AsyncRawPublicClient:
             The record type to search.
 
         q : typing.Optional[str]
-            The text to search for, at most 256 characters. Required, except with `near.*`: then leave it out to list the records near a place, nearest first.
+            The text to search for, at most 256 characters. Required, except with `near.*`, a filter or `sortBy`: with `near.*`, leave it out to list the records near a place, nearest first; with at least one `filter.<field>`, leave it out to list the records that match the filters; with `sortBy` and no filter, leave it out to list the type's records in that field's order.
 
         mode : typing.Optional[str]
-            `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows.
+            `text`, `semantic` or `hybrid`: one of the modes the type offers. Defaults to the first one it offers that the account allows. With `sortBy` it is `text`.
 
         offset : typing.Optional[int]
             How many results to skip, 0 to 200 (default 0).
 
         limit : typing.Optional[int]
             The page size, 1 to 40 (default 20).
+
+        sort_by : typing.Optional[str]
+            The id of a filterable `number`, `date` or `instant` field of the type, one of the fields its public view publishes. Results come in that field's order, records without a value last. `q` is optional with it. `mode` must be left out or be `text`, and the type must offer `text`.
+
+        order : typing.Optional[str]
+            `asc` (the default) or `desc`. Needs `sortBy`.
 
         near_lat : typing.Optional[str]
             The latitude of the place to search near, -90 to 90, written as a plain decimal with at most 6 decimal places (for example `38.7223` or `-0.5`; no exponent, no leading `+`, and not `-0`). Send with `near.lon` and `near.radius`.
@@ -688,6 +706,8 @@ class AsyncRawPublicClient:
                 "mode": mode,
                 "offset": offset,
                 "limit": limit,
+                "sortBy": sort_by,
+                "order": order,
                 "near.lat": near_lat,
                 "near.lon": near_lon,
                 "near.radius": near_radius,

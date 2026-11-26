@@ -23,7 +23,7 @@ class DocumentDownloadResponse(UniversalBaseModel):
         FieldMetadata(alias="downloadUrl"),
         pydantic.Field(
             alias="downloadUrl",
-            description="Presigned download URL for the original file. Short-lived — fetch the file before the time given in `expires`.",
+            description="Presigned download URL for the file (for an image, a copy of the processed image). Short-lived — fetch the file before the time given in `expires`.",
         ),
     ] = None
     expires: typing.Optional[int] = pydantic.Field(default=None)

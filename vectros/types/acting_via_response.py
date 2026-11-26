@@ -15,7 +15,7 @@ class ActingViaResponse(UniversalBaseModel):
 
     kind: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The kind of execution. Currently `agent-run`, a run of a stored agent. This is an open set: new kinds may be added without notice, so treat an unrecognized value as a valid kind you do not interpret.
+    The kind of execution: `agent-run`, a run of a stored agent; or `script`, a script version a record type's `writePolicy` admitted for this write. This is an open set: new kinds may be added without notice, so treat an unrecognized value as a valid kind you do not interpret.
     """
 
     actor_id: typing_extensions.Annotated[
@@ -23,7 +23,7 @@ class ActingViaResponse(UniversalBaseModel):
         FieldMetadata(alias="actorId"),
         pydantic.Field(
             alias="actorId",
-            description="Identifier of the definition that acted. For `agent-run`, the ID of the stored agent.",
+            description="Identifier of the definition that acted. For `agent-run`, the ID of the stored agent; for `script`, the script's name and version (`name@version`).",
         ),
     ] = None
     run_id: typing_extensions.Annotated[
@@ -31,12 +31,12 @@ class ActingViaResponse(UniversalBaseModel):
         FieldMetadata(alias="runId"),
         pydantic.Field(
             alias="runId",
-            description="Identifier of the execution that made the call. For `agent-run`, the ID of the run. Treat it as opaque: for other kinds it may be a composite reference.",
+            description="Identifier of the execution that made the call. For `agent-run`, the ID of the run; for `script`, the ID of the script execution. Treat it as opaque: for other kinds it may be a composite reference.",
         ),
     ] = None
     tool: typing.Optional[str] = pydantic.Field(default=None)
     """
-    The tool the execution called to make this call, when it made it through a tool. For `agent-run`, the name of the tool the run called.
+    The tool the execution called to make this call, when it made it through a tool. For `agent-run`, the name of the tool the run called. For `script`, the script version's `seal`.
     """
 
     if IS_PYDANTIC_V2:

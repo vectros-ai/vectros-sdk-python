@@ -10,7 +10,7 @@ from ..core.serialization import FieldMetadata
 
 class DocumentMedia(UniversalBaseModel):
     """
-    The image state of a document whose type has `fileProfile: PUBLIC_MEDIA`. Read-only. Absent on every other document, and until the upload has been processed; no upload is processed in this version.
+    The image state of a document whose type has `fileProfile: PUBLIC_MEDIA`. Read-only. Absent on every other document.
     """
 
     state: typing.Optional[str] = pydantic.Field(default=None)
@@ -33,12 +33,25 @@ class DocumentMedia(UniversalBaseModel):
     The image's height in pixels, once processed.
     """
 
+    url: typing.Optional[str] = pydantic.Field(default=None)
+    """
+    The image's public address. It serves the image only while `state` is `PUBLISHED`. Absent when `state` is `REJECTED`.
+    """
+
+    reject_reason: typing_extensions.Annotated[
+        typing.Optional[str],
+        FieldMetadata(alias="rejectReason"),
+        pydantic.Field(
+            alias="rejectReason",
+            description="Why the image was refused, when `state` is `REJECTED`: `UNDECODABLE`, `FORMAT_MISMATCH`, `PIXEL_LIMIT_EXCEEDED` or `OUTPUT_TOO_LARGE`. New values may be added.",
+        ),
+    ] = None
     taken_down: typing_extensions.Annotated[
         typing.Optional[str],
         FieldMetadata(alias="takenDown"),
         pydantic.Field(
             alias="takenDown",
-            description="When the image was taken down by the platform, as an ISO-8601 UTC timestamp. A taken-down image is never public and cannot be set on a record; a record that already holds it can still be saved. Absent unless taken down.",
+            description="When the image was taken down by the platform, as an ISO-8601 UTC timestamp. A taken-down image is never public and cannot be set on a record; a record that already holds it can still be saved. A taken-down image has no download. Absent unless taken down.",
         ),
     ] = None
 

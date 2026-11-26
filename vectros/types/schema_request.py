@@ -14,6 +14,7 @@ from .schema_request_allowed_surfaces_item import SchemaRequestAllowedSurfacesIt
 from .schema_request_file_profile import SchemaRequestFileProfile
 from .schema_request_index_mode import SchemaRequestIndexMode
 from .schema_request_storage_profile import SchemaRequestStorageProfile
+from .write_policy import WritePolicy
 
 
 class SchemaRequest(UniversalBaseModel):
@@ -149,6 +150,9 @@ class SchemaRequest(UniversalBaseModel):
     ] = None
     public_view: typing_extensions.Annotated[
         typing.Optional[PublicViewDef], FieldMetadata(alias="publicView"), pydantic.Field(alias="publicView")
+    ] = None
+    write_policy: typing_extensions.Annotated[
+        typing.Optional[WritePolicy], FieldMetadata(alias="writePolicy"), pydantic.Field(alias="writePolicy")
     ] = None
 
     if IS_PYDANTIC_V2:

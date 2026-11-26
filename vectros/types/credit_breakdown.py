@@ -113,6 +113,32 @@ class CreditBreakdown(UniversalBaseModel):
         FieldMetadata(alias="scriptExecutionMilli"),
         pydantic.Field(alias="scriptExecutionMilli", description="scriptExecution in milli-credit precision (exact)"),
     ] = None
+    public_access: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="publicAccess"),
+        pydantic.Field(
+            alias="publicAccess",
+            description="Credits consumed by anonymous public access: public reads beyond the shared read allowance, public searches, public cache hits beyond the allowance, and edge cache purges (0.5 credit for each purged path). Public response bytes are charged on `dataOut`.",
+        ),
+    ] = None
+    public_access_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="publicAccessMilli"),
+        pydantic.Field(alias="publicAccessMilli", description="publicAccess in milli-credit precision (exact)"),
+    ] = None
+    geocode_stored: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="geocodeStored"),
+        pydantic.Field(
+            alias="geocodeStored",
+            description="Credits consumed by address geocoding: 1 credit for each address the geocoding provider looked up (see the `geocoding` section).",
+        ),
+    ] = None
+    geocode_stored_milli: typing_extensions.Annotated[
+        typing.Optional[int],
+        FieldMetadata(alias="geocodeStoredMilli"),
+        pydantic.Field(alias="geocodeStoredMilli", description="geocodeStored in milli-credit precision (exact)"),
+    ] = None
 
     if IS_PYDANTIC_V2:
         model_config: typing.ClassVar[pydantic.ConfigDict] = pydantic.ConfigDict(extra="allow", frozen=True)  # type: ignore # Pydantic v2

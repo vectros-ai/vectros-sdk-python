@@ -8,8 +8,11 @@ from ..types.batch_get_response import BatchGetResponse
 from ..types.batch_lookup_input import BatchLookupInput
 from ..types.batch_lookup_response import BatchLookupResponse
 from ..types.batch_write_response import BatchWriteResponse
+from ..types.geocode_queued_response import GeocodeQueuedResponse
 from ..types.model_data_version_page import ModelDataVersionPage
 from ..types.public_view_copy_response import PublicViewCopyResponse
+from ..types.record_increment_limits import RecordIncrementLimits
+from ..types.record_increment_response import RecordIncrementResponse
 from ..types.record_lookup_page import RecordLookupPage
 from ..types.record_page import RecordPage
 from ..types.record_request import RecordRequest
@@ -123,7 +126,9 @@ class RecordsClient:
         """
         Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
-        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens. Each `externalId` and each value of a `unique` lookup field counts as one more row per record: up to 49 records that each carry an `externalId` fit in one `all_or_nothing` batch, and about 32 when each also carries one `unique` value.
+
+        Within one `all_or_nothing` batch a unique value cannot move from one record to another: an item that takes an `externalId` or `unique` value another item in the same batch releases is refused with the whole batch. Send the two writes in separate requests.
 
         The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 
@@ -136,7 +141,7 @@ class RecordsClient:
             Only relevant with `?upsert=true`; same meaning as on a single `POST /v1/records`. Defaults to `false`.
 
         atomicity : typing.Optional[BatchWriteRequestAtomicity]
-            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
+            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens (each `externalId` and each `unique` lookup value is one more row: up to 49 records that each carry an `externalId` fit, about 32 when each also carries one `unique` value). Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
 
         items : typing.Optional[typing.Sequence[RecordRequest]]
             The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`), and goes through the same schema validation, `externalId` idempotency, unique-field enforcement and scope check — the `records:c:<type>` check being applied per item, against that item's own record type.
@@ -178,12 +183,12 @@ class RecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordPage:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads. A page can hold fewer than `limit` records (or none) while `nextCursor` is set: page until it is null.
 
         Parameters
         ----------
         type : typing.Optional[str]
-            The record type to list, e.g. `intake_form`. Required unless `folderId` or `recent=true` is given.
+            The record type to list, e.g. `intake_form`: only records of that type are returned. Required unless `folderId` or `recent=true` is given.
 
         folder_id : typing.Optional[str]
             List all records in this folder, regardless of type. The value is a Vectros-assigned folder UUID. Required unless `type` or `recent=true` is given; may be combined with `type` to list a single type within the folder.
@@ -346,14 +351,23 @@ class RecordsClient:
         )
         return _response.data
 
-    def get_record(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> RecordResponse:
+    def get_record(
+        self,
+        id: str,
+        *,
+        consistent: typing.Optional[bool] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RecordResponse:
         """
-        Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence.
+        Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence. By default the read is eventually consistent: a write that completed moments ago may not be visible yet. Pass `consistent=true` for a strongly consistent read that always reflects every write completed before the request.
 
         Parameters
         ----------
         id : str
             The Vectros-assigned UUID of the record to retrieve.
+
+        consistent : typing.Optional[bool]
+            When `true`, the record is read with strong consistency: the response reflects every write to this record that completed before this request started. Use it when a decision depends on the record's latest state. It is metered as one ordinary read, but it is slower and uses more database capacity than the default, so use it only where you need it. `false` (the default) is the ordinary read; any other value is rejected with 400, as is the parameter on the other data endpoints. It does not replace `expectedVersion` on an update: a write that lands between this read and your update is still caught only by the version check.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -375,7 +389,7 @@ class RecordsClient:
             id="550e8400-e29b-41d4-a716-446655440000",
         )
         """
-        _response = self._raw_client.get_record(id, request_options=request_options)
+        _response = self._raw_client.get_record(id, consistent=consistent, request_options=request_options)
         return _response.data
 
     def update_record(
@@ -824,6 +838,43 @@ class RecordsClient:
         )
         return _response.data
 
+    def geocode_record(
+        self, id: str, *, field: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> GeocodeQueuedResponse:
+        """
+        Looks up the address of one `geo` field filled from an address (`geocode.from`) again, even though the address has not changed. The field becomes PENDING and its coordinates are removed at once, on the record and on any public copy; they are filled again only if the new lookup finds the address (status OK). Follow it with `geocodeStatus` on a read of the record. Charged 1 credit when the new result is saved on the record, like any address lookup, and counted toward the tenant's daily geocoding limit. If the record has a public view, the re-check also updates its public copy up to twice (when the old location is cleared and when the new result is saved); each of those updates is charged at the normal write rate, in addition to the 1 credit. Note that each request after the field settles starts a new, charged lookup. It is refused for a field whose coordinates you supplied, a field with no address, and a field already `PENDING`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record.
+
+        Parameters
+        ----------
+        id : str
+
+        field : str
+            The id of a `geo` field of the record's schema that is filled from an address (`geocode.from`).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        GeocodeQueuedResponse
+            The lookup is queued; the field is `PENDING`.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.records.geocode_record(
+            id="id",
+            field="location",
+        )
+        """
+        _response = self._raw_client.geocode_record(id, field=field, request_options=request_options)
+        return _response.data
+
     def get_record_public_view(
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> PublicViewCopyResponse:
@@ -929,6 +980,62 @@ class RecordsClient:
         )
         """
         _response = self._raw_client.get_record_versions(id, start_from=start_from, request_options=request_options)
+        return _response.data
+
+    def increment_record(
+        self,
+        id: str,
+        *,
+        field: str,
+        by: int,
+        idempotency_key: typing.Optional[str] = None,
+        where: typing.Optional[RecordIncrementLimits] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RecordIncrementResponse:
+        """
+        Keep a counter on its own lean record type: `indexMode` `NONE`, small, the counted field `inline: true`, no `rangeEnabled`/`allowOverflow` lookups. On a searchable type every increment re-indexes the record (and may embed it again), and lookups that copy the record are each updated too: that cost is accepted by whoever keeps a counter there. Adds `by` to one `number` field of a record as a single database operation, so concurrent requests never overwrite each other's change: each one is applied to the value as it is at that moment, with no version to match. Under heavy contention a request can still be answered `409` without an error code; retry it. Send an `Idempotency-Key` to make a retry safe: retry a `5xx` or a lost response with the same key and it is not added again (short of a fault in the platform's own key store right after the increment). The result must stay within plus or minus 9007199254740991. Optional limits in `where` are checked against the NEW value in the same operation; if one does not hold, nothing changes and the request is refused with `INCREMENT_CONDITION_NOT_MET`. The field's own schema `validation.min`/`max` always apply too. A field with no value counts as 0. The record's `version` and update time change as for any update, and it records a version-history entry and fires the type's update triggers. On a type whose `indexMode` is not `NONE` it re-indexes the record for search (and may embed it again), as any write does; keep a busy counter on a type with `indexMode` `NONE`. Allowed only for a `number` field that is not sensitive, searchable or filterable, not a lookup field or a lookup's `sortBy`, not an address source of a `geo` field and not copied into a public view (otherwise `400` `INCREMENT_FIELD_NOT_ELIGIBLE`). A lookup that keeps a copy of the record (`rangeEnabled`, `allowOverflow`) is updated in the same operation. When the record's payload is stored externally (under storageProfile STANDARD, at 4096 bytes or more: see `payloadExternalized` on the record), only a field declared `inline: true` can be incremented; any other is `400` `INCREMENT_PAYLOAD_EXTERNALIZED`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record. Charged as a record update.
+
+        Parameters
+        ----------
+        id : str
+
+        field : str
+            The id of a `number` field of the record's schema. It must not be sensitive, searchable or filterable, a lookup field, a lookup's `sortBy`, an address source of a `geo` field, or part of a public view.
+
+        by : int
+            The whole number to add; negative to subtract. Not 0. A field with no value counts as 0.
+
+        idempotency_key : typing.Optional[str]
+            Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without adding again, when that attempt succeeded or ended `INCREMENT_OUTCOME_UNKNOWN`; a refused attempt is not remembered, so a retry is decided again. The body is compared byte for byte; the same key with a different request is `422`.
+
+        where : typing.Optional[RecordIncrementLimits]
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RecordIncrementResponse
+            The increment was applied.
+
+        Examples
+        --------
+        from vectros import VectrosApi
+
+        client = VectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+        client.records.increment_record(
+            id="id",
+            idempotency_key="booking-8412",
+            field="booked",
+            by=1,
+        )
+        """
+        _response = self._raw_client.increment_record(
+            id, field=field, by=by, idempotency_key=idempotency_key, where=where, request_options=request_options
+        )
         return _response.data
 
 
@@ -1045,7 +1152,9 @@ class AsyncRecordsClient:
         """
         Writes up to 50 records per request in `best_effort` mode and up to 50 with `atomicity: all_or_nothing`, in a single request. Each item in `items` has exactly the same shape, and goes through exactly the same validation, authorization and idempotency rules, as the body of a single `POST /v1/records` — including schema validation, `externalId` idempotency, unique-field enforcement, and the `records:c:<type>` scope check, which is applied per item against that item's own record type. A batch is not a way to write a type your credential could not write one at a time.
 
-        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens.
+        `atomicity` selects how the batch commits. `best_effort` (the default) writes each item independently: some can succeed while others fail, and each item's own outcome is reported. `all_or_nothing` commits every item in one transaction — if any item fails, no record is created or updated at all, and every item that was itself fine reports `not_committed` while the ones that failed report why. Because the transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can be refused as too large to commit atomically even when it is within the item limit; the error says so, and nothing is written when it happens. Each `externalId` and each value of a `unique` lookup field counts as one more row per record: up to 49 records that each carry an `externalId` fit in one `all_or_nothing` batch, and about 32 when each also carries one `unique` value.
+
+        Within one `all_or_nothing` batch a unique value cannot move from one record to another: an item that takes an `externalId` or `unique` value another item in the same batch releases is refused with the whole batch. Send the two writes in separate requests.
 
         The response is HTTP 200 whenever the batch was processed at all — including when every item failed — so always inspect `results` rather than relying on the status code. Match each result to the item you sent using its `index`. Requires the `records:c` scope.
 
@@ -1058,7 +1167,7 @@ class AsyncRecordsClient:
             Only relevant with `?upsert=true`; same meaning as on a single `POST /v1/records`. Defaults to `false`.
 
         atomicity : typing.Optional[BatchWriteRequestAtomicity]
-            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens. Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
+            Controls how the batch commits. `best_effort` (the default, maximum 50 items) commits each item independently and reports a per-item outcome, so some items can succeed while others fail. `all_or_nothing` (maximum 50 items) commits every item in one transaction: if any item fails, no record is created or updated at all and the items that were themselves fine come back with status `not_committed`. Because that transaction is bounded by the number of underlying storage rows rather than by the number of records, a large `all_or_nothing` batch can still be refused as too big to commit atomically even when it is within the item limit — nothing is written when that happens (each `externalId` and each `unique` lookup value is one more row: up to 49 records that each carry an `externalId` fit, about 32 when each also carries one `unique` value). Any value other than these two is rejected rather than treated as the default, so a typo can never silently downgrade a transactional batch.
 
         items : typing.Optional[typing.Sequence[RecordRequest]]
             The records to write. Each item has the same shape as the body of a single create-record request (`POST /v1/records`), and goes through the same schema validation, `externalId` idempotency, unique-field enforcement and scope check — the `records:c:<type>` check being applied per item, against that item's own record type.
@@ -1108,12 +1217,12 @@ class AsyncRecordsClient:
         request_options: typing.Optional[RequestOptions] = None,
     ) -> RecordPage:
         """
-        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads.
+        Returns a paginated list of records in your account as a `{data, nextCursor}` page. Supply exactly one of `type`, `folderId`, or `recent=true` to choose the mode: `type` lists all records of a single type; `folderId` lists all records in a folder (any type); and `recent=true` returns the account-wide recently-updated feed across all types, newest first. You may combine `type` with `folderId` to list a single type within a folder. The owner filters (`userId`, `scope`) further narrow the type and folder modes; the `recent` feed is standalone and ignores all filters. Each token only sees the record types it is scoped to read. Requires the `records:r` scope. By default the response returns the indexed projection of each record; set `includePayload=true` to include full payloads. A page can hold fewer than `limit` records (or none) while `nextCursor` is set: page until it is null.
 
         Parameters
         ----------
         type : typing.Optional[str]
-            The record type to list, e.g. `intake_form`. Required unless `folderId` or `recent=true` is given.
+            The record type to list, e.g. `intake_form`: only records of that type are returned. Required unless `folderId` or `recent=true` is given.
 
         folder_id : typing.Optional[str]
             List all records in this folder, regardless of type. The value is a Vectros-assigned folder UUID. Required unless `type` or `recent=true` is given; may be combined with `type` to list a single type within the folder.
@@ -1292,14 +1401,23 @@ class AsyncRecordsClient:
         )
         return _response.data
 
-    async def get_record(self, id: str, *, request_options: typing.Optional[RequestOptions] = None) -> RecordResponse:
+    async def get_record(
+        self,
+        id: str,
+        *,
+        consistent: typing.Optional[bool] = None,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RecordResponse:
         """
-        Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence.
+        Retrieves a single record by its Vectros-assigned ID, including its full payload (payloads that were externalized to object storage are rehydrated for this response). Sensitive fields are masked according to the record's schema. Requires the `records:r:<type>` scope. A record outside your account or scope returns 404 (not found) rather than revealing its existence. By default the read is eventually consistent: a write that completed moments ago may not be visible yet. Pass `consistent=true` for a strongly consistent read that always reflects every write completed before the request.
 
         Parameters
         ----------
         id : str
             The Vectros-assigned UUID of the record to retrieve.
+
+        consistent : typing.Optional[bool]
+            When `true`, the record is read with strong consistency: the response reflects every write to this record that completed before this request started. Use it when a decision depends on the record's latest state. It is metered as one ordinary read, but it is slower and uses more database capacity than the default, so use it only where you need it. `false` (the default) is the ordinary read; any other value is rejected with 400, as is the parameter on the other data endpoints. It does not replace `expectedVersion` on an update: a write that lands between this read and your update is still caught only by the version check.
 
         request_options : typing.Optional[RequestOptions]
             Request-specific configuration.
@@ -1329,7 +1447,7 @@ class AsyncRecordsClient:
 
         asyncio.run(main())
         """
-        _response = await self._raw_client.get_record(id, request_options=request_options)
+        _response = await self._raw_client.get_record(id, consistent=consistent, request_options=request_options)
         return _response.data
 
     async def update_record(
@@ -1818,6 +1936,51 @@ class AsyncRecordsClient:
         )
         return _response.data
 
+    async def geocode_record(
+        self, id: str, *, field: str, request_options: typing.Optional[RequestOptions] = None
+    ) -> GeocodeQueuedResponse:
+        """
+        Looks up the address of one `geo` field filled from an address (`geocode.from`) again, even though the address has not changed. The field becomes PENDING and its coordinates are removed at once, on the record and on any public copy; they are filled again only if the new lookup finds the address (status OK). Follow it with `geocodeStatus` on a read of the record. Charged 1 credit when the new result is saved on the record, like any address lookup, and counted toward the tenant's daily geocoding limit. If the record has a public view, the re-check also updates its public copy up to twice (when the old location is cleared and when the new result is saved); each of those updates is charged at the normal write rate, in addition to the 1 credit. Note that each request after the field settles starts a new, charged lookup. It is refused for a field whose coordinates you supplied, a field with no address, and a field already `PENDING`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record.
+
+        Parameters
+        ----------
+        id : str
+
+        field : str
+            The id of a `geo` field of the record's schema that is filled from an address (`geocode.from`).
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        GeocodeQueuedResponse
+            The lookup is queued; the field is `PENDING`.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.records.geocode_record(
+                id="id",
+                field="location",
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.geocode_record(id, field=field, request_options=request_options)
+        return _response.data
+
     async def get_record_public_view(
         self, id: str, *, request_options: typing.Optional[RequestOptions] = None
     ) -> PublicViewCopyResponse:
@@ -1948,5 +2111,69 @@ class AsyncRecordsClient:
         """
         _response = await self._raw_client.get_record_versions(
             id, start_from=start_from, request_options=request_options
+        )
+        return _response.data
+
+    async def increment_record(
+        self,
+        id: str,
+        *,
+        field: str,
+        by: int,
+        idempotency_key: typing.Optional[str] = None,
+        where: typing.Optional[RecordIncrementLimits] = OMIT,
+        request_options: typing.Optional[RequestOptions] = None,
+    ) -> RecordIncrementResponse:
+        """
+        Keep a counter on its own lean record type: `indexMode` `NONE`, small, the counted field `inline: true`, no `rangeEnabled`/`allowOverflow` lookups. On a searchable type every increment re-indexes the record (and may embed it again), and lookups that copy the record are each updated too: that cost is accepted by whoever keeps a counter there. Adds `by` to one `number` field of a record as a single database operation, so concurrent requests never overwrite each other's change: each one is applied to the value as it is at that moment, with no version to match. Under heavy contention a request can still be answered `409` without an error code; retry it. Send an `Idempotency-Key` to make a retry safe: retry a `5xx` or a lost response with the same key and it is not added again (short of a fault in the platform's own key store right after the increment). The result must stay within plus or minus 9007199254740991. Optional limits in `where` are checked against the NEW value in the same operation; if one does not hold, nothing changes and the request is refused with `INCREMENT_CONDITION_NOT_MET`. The field's own schema `validation.min`/`max` always apply too. A field with no value counts as 0. The record's `version` and update time change as for any update, and it records a version-history entry and fires the type's update triggers. On a type whose `indexMode` is not `NONE` it re-indexes the record for search (and may embed it again), as any write does; keep a busy counter on a type with `indexMode` `NONE`. Allowed only for a `number` field that is not sensitive, searchable or filterable, not a lookup field or a lookup's `sortBy`, not an address source of a `geo` field and not copied into a public view (otherwise `400` `INCREMENT_FIELD_NOT_ELIGIBLE`). A lookup that keeps a copy of the record (`rangeEnabled`, `allowOverflow`) is updated in the same operation. When the record's payload is stored externally (under storageProfile STANDARD, at 4096 bytes or more: see `payloadExternalized` on the record), only a field declared `inline: true` can be incremented; any other is `400` `INCREMENT_PAYLOAD_EXTERNALIZED`. Requires the `records:u:<type>` scope, with ownership checked as for updating the record. Charged as a record update.
+
+        Parameters
+        ----------
+        id : str
+
+        field : str
+            The id of a `number` field of the record's schema. It must not be sensitive, searchable or filterable, a lookup field, a lookup's `sortBy`, an address source of a `geo` field, or part of a public view.
+
+        by : int
+            The whole number to add; negative to subtract. Not 0. A field with no value counts as 0.
+
+        idempotency_key : typing.Optional[str]
+            Optional. 1–128 characters of letters, digits, `.`, `_`, `:` or `-`. A request repeated under the same key within 24 hours, by the same credential, receives the first attempt's response without adding again, when that attempt succeeded or ended `INCREMENT_OUTCOME_UNKNOWN`; a refused attempt is not remembered, so a retry is decided again. The body is compared byte for byte; the same key with a different request is `422`.
+
+        where : typing.Optional[RecordIncrementLimits]
+
+        request_options : typing.Optional[RequestOptions]
+            Request-specific configuration.
+
+        Returns
+        -------
+        RecordIncrementResponse
+            The increment was applied.
+
+        Examples
+        --------
+        import asyncio
+
+        from vectros import AsyncVectrosApi
+
+        client = AsyncVectrosApi(
+            token="YOUR_TOKEN",
+            base_url="https://yourhost.com/path/to/api",
+        )
+
+
+        async def main() -> None:
+            await client.records.increment_record(
+                id="id",
+                idempotency_key="booking-8412",
+                field="booked",
+                by=1,
+            )
+
+
+        asyncio.run(main())
+        """
+        _response = await self._raw_client.increment_record(
+            id, field=field, by=by, idempotency_key=idempotency_key, where=where, request_options=request_options
         )
         return _response.data
